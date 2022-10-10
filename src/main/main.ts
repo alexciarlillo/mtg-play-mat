@@ -12,8 +12,10 @@ import path from 'path';
 import { app, BrowserWindow, shell, ipcMain } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
+import Database from 'better-sqlite3';
 import MenuBuilder from './menu';
 import { resolveHtmlPath } from './util';
+import webpackPaths from '../../.erb/configs/webpack.paths';
 
 export default class AppUpdater {
   constructor() {
@@ -24,12 +26,6 @@ export default class AppUpdater {
 }
 
 let mainWindow: BrowserWindow | null = null;
-
-ipcMain.on('ipc-example', async (event, arg) => {
-  const msgTemplate = (pingPong: string) => `IPC test: ${pingPong}`;
-  console.log(msgTemplate(arg));
-  event.reply('ipc-example', msgTemplate('pong'));
-});
 
 if (process.env.NODE_ENV === 'production') {
   const sourceMapSupport = require('source-map-support');
@@ -42,6 +38,30 @@ const isDebug =
 if (isDebug) {
   require('electron-debug')();
 }
+
+const cardDbPath = isDebug
+  ? path.join(webpackPaths.appPath, './db/AllPrintings.sqlite')
+  : path.join(__dirname, '../../db/AllPrintings.sqlite'); // In prod, __dirname is release/app/dist/main. We want release/app/sql
+
+let database = null;
+try {
+  database = new Database(cardDbPath, { readonly: true, fileMustExist: true });
+} catch (err) {
+  console.error('[DB Load Error]', err.message);
+}
+
+ipcMain.on('search-query', async (event, arg) => {
+  let results = [];
+  try {
+    const stmt = database.prepare(
+      'SELECT name, uuid, scryfallId, originalText FROM cards WHERE name LIKE ?'
+    );
+    results = stmt.all('%slimefoot%');
+  } catch (err) {
+    console.error('[DB Statement Error]', err.message);
+  }
+  event.reply('search-results', results);
+});
 
 const installExtensions = async () => {
   const installer = require('electron-devtools-installer');
