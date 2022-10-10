@@ -26,6 +26,7 @@ export default class AppUpdater {
 }
 
 let mainWindow: BrowserWindow | null = null;
+let handWindow: BrowserWindow | null = null;
 
 if (process.env.NODE_ENV === 'production') {
   const sourceMapSupport = require('source-map-support');
@@ -101,7 +102,7 @@ const createWindow = async () => {
     },
   });
 
-  mainWindow.loadURL(resolveHtmlPath('index.html'));
+  mainWindow.loadURL(resolveHtmlPath('battlefield.html'));
 
   mainWindow.on('ready-to-show', () => {
     if (!mainWindow) {
@@ -112,6 +113,36 @@ const createWindow = async () => {
     } else {
       mainWindow.show();
     }
+  });
+
+  handWindow = new BrowserWindow({
+    show: false,
+    width: 1200,
+    height: 330,
+    frame: false,
+    icon: getAssetPath('icon.png'),
+    webPreferences: {
+      preload: app.isPackaged
+        ? path.join(__dirname, 'preload.js')
+        : path.join(__dirname, '../../.erb/dll/preload.js'),
+    },
+  });
+
+  handWindow.loadURL(resolveHtmlPath('hand.html'));
+
+  handWindow.on('ready-to-show', () => {
+    if (!handWindow) {
+      throw new Error('"handWindow" is not defined');
+    }
+    if (process.env.START_MINIMIZED) {
+      handWindow.minimize();
+    } else {
+      handWindow.show();
+    }
+  });
+
+  handWindow.on('closed', () => {
+    handWindow = null;
   });
 
   mainWindow.on('closed', () => {
