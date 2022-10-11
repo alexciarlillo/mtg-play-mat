@@ -107,7 +107,7 @@ const createWindow = async () => {
     },
   });
 
-  mainWindow.loadURL(resolveHtmlPath('battlefield.html'));
+  mainWindow.loadURL(resolveHtmlPath('board.html'));
 
   mainWindow.on('ready-to-show', () => {
     if (!mainWindow) {

@@ -1,6 +1,6 @@
 import { makeAutoObservable } from 'mobx';
 
-export default class BattlefieldStore {
+export default class BoardStore {
   battlefield = [];
   graveyard = [];
 

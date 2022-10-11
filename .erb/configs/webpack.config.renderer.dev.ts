@@ -49,7 +49,7 @@ const configuration: webpack.Configuration = {
   entry: [
     `webpack-dev-server/client?http://localhost:${port}/dist`,
     'webpack/hot/only-dev-server',
-    path.join(webpackPaths.srcRendererPath, '_battlefield.tsx'),
+    path.join(webpackPaths.srcRendererPath, '_board.tsx'),
     path.join(webpackPaths.srcRendererPath, '_hand.tsx'),
   ],
 
@@ -153,8 +153,8 @@ const configuration: webpack.Configuration = {
     new ReactRefreshWebpackPlugin(),
 
     new HtmlWebpackPlugin({
-      filename: path.join('battlefield.html'),
-      template: path.join(webpackPaths.srcRendererPath, 'battlefield.ejs'),
+      filename: path.join('board.html'),
+      template: path.join(webpackPaths.srcRendererPath, 'board.ejs'),
       minify: {
         collapseWhitespace: true,
         removeAttributeQuotes: true,
