@@ -64,6 +64,11 @@ ipcMain.on('search-query', async (event, arg) => {
   event.reply('search-results', results);
 });
 
+ipcMain.on('played', async (event, arg) => {
+  console.log('played', arg);
+  mainWindow.webContents.send('etb', arg);
+});
+
 const installExtensions = async () => {
   const installer = require('electron-devtools-installer');
   const forceDownload = !!process.env.UPGRADE_EXTENSIONS;

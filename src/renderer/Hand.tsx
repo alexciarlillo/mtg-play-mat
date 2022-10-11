@@ -1,7 +1,13 @@
+import PropTypes from 'prop-types';
+import { observer } from 'mobx-react';
 import Card from './Card';
 import 'tailwindcss/tailwind.css';
 
-const Hand = () => {
+const Hand = ({ store }) => {
+  handlePlayed = (id) => {
+    store.play(id);
+  };
+
   return (
     <div className="h-screen w-screen bg-slate-800">
       <div
@@ -10,13 +16,19 @@ const Hand = () => {
       >
         Hand
       </div>
-      <Card
-        scryfallId="e8815cd9-7032-445a-aebc-cfc19bd51ee4"
-        draggable={false}
-        tappable={false}
-      />
+      {store.hand.map((id) => (
+        <Card scryfallId={id} playable onPlayed={handlePlayed} />
+      ))}
     </div>
   );
 };
 
-export default Hand;
+Hand.propTypes = {
+  store: PropTypes.object,
+};
+
+Hand.defaultProps = {
+  store: {},
+};
+
+export default observer(Hand);

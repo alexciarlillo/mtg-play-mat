@@ -19,19 +19,27 @@ const CardImg = ({ scryfallId }) => {
   ) : null;
 };
 
-const Card = ({ scryfallId, draggable, tappable }) => {
+const Card = ({ scryfallId, draggable, tappable, playable, onPlayed }) => {
   const [tapped, setTapped] = useState(false);
   const [moved, setMoved] = useState(false);
 
   const [lastPosition, setLastPosition] = useState(null);
 
   toggleTapped = () => {
-    if (!tappable) {
-      return;
-    }
-
     if (!moved) {
       setTapped(!tapped);
+    }
+  };
+
+  handlePlayed = () => {
+    onPlayed?.(scryfallId);
+  };
+
+  handleClick = () => {
+    if (tappable && !playable) {
+      toggleTapped();
+    } else if (playable) {
+      handlePlayed();
     }
 
     setMoved(false);
@@ -68,7 +76,7 @@ const Card = ({ scryfallId, draggable, tappable }) => {
                 'rotate-90': tapped,
               }
             )}
-            onClick={toggleTapped}
+            onClick={handleClick}
           >
             <CardImg scryfallId={scryfallId} />
           </div>
@@ -106,11 +114,13 @@ Card.propTypes = {
   scryfallId: PropTypes.string.isRequired,
   draggable: PropTypes.bool,
   tappable: PropTypes.bool,
+  playable: PropTypes.bool,
 };
 
 Card.defaultProps = {
   draggable: true,
   tappable: true,
+  playable: false,
 };
 
 export default Card;
