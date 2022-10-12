@@ -12,6 +12,11 @@ export default class BoardStore {
   play(id) {
     this.battlefield.push(id);
   }
+
+  moved(id) {
+    this.battlefield.splice(this.battlefield.indexOf(id), 1);
+    this.battlefield.push(id);
+  }
 }
 
 const BoardStoreContext = React.createContext();

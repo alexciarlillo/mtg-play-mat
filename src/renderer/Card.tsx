@@ -19,16 +19,24 @@ const CardImg = ({ scryfallId }) => {
   ) : null;
 };
 
-const Card = ({ scryfallId, draggable, tappable, playable, onPlayed }) => {
+CardImg.propTypes = {
+  scryfallId: PropTypes.string.isRequired,
+};
+
+const Card = ({
+  scryfallId,
+  draggable,
+  tappable,
+  playable,
+  onPlayed,
+  onMoved,
+}) => {
   const [tapped, setTapped] = useState(false);
-  const [moved, setMoved] = useState(false);
 
   const [lastPosition, setLastPosition] = useState(null);
 
   toggleTapped = () => {
-    if (!moved) {
-      setTapped(!tapped);
-    }
+    setTapped(!tapped);
   };
 
   handlePlayed = () => {
@@ -41,24 +49,29 @@ const Card = ({ scryfallId, draggable, tappable, playable, onPlayed }) => {
     } else if (playable) {
       handlePlayed();
     }
-
-    setMoved(false);
   };
 
   onDragStart = (event, data) => {
     setLastPosition({ x: data.lastX, y: data.lastY });
   };
 
-  onDragStop = (...args) => {
+  onDragStop = (_, data) => {
+    const dX = Math.abs(data.x - lastPosition.x);
+    const dY = Math.abs(data.y - lastPosition.y);
+
+    // count small movements as intended clicks
+    if (dX <= 2 && dY <= 2) {
+      handleClick();
+    } else {
+      onMoved?.(scryfallId);
+    }
+
     setLastPosition(null);
   };
 
   return (
     <div className="relative">
       <Draggable
-        onDrag={(args, data) => {
-          setMoved(true);
-        }}
         onStart={onDragStart}
         onStop={onDragStop}
         disabled={!draggable}
@@ -76,7 +89,7 @@ const Card = ({ scryfallId, draggable, tappable, playable, onPlayed }) => {
                 'rotate-90': tapped,
               }
             )}
-            onClick={handleClick}
+            // onClick={handleClick}
           >
             <CardImg scryfallId={scryfallId} />
           </div>
@@ -115,12 +128,16 @@ Card.propTypes = {
   draggable: PropTypes.bool,
   tappable: PropTypes.bool,
   playable: PropTypes.bool,
+  onPlayed: PropTypes.func,
+  onMoved: PropTypes.func,
 };
 
 Card.defaultProps = {
   draggable: true,
   tappable: true,
   playable: false,
+  onPlayed: null,
+  onMoved: null,
 };
 
 export default Card;
