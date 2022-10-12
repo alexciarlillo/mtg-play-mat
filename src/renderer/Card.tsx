@@ -15,7 +15,12 @@ const CardImg = ({ scryfallId }) => {
   }, [scryfallId]);
 
   return imageUri ? (
-    <img className="rounded-lg" src={imageUri} draggable={false} alt="" />
+    <img
+      className="rounded-lg h-full"
+      src={imageUri}
+      draggable={false}
+      alt=""
+    />
   ) : null;
 };
 
@@ -82,14 +87,19 @@ const Card = ({
             className={classNames(
               'origin-center',
               'flex',
+              'justify-center',
+              'items-center',
               'aspect-card',
               'w-52',
               'handle',
+              'ring-amber-300',
+              'rounded-lg',
+              'hover:cursor-pointer',
+              'hover:ring-4',
               {
                 'rotate-90': tapped,
               }
             )}
-            // onClick={handleClick}
           >
             <CardImg scryfallId={scryfallId} />
           </div>
@@ -101,6 +111,8 @@ const Card = ({
             'absolute',
             'origin-center',
             'flex',
+            'justify-center',
+            'items-center',
             'aspect-card',
             'w-52',
             'z-0',

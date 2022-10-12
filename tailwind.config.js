@@ -10,6 +10,9 @@ module.exports = {
         card: ' 5 / 7',
         'tapped-card': ' 7 / 5',
       },
+      padding: {
+        '4px': '4px',
+      },
     },
   },
   plugins: [],
