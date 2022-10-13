@@ -12,16 +12,24 @@ const Hand = () => {
   };
 
   return (
-    <div className="h-screen w-screen bg-slate-800">
+    <div className="h-full w-screen bg-slate-800">
       <div
         className="w-screen h-6 text-center bg-slate-200 text-center"
         style={{ WebkitAppRegion: 'drag' }}
       >
         Hand
       </div>
-      {hand.cards.map((id) => (
-        <Card key={id} scryfallId={id} playable onPlayed={handlePlayed} />
-      ))}
+      <div className="grid grid-cols-7 gap-y-2">
+        {hand.cards.map((id) => (
+          <Card
+            key={id}
+            scryfallId={id}
+            playable
+            onPlayed={handlePlayed}
+            draggable={false}
+          />
+        ))}
+      </div>
     </div>
   );
 };

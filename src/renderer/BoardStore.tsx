@@ -2,7 +2,7 @@ import React from 'react';
 import { makeAutoObservable } from 'mobx';
 
 export default class BoardStore {
-  battlefield = [];
+  battlefield = ['e8815cd9-7032-445a-aebc-cfc19bd51ee4'];
   graveyard = [];
 
   constructor() {

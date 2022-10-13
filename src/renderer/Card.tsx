@@ -45,6 +45,7 @@ const Card = ({
   };
 
   handlePlayed = () => {
+    console.log('handlePlayed', scryfallId);
     onPlayed?.(scryfallId);
   };
 
@@ -82,7 +83,10 @@ const Card = ({
         disabled={!draggable}
         handle=".handle"
       >
-        <div className={classNames('absolute', 'z-10')}>
+        <div
+          className={classNames({ absolute: draggable })}
+          onClick={draggable ? null : handleClick}
+        >
           <div
             className={classNames(
               'origin-center',
@@ -97,6 +101,7 @@ const Card = ({
               'hover:cursor-pointer',
               'hover:ring-4',
               {
+                absolute: draggable,
                 'rotate-90': tapped,
               }
             )}
