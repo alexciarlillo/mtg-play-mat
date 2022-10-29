@@ -19,4 +19,9 @@ if (container) {
     console.log(results);
   });
   window.electron.ipcRenderer.sendMessage('search-query', ['slimefoot']);
+
+  window.electron.ipcRenderer.on('draw', (id) => {
+    console.log('draw', id);
+    store.add(id);
+  });
 }

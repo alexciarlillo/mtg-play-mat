@@ -2,31 +2,7 @@ import PropTypes from 'prop-types';
 import Draggable from 'react-draggable';
 import classNames from 'classnames';
 import { useState, useEffect } from 'react';
-
-const CardImg = ({ scryfallId }) => {
-  const [imageUri, setImageUri] = useState(null);
-
-  useEffect(() => {
-    setImageUri(
-      `https://cards.scryfall.io/normal/front/${scryfallId.charAt(
-        0
-      )}/${scryfallId.charAt(1)}/${scryfallId}.jpg`
-    );
-  }, [scryfallId]);
-
-  return imageUri ? (
-    <img
-      className="rounded-lg h-full"
-      src={imageUri}
-      draggable={false}
-      alt=""
-    />
-  ) : null;
-};
-
-CardImg.propTypes = {
-  scryfallId: PropTypes.string.isRequired,
-};
+import CardImg from './CardImg';
 
 const Card = ({
   scryfallId,
@@ -44,16 +20,11 @@ const Card = ({
     setTapped(!tapped);
   };
 
-  handlePlayed = () => {
-    console.log('handlePlayed', scryfallId);
-    onPlayed?.(scryfallId);
-  };
-
   handleClick = () => {
     if (tappable && !playable) {
       toggleTapped();
     } else if (playable) {
-      handlePlayed();
+      onPlayed?.(scryfallId);
     }
   };
 

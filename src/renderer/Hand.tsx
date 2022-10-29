@@ -1,4 +1,3 @@
-import PropTypes from 'prop-types';
 import { observer } from 'mobx-react';
 import Card from './Card';
 import { useHandStore } from './HandStore';

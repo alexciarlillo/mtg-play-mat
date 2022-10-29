@@ -21,6 +21,11 @@ export default class HandStore {
     this.cards.splice(this.cards.indexOf(id), 1);
     window.electron.ipcRenderer.sendMessage('played', id);
   }
+
+  add(id) {
+    console.log('add', id);
+    this.cards.push(id);
+  }
 }
 
 const HandStoreContext = React.createContext();

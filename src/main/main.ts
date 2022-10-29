@@ -69,6 +69,11 @@ ipcMain.on('played', async (event, arg) => {
   mainWindow.webContents.send('etb', arg);
 });
 
+ipcMain.on('draw', async (event, arg) => {
+  console.log('draw', arg);
+  handWindow.webContents.send('draw', arg);
+});
+
 const installExtensions = async () => {
   const installer = require('electron-devtools-installer');
   const forceDownload = !!process.env.UPGRADE_EXTENSIONS;
