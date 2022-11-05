@@ -22,10 +22,12 @@ const Library = () => {
           'aspect-card',
           'w-52',
           'handle',
-          'ring-amber-300',
-          'rounded-lg'
+          'rounded-lg',
+          {
+            'hover:cursor-pointer': board.library.length > 0,
+          }
         )}
-        onClick={drawCard}
+        onClick={board.library.length > 0 ? drawCard : null}
       >
         <CardImg />
       </div>

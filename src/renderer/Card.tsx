@@ -70,10 +70,10 @@ const Card = ({
               'ring-amber-300',
               'rounded-lg',
               'hover:cursor-pointer',
-              'hover:ring-4',
               {
                 absolute: draggable,
                 'rotate-90': tapped,
+                'hover:ring-4': draggable || tappable || onPlayed,
               }
             )}
           >

@@ -3,7 +3,10 @@ import { makeAutoObservable } from 'mobx';
 
 export default class BoardStore {
   battlefield = ['e8815cd9-7032-445a-aebc-cfc19bd51ee4'];
-  graveyard = ['c7a7fe6e-aa5a-4be6-a730-5cfff4fb89e3'];
+  graveyard = [
+    'c7a7fe6e-aa5a-4be6-a730-5cfff4fb89e3',
+    'ab3e096a-d6e8-4148-bbea-f26fc67e2fe2',
+  ];
   library = [
     'a808868f-aea8-4651-9357-85a4d7b4f290',
     'cb1d0254-985c-4d44-9cce-1d563e11f0a4',
