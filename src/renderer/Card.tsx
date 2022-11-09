@@ -12,6 +12,8 @@ const Card = ({
   playable,
   onPlayed,
   onMoved,
+  onDestroy,
+  onExile,
 }) => {
   const menu = useContextMenu();
   const [tapped, setTapped] = useState(false);
@@ -52,7 +54,14 @@ const Card = ({
     e.preventDefault();
     e.stopPropagation();
     console.log('card menu', e);
-    menu.open({ specs: ['Destroy', 'Exile'], x: e.pageX, y: e.pageY });
+    menu.open({
+      specs: [
+        { title: 'Destroy', action: () => onDestroy(scryfallId) },
+        { title: 'Exile', action: () => onExile(scryfallId) },
+      ],
+      x: e.pageX,
+      y: e.pageY,
+    });
   };
 
   return (

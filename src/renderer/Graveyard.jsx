@@ -7,15 +7,20 @@ const Graveyard = () => {
   const board = useBoardStore();
 
   return (
-    <div className="flex flex-col justify-evenly">
-      {board.graveyard.length > 0 && (
-        <Card
-          key={board.graveyard[0]}
-          scryfallId={board.graveyard[0]}
-          draggable={false}
-          tappable={false}
-        />
-      )}
+    <div className="flex flex-col justify-evenly relative">
+      {board.graveyard.map((card, index) => (
+        <div
+          style={{ position: 'absolute', top: `${index * 30}px` }}
+          key={card}
+        >
+          <Card
+            key={card}
+            scryfallId={card}
+            draggable={false}
+            tappable={false}
+          />
+        </div>
+      ))}
     </div>
   );
 };

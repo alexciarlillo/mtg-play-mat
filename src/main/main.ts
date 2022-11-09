@@ -8,6 +8,8 @@
  * When running `npm run build` or `npm run build:main`, this file is compiled to
  * `./src/main.js` using webpack. This gives us some performance wins.
  */
+
+import fs from 'fs';
 import path from 'path';
 import { app, BrowserWindow, shell, ipcMain } from 'electron';
 import { autoUpdater } from 'electron-updater';
@@ -16,6 +18,7 @@ import Database from 'better-sqlite3';
 import MenuBuilder from './menu';
 import { resolveHtmlPath } from './util';
 import webpackPaths from '../../.erb/configs/webpack.paths';
+import DeckImporter from './DeckImporter';
 
 export default class AppUpdater {
   constructor() {
@@ -72,6 +75,17 @@ ipcMain.on('played', async (event, arg) => {
 ipcMain.on('draw', async (event, arg) => {
   console.log('draw', arg);
   handWindow.webContents.send('draw', arg);
+});
+
+ipcMain.on('import', async (event, arg) => {
+  const deckPath = isDebug
+    ? path.join(webpackPaths.appPath, './db/slimefoot.txt')
+    : path.join(__dirname, '../../db/slimefoot.txt');
+  console.log('importing deck', deckPath);
+  const importer = new DeckImporter(database);
+  const lines = fs.readFileSync(deckPath).toString().split('\n');
+  const cards = importer.import(lines);
+  mainWindow.webContents.send('newdeck', cards);
 });
 
 const installExtensions = async () => {

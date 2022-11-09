@@ -21,8 +21,12 @@ const Menu = () => {
   return menu.isOpen ? (
     <div className="absolute" style={{ top: menu.posY, left: menu.posX }}>
       <ul className="w-full h-full bg-slate-200">
-        {menu.specs.map((title, i) => {
-          return <li key={i}>{title}</li>;
+        {menu.specs.map(({ title, action }, i) => {
+          return (
+            <li key={i} onClick={action}>
+              {title}
+            </li>
+          );
         })}
       </ul>
     </div>

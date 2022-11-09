@@ -2,16 +2,11 @@ import React from 'react';
 import { makeAutoObservable } from 'mobx';
 
 export default class BoardStore {
-  battlefield = ['e8815cd9-7032-445a-aebc-cfc19bd51ee4'];
-  graveyard = [
-    'c7a7fe6e-aa5a-4be6-a730-5cfff4fb89e3',
-    'ab3e096a-d6e8-4148-bbea-f26fc67e2fe2',
-  ];
-  library = [
-    'a808868f-aea8-4651-9357-85a4d7b4f290',
-    'cb1d0254-985c-4d44-9cce-1d563e11f0a4',
-    'eab611c3-3a24-4033-864f-084b71317320',
-  ];
+  battlefield = [];
+
+  graveyard = [];
+
+  library = [];
 
   constructor() {
     makeAutoObservable(this);
@@ -27,8 +22,31 @@ export default class BoardStore {
   }
 
   drawCard() {
-    const id = this.library.shift();
-    window.electron.ipcRenderer.sendMessage('draw', id);
+    const { scryfallId } = this.library.shift();
+    window.electron.ipcRenderer.sendMessage('draw', scryfallId);
+  }
+
+  importDeck = () => {
+    window.electron.ipcRenderer.sendMessage('import');
+  };
+
+  reset(deck) {
+    this.battlefield = [];
+    this.graveyard = [];
+    this.library = deck;
+    this.shuffle();
+  }
+
+  shuffle() {
+    this.library = this.library
+      .map((value) => ({ value, sort: Math.random() }))
+      .sort((a, b) => a.sort - b.sort)
+      .map(({ value }) => value);
+  }
+
+  destroy(id) {
+    this.graveyard.push(id);
+    this.battlefield.splice(this.battlefield.indexOf(id), 1);
   }
 }
 

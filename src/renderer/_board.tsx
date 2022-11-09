@@ -27,4 +27,9 @@ if (container) {
     console.log('etb', id);
     store.play(id);
   });
+
+  window.electron.ipcRenderer.on('newdeck', (cards) => {
+    console.log('newdeck', cards.length);
+    store.reset(cards);
+  });
 }

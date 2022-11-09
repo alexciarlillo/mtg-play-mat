@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { observer } from 'mobx-react';
 import Library from './Library';
 import Graveyard from './Graveyard';
@@ -14,11 +15,23 @@ const Board = () => {
     board.moved(id);
   };
 
+  handleDestroyed = (id) => {
+    board.destroy(id);
+  };
+
   handleContextMenu = (e) => {
     e.preventDefault();
     console.log('board menu', e);
-    menu.open({ specs: ['Add Token', 'Add Card'], x: e.pageX, y: e.pageY });
+    menu.open({
+      specs: [{ title: 'Add Token', action: null }],
+      x: e.pageX,
+      y: e.pageY,
+    });
   };
+
+  useEffect(() => {
+    board.importDeck();
+  }, [board]);
 
   return (
     <div
@@ -27,7 +40,12 @@ const Board = () => {
     >
       <div className="w-4/5 h-full bg-neutral-400">
         {board.battlefield.map((id) => (
-          <Card scryfallId={id} key={id} onMoved={handleMoved} />
+          <Card
+            scryfallId={id}
+            key={id}
+            onMoved={handleMoved}
+            onDestroy={handleDestroyed}
+          />
         ))}
       </div>
       <div className="w-1/5 h-full">
