@@ -3,6 +3,7 @@ import Draggable from 'react-draggable';
 import classNames from 'classnames';
 import { useState, useEffect } from 'react';
 import CardImg from './CardImg';
+import { useContextMenu } from './ContextMenuProvider';
 
 const Card = ({
   scryfallId,
@@ -12,6 +13,7 @@ const Card = ({
   onPlayed,
   onMoved,
 }) => {
+  const menu = useContextMenu();
   const [tapped, setTapped] = useState(false);
 
   const [lastPosition, setLastPosition] = useState(null);
@@ -46,6 +48,13 @@ const Card = ({
     setLastPosition(null);
   };
 
+  handleContextMenu = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log('card menu', e);
+    menu.open({ specs: ['Destroy', 'Exile'], x: e.pageX, y: e.pageY });
+  };
+
   return (
     <div className="relative">
       <Draggable
@@ -57,6 +66,7 @@ const Card = ({
         <div
           className={classNames({ absolute: draggable })}
           onClick={draggable ? null : handleClick}
+          onContextMenu={handleContextMenu}
         >
           <div
             className={classNames(

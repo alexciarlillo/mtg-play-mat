@@ -8,6 +8,7 @@ export default class ContextMenuStore {
   specs = [];
 
   posX = 0;
+
   posY = 0;
 
   constructor() {

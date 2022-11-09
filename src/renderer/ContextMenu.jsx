@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { observer } from 'mobx-react';
 import 'tailwindcss/tailwind.css';
 import { useContextMenu } from './ContextMenuProvider';
@@ -5,16 +6,24 @@ import { useContextMenu } from './ContextMenuProvider';
 const Menu = () => {
   const menu = useContextMenu();
 
-  close = () => {
-    menu.close();
-  };
+  useEffect(() => {
+    const closeMenu = () => {
+      menu.close();
+    };
+
+    document.body.addEventListener('click', closeMenu);
+
+    return function cleanup() {
+      window.removeEventListener('click', closeMenu);
+    };
+  }, [menu]);
 
   return menu.isOpen ? (
     <div className="absolute" style={{ top: menu.posY, left: menu.posX }}>
-      <ul className="w-full h-full bg-slate-200" onClick={close}>
-        <li>Test 1</li>
-        <li>Test 2</li>
-        <li>Test 3</li>
+      <ul className="w-full h-full bg-slate-200">
+        {menu.specs.map((title, i) => {
+          return <li key={i}>{title}</li>;
+        })}
       </ul>
     </div>
   ) : (

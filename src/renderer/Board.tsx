@@ -16,8 +16,8 @@ const Board = () => {
 
   handleContextMenu = (e) => {
     e.preventDefault();
-    console.log(e);
-    menu.open({ specs: [], x: e.pageX, y: e.pageY });
+    console.log('board menu', e);
+    menu.open({ specs: ['Add Token', 'Add Card'], x: e.pageX, y: e.pageY });
   };
 
   return (
