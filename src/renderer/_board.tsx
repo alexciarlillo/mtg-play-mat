@@ -16,18 +16,6 @@ if (container) {
     </BoardStoreProvider>
   );
 
-  // calling IPC exposed from preload script
-  window.electron.ipcRenderer.once('search-results', (results) => {
-    // eslint-disable-next-line no-console
-    console.log(results);
-  });
-  window.electron.ipcRenderer.sendMessage('search-query', ['slimefoot']);
-
-  window.electron.ipcRenderer.on('etb', (id) => {
-    console.log('etb', id);
-    store.play(id);
-  });
-
   window.electron.ipcRenderer.on('newdeck', (cards) => {
     console.log('newdeck', cards.length);
     store.reset(cards);

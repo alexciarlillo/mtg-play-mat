@@ -18,6 +18,8 @@ import { resolveHtmlPath } from './util';
 import webpackPaths from '../../.erb/configs/webpack.paths';
 import DeckImporter from '../util/DeckImporter';
 import CardDB from './db/CardDB';
+import IpcBus from './ipc/IpcBus';
+import WindowTypes from './ipc/WindowTypes';
 
 export default class AppUpdater {
   constructor() {
@@ -44,19 +46,11 @@ if (isDebug) {
 
 const cardDb = new CardDB();
 
+const ipcBus = new IpcBus();
+
 ipcMain.on('search-query', async (event, arg) => {
   const results = cardDb.searchCardsByName({ keyword: 'slimefoot' });
   event.reply('search-results', results);
-});
-
-ipcMain.on('played', async (event, arg) => {
-  console.log('played', arg);
-  boardWindow.webContents.send('etb', arg);
-});
-
-ipcMain.on('draw', async (event, arg) => {
-  console.log('draw', arg);
-  handWindow.webContents.send('draw', arg);
 });
 
 ipcMain.on('import', async (event, arg) => {
@@ -109,6 +103,8 @@ const createWindow = async () => {
     },
   });
 
+  ipcBus.registerWindow({ type: WindowTypes.BOARD, window: boardWindow });
+
   boardWindow.loadURL(resolveHtmlPath('board.html'));
 
   boardWindow.on('ready-to-show', () => {
@@ -134,6 +130,8 @@ const createWindow = async () => {
         : path.join(__dirname, '../../.erb/dll/preload.js'),
     },
   });
+
+  ipcBus.registerWindow({ type: WindowTypes.HAND, window: handWindow });
 
   handWindow.loadURL(resolveHtmlPath('hand.html'));
 

@@ -1,7 +1,15 @@
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
+import BoardIpcHandler from './ipc/BoardIpcHandler';
+import HandIpcHandler from './ipc/HandIpcHandler';
 
+const boardIpcHandler = new BoardIpcHandler();
+contextBridge.exposeInMainWorld('Board', boardIpcHandler);
+
+const handIpcHandler = new HandIpcHandler();
+contextBridge.exposeInMainWorld('Hand', handIpcHandler);
+
+// TODO: remove
 export type Channels = 'ipc-example';
-
 contextBridge.exposeInMainWorld('electron', {
   ipcRenderer: {
     sendMessage(channel: Channels, args: unknown[]) {

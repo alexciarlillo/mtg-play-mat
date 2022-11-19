@@ -1,23 +1,26 @@
 import React from 'react';
 import { makeAutoObservable } from 'mobx';
+import IpcEvents from '../shared/ipc/IpcEvents';
 
 export default class HandStore {
   cards = [];
 
   constructor() {
     makeAutoObservable(this);
+
+    window.Hand.rendererChannel.On(IpcEvents.DRAW, (event, id) => {
+      this.add(id);
+    });
   }
 
-  play(id) {
-    console.log('play', id);
+  play = (id) => {
     this.cards.splice(this.cards.indexOf(id), 1);
-    window.electron.ipcRenderer.sendMessage('played', id);
-  }
+    window.Hand.play({ id });
+  };
 
-  add(id) {
-    console.log('add', id);
+  add = (id) => {
     this.cards.push(id);
-  }
+  };
 }
 
 const HandStoreContext = React.createContext();

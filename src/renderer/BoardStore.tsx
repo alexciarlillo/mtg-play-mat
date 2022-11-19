@@ -1,5 +1,6 @@
 import React from 'react';
 import { makeAutoObservable } from 'mobx';
+import IpcEvents from '../shared/ipc/IpcEvents';
 
 export default class BoardStore {
   battlefield = [];
@@ -10,6 +11,10 @@ export default class BoardStore {
 
   constructor() {
     makeAutoObservable(this);
+
+    window.Board.rendererChannel.On(IpcEvents.ETB, (event, id) => {
+      this.play(id);
+    });
   }
 
   play(id) {
@@ -23,7 +28,7 @@ export default class BoardStore {
 
   drawCard() {
     const { scryfallId } = this.library.shift();
-    window.electron.ipcRenderer.sendMessage('draw', scryfallId);
+    window.Board.draw({ id: scryfallId });
   }
 
   importDeck = () => {
