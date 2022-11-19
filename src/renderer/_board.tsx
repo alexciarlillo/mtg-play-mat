@@ -15,9 +15,4 @@ if (container) {
       </ContextMenuProvider>
     </BoardStoreProvider>
   );
-
-  window.electron.ipcRenderer.on('newdeck', (cards) => {
-    console.log('newdeck', cards.length);
-    store.reset(cards);
-  });
 }

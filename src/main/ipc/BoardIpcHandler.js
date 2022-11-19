@@ -10,4 +10,8 @@ export default class BoardIpcHandler {
   draw = ({ id }) => {
     this.rendererChannel.Send(IpcEvents.DRAW, id);
   };
+
+  import = () => {
+    this.rendererChannel.Send(IpcEvents.IMPORT);
+  };
 }

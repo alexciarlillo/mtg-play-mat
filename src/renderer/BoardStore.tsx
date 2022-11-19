@@ -15,6 +15,10 @@ export default class BoardStore {
     window.Board.rendererChannel.On(IpcEvents.ETB, (event, id) => {
       this.play(id);
     });
+
+    window.Board.rendererChannel.On(IpcEvents.DECK_LOADED, (event, cards) => {
+      this.reset(cards);
+    });
   }
 
   play(id) {
@@ -32,7 +36,7 @@ export default class BoardStore {
   }
 
   importDeck = () => {
-    window.electron.ipcRenderer.sendMessage('import');
+    window.Board.import();
   };
 
   reset(deck) {

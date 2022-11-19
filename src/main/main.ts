@@ -10,13 +10,11 @@
  */
 
 import path from 'path';
-import { app, BrowserWindow, shell, ipcMain } from 'electron';
+import { app, BrowserWindow, shell } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
 import MenuBuilder from './menu';
 import { resolveHtmlPath } from './util';
-import webpackPaths from '../../.erb/configs/webpack.paths';
-import DeckImporter from '../util/DeckImporter';
 import CardDB from './db/CardDB';
 import IpcBus from './ipc/IpcBus';
 import WindowTypes from './ipc/WindowTypes';
@@ -45,25 +43,7 @@ if (isDebug) {
 }
 
 const cardDb = new CardDB();
-
 const ipcBus = new IpcBus();
-
-ipcMain.on('search-query', async (event, arg) => {
-  const results = cardDb.searchCardsByName({ keyword: 'slimefoot' });
-  event.reply('search-results', results);
-});
-
-ipcMain.on('import', async (event, arg) => {
-  const deckPath = isDebug
-    ? path.join(webpackPaths.appPath, './db/slimefoot.txt')
-    : path.join(__dirname, '../../db/slimefoot.txt');
-
-  console.log('importing deck', deckPath);
-
-  const importer = new DeckImporter({ cardDb });
-  const cards = importer.importFromFile({ filePath: deckPath });
-  boardWindow.webContents.send('newdeck', cards);
-});
 
 const installExtensions = async () => {
   const installer = require('electron-devtools-installer');
