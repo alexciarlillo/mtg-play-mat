@@ -1,6 +1,6 @@
 import React from 'react';
 import { makeAutoObservable } from 'mobx';
-import IpcEvents from '../shared/ipc/IpcEvents';
+import IpcEvents from '../../shared/ipc/IpcEvents';
 
 export default class HandStore {
   cards = [];

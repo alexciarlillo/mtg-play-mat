@@ -49,8 +49,8 @@ const configuration: webpack.Configuration = {
   entry: [
     `webpack-dev-server/client?http://localhost:${port}/dist`,
     'webpack/hot/only-dev-server',
-    path.join(webpackPaths.srcRendererPath, '_board.tsx'),
-    path.join(webpackPaths.srcRendererPath, '_hand.tsx'),
+    path.join(webpackPaths.srcRendererPath, 'board/_board.tsx'),
+    path.join(webpackPaths.srcRendererPath, 'hand/_hand.tsx'),
   ],
 
   output: {
@@ -154,7 +154,7 @@ const configuration: webpack.Configuration = {
 
     new HtmlWebpackPlugin({
       filename: path.join('board.html'),
-      template: path.join(webpackPaths.srcRendererPath, 'board.ejs'),
+      template: path.join(webpackPaths.srcRendererPath, 'board/board.ejs'),
       minify: {
         collapseWhitespace: true,
         removeAttributeQuotes: true,
@@ -168,7 +168,7 @@ const configuration: webpack.Configuration = {
 
     new HtmlWebpackPlugin({
       filename: path.join('hand.html'),
-      template: path.join(webpackPaths.srcRendererPath, 'hand.ejs'),
+      template: path.join(webpackPaths.srcRendererPath, 'hand/hand.ejs'),
       minify: {
         collapseWhitespace: true,
         removeAttributeQuotes: true,

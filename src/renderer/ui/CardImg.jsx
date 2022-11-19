@@ -1,6 +1,6 @@
 import PropTypes from 'prop-types';
 import { useState, useEffect } from 'react';
-import cardBackImg from '../../assets/back.jpg';
+import cardBackImg from '../../../assets/back.jpg';
 
 const CardImg = ({ scryfallId }) => {
   const [imageUri, setImageUri] = useState(null);
