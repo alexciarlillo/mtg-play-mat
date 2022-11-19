@@ -1,34 +1,35 @@
+import fs from 'fs';
+
 export default class DeckImporter {
-  constructor(database) {
-    this.database = database;
+  constructor({ cardDb }) {
+    this.cardDb = cardDb;
   }
 
-  import = (items) => {
-    return items
-      .map((item) => {
-        const { count, name, setCode, number } = DeckImporter.ParseItem(item);
+  importFromFile = ({ filePath }) => {
+    const contents = fs.readFileSync(filePath).toString();
+    return this.importFromString({ string: contents });
+  };
+
+  importFromString = ({ string }) => {
+    const lines = string.split('\n');
+
+    return lines
+      .map((line) => {
+        const { count, name, setCode, number } = DeckImporter.ParseLine(line);
         return { count, name, setCode, number };
       })
       .map(({ count, name, setCode, number }) => {
-        let query =
-          'SELECT name, uuid, scryfallId, setCode, number FROM cards WHERE name = ? COLLATE NOCASE AND setCode = ? COLLATE NOCASE';
-        if (number) {
-          query = `${query} AND number = ?`;
-        }
-
-        const stmt = this.database.prepare(query);
-
-        const result = stmt.get([name, setCode, number].filter(Boolean));
+        const result = this.cardDb.getCard({ name, setCode, number });
         return Array(Number(count)).fill(result);
       })
       .flat()
       .filter(Boolean);
   };
 
-  static ParseItem(item) {
+  static ParseLine(line) {
     const setCodeRegex = /(\(|\[)([a-zA-Z0-9]+)(\)|\])/;
 
-    const fields = item.split(' ');
+    const fields = line.split(' ');
     const count = Number(fields[0]);
     let number = null;
     let setCode;

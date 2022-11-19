@@ -9,16 +9,15 @@
  * `./src/main.js` using webpack. This gives us some performance wins.
  */
 
-import fs from 'fs';
 import path from 'path';
 import { app, BrowserWindow, shell, ipcMain } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
-import Database from 'better-sqlite3';
 import MenuBuilder from './menu';
 import { resolveHtmlPath } from './util';
 import webpackPaths from '../../.erb/configs/webpack.paths';
-import DeckImporter from './DeckImporter';
+import DeckImporter from '../util/DeckImporter';
+import CardDB from './db/CardDB';
 
 export default class AppUpdater {
   constructor() {
@@ -28,7 +27,7 @@ export default class AppUpdater {
   }
 }
 
-let mainWindow: BrowserWindow | null = null;
+let boardWindow: BrowserWindow | null = null;
 let handWindow: BrowserWindow | null = null;
 
 if (process.env.NODE_ENV === 'production') {
@@ -43,33 +42,16 @@ if (isDebug) {
   require('electron-debug')();
 }
 
-const cardDbPath = isDebug
-  ? path.join(webpackPaths.appPath, './db/AllPrintings.sqlite')
-  : path.join(__dirname, '../../db/AllPrintings.sqlite'); // In prod, __dirname is release/app/dist/main. We want release/app/sql
-
-let database = null;
-try {
-  database = new Database(cardDbPath, { readonly: true, fileMustExist: true });
-} catch (err) {
-  console.error('[DB Load Error]', err.message);
-}
+const cardDb = new CardDB();
 
 ipcMain.on('search-query', async (event, arg) => {
-  let results = [];
-  try {
-    const stmt = database.prepare(
-      'SELECT name, uuid, scryfallId, originalText FROM cards WHERE name LIKE ?'
-    );
-    results = stmt.all('%slimefoot%');
-  } catch (err) {
-    console.error('[DB Statement Error]', err.message);
-  }
+  const results = cardDb.searchCardsByName({ keyword: 'slimefoot' });
   event.reply('search-results', results);
 });
 
 ipcMain.on('played', async (event, arg) => {
   console.log('played', arg);
-  mainWindow.webContents.send('etb', arg);
+  boardWindow.webContents.send('etb', arg);
 });
 
 ipcMain.on('draw', async (event, arg) => {
@@ -81,11 +63,12 @@ ipcMain.on('import', async (event, arg) => {
   const deckPath = isDebug
     ? path.join(webpackPaths.appPath, './db/slimefoot.txt')
     : path.join(__dirname, '../../db/slimefoot.txt');
+
   console.log('importing deck', deckPath);
-  const importer = new DeckImporter(database);
-  const lines = fs.readFileSync(deckPath).toString().split('\n');
-  const cards = importer.import(lines);
-  mainWindow.webContents.send('newdeck', cards);
+
+  const importer = new DeckImporter({ cardDb });
+  const cards = importer.importFromFile({ filePath: deckPath });
+  boardWindow.webContents.send('newdeck', cards);
 });
 
 const installExtensions = async () => {
@@ -114,7 +97,7 @@ const createWindow = async () => {
     return path.join(RESOURCES_PATH, ...paths);
   };
 
-  mainWindow = new BrowserWindow({
+  boardWindow = new BrowserWindow({
     show: false,
     width: 1560,
     height: 728,
@@ -126,16 +109,16 @@ const createWindow = async () => {
     },
   });
 
-  mainWindow.loadURL(resolveHtmlPath('board.html'));
+  boardWindow.loadURL(resolveHtmlPath('board.html'));
 
-  mainWindow.on('ready-to-show', () => {
-    if (!mainWindow) {
-      throw new Error('"mainWindow" is not defined');
+  boardWindow.on('ready-to-show', () => {
+    if (!boardWindow) {
+      throw new Error('"boardWindow" is not defined');
     }
     if (process.env.START_MINIMIZED) {
-      mainWindow.minimize();
+      boardWindow.minimize();
     } else {
-      mainWindow.show();
+      boardWindow.show();
     }
   });
 
@@ -169,15 +152,15 @@ const createWindow = async () => {
     handWindow = null;
   });
 
-  mainWindow.on('closed', () => {
-    mainWindow = null;
+  boardWindow.on('closed', () => {
+    boardWindow = null;
   });
 
-  const menuBuilder = new MenuBuilder(mainWindow);
+  const menuBuilder = new MenuBuilder(boardWindow);
   menuBuilder.buildMenu();
 
   // Open urls in the user's browser
-  mainWindow.webContents.setWindowOpenHandler((edata) => {
+  boardWindow.webContents.setWindowOpenHandler((edata) => {
     shell.openExternal(edata.url);
     return { action: 'deny' };
   });
@@ -206,7 +189,7 @@ app
     app.on('activate', () => {
       // On macOS it's common to re-create a window in the app when the
       // dock icon is clicked and there are no other windows open.
-      if (mainWindow === null) createWindow();
+      if (boardWindow === null) createWindow();
     });
   })
   .catch(console.log);
