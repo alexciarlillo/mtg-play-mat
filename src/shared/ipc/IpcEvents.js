@@ -4,4 +4,5 @@ export default {
   ETB: 'ETB',
   IMPORT: 'IMPORT',
   DECK_LOADED: 'DECK_LOADED',
+  PLAY_TEST: 'PLAY_TEST',
 };

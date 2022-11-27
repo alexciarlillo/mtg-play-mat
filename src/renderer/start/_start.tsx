@@ -1,18 +1,9 @@
 import { createRoot } from 'react-dom/client';
-import Board from 'Board';
-import BoardStore, { BoardStoreProvider } from 'BoardStore';
-import { ContextMenuProvider } from 'ContextMenuProvider';
+import Start from 'Start';
 
-const container = document.getElementById('board')!;
+const container = document.getElementById('start')!;
 
 if (container) {
-  const store = new BoardStore();
   const root = createRoot(container);
-  root.render(
-    <BoardStoreProvider store={store}>
-      <ContextMenuProvider>
-        <Board />
-      </ContextMenuProvider>
-    </BoardStoreProvider>
-  );
+  root.render(<Start />);
 }

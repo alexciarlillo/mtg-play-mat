@@ -31,6 +31,16 @@ export default class IpcBus {
       this.windowsByType[WindowTypes.HAND]?.send(IpcEvents.DRAW, arg);
     });
 
+    this.mainChannel.On(IpcEvents.PLAY_TEST, async (event, arg) => {
+      if (
+        this.windowsByType[WindowTypes.BOARD] &&
+        this.windowsByType[WindowTypes.HAND]
+      ) {
+        this.windowsByType[WindowTypes.BOARD].show();
+        this.windowsByType[WindowTypes.HAND].show();
+      }
+    });
+
     // TODO: fix this. defer this to some type of singleton manager
     // instance??
     this.mainChannel.On(IpcEvents.IMPORT, async (event, arg) => {
