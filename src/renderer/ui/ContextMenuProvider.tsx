@@ -1,6 +1,6 @@
 import React from 'react';
 import { makeAutoObservable } from 'mobx';
-import ContextMenu from './ContextMenu';
+import ContextMenu from 'ContextMenu';
 
 export default class ContextMenuStore {
   isOpen = false;

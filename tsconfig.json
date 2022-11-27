@@ -9,7 +9,17 @@
     "strict": true,
     "pretty": true,
     "sourceMap": true,
-    "baseUrl": "./src",
+    "baseUrl": ".",
+    "paths": {
+      "*": [
+        "src/*",
+        "src/main/*",
+        "src/main/ipc/*",
+        "src/main/db/*",
+        "src/shared/ipc/*",
+        "src/shared/util/*"
+      ]
+    },
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noImplicitReturns": true,

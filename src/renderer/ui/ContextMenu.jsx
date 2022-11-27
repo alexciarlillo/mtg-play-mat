@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { observer } from 'mobx-react';
 import 'tailwindcss/tailwind.css';
-import { useContextMenu } from './ContextMenuProvider';
+import { useContextMenu } from 'ContextMenuProvider';
 
 const Menu = () => {
   const menu = useContextMenu();

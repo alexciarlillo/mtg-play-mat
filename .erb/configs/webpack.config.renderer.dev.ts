@@ -49,8 +49,12 @@ const configuration: webpack.Configuration = {
   entry: [
     `webpack-dev-server/client?http://localhost:${port}/dist`,
     'webpack/hot/only-dev-server',
-    path.join(webpackPaths.srcRendererPath, 'board/_board.tsx'),
-    path.join(webpackPaths.srcRendererPath, 'hand/_hand.tsx'),
+    path.join(
+      webpackPaths.srcRendererPath,
+      'modules/play-test/board/_board.tsx'
+    ),
+    path.join(webpackPaths.srcRendererPath, 'modules/play-test/hand/_hand.tsx'),
+    path.join(webpackPaths.srcRendererPath, 'start/_start.tsx'),
   ],
 
   output: {
@@ -154,7 +158,10 @@ const configuration: webpack.Configuration = {
 
     new HtmlWebpackPlugin({
       filename: path.join('board.html'),
-      template: path.join(webpackPaths.srcRendererPath, 'board/board.ejs'),
+      template: path.join(
+        webpackPaths.srcRendererPath,
+        'modules/play-test/board/board.ejs'
+      ),
       minify: {
         collapseWhitespace: true,
         removeAttributeQuotes: true,
@@ -168,7 +175,24 @@ const configuration: webpack.Configuration = {
 
     new HtmlWebpackPlugin({
       filename: path.join('hand.html'),
-      template: path.join(webpackPaths.srcRendererPath, 'hand/hand.ejs'),
+      template: path.join(
+        webpackPaths.srcRendererPath,
+        'modules/play-test/hand/hand.ejs'
+      ),
+      minify: {
+        collapseWhitespace: true,
+        removeAttributeQuotes: true,
+        removeComments: true,
+      },
+      isBrowser: false,
+      env: process.env.NODE_ENV,
+      isDevelopment: process.env.NODE_ENV !== 'production',
+      nodeModules: webpackPaths.appNodeModulesPath,
+    }),
+
+    new HtmlWebpackPlugin({
+      filename: path.join('start.html'),
+      template: path.join(webpackPaths.srcRendererPath, 'start/start.ejs'),
       minify: {
         collapseWhitespace: true,
         removeAttributeQuotes: true,

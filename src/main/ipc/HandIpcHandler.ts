@@ -1,6 +1,6 @@
 import { ipcRenderer } from 'electron';
-import IpcChannel from './IpcChannel';
-import IpcEvents from '../../shared/ipc/IpcEvents';
+import IpcChannel from 'IpcChannel';
+import IpcEvents from 'IpcEvents';
 
 export default class HandIpcHandler {
   constructor() {

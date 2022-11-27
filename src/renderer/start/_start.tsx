@@ -1,7 +1,7 @@
 import { createRoot } from 'react-dom/client';
-import Board from './Board';
-import BoardStore, { BoardStoreProvider } from './BoardStore';
-import { ContextMenuProvider } from '../ui/ContextMenuProvider';
+import Board from 'Board';
+import BoardStore, { BoardStoreProvider } from 'BoardStore';
+import { ContextMenuProvider } from 'ContextMenuProvider';
 
 const container = document.getElementById('board')!;
 

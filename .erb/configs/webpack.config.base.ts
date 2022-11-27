@@ -2,6 +2,7 @@
  * Base webpack config used across other specific configs
  */
 
+import path from 'path';
 import webpack from 'webpack';
 import webpackPaths from './webpack.paths';
 import { dependencies as externals } from '../../release/app/package.json';
@@ -40,7 +41,21 @@ const configuration: webpack.Configuration = {
    */
   resolve: {
     extensions: ['.js', '.jsx', '.json', '.ts', '.tsx'],
-    modules: [webpackPaths.srcPath, 'node_modules'],
+    modules: [
+      webpackPaths.srcMainPath,
+      path.join(webpackPaths.srcMainPath, 'db'),
+      path.join(webpackPaths.srcMainPath, 'ipc'),
+      webpackPaths.srcPath,
+      webpackPaths.srcSharedPath,
+      path.join(webpackPaths.srcSharedPath, 'util'),
+      path.join(webpackPaths.srcSharedPath, 'ipc'),
+      path.join(webpackPaths.srcSharedPath, 'models'),
+      path.join(webpackPaths.srcRendererPath, 'modules/play-test/board'),
+      path.join(webpackPaths.srcRendererPath, 'modules/play-test/hand'),
+      path.join(webpackPaths.srcRendererPath, 'start'),
+      path.join(webpackPaths.srcRendererPath, 'ui'),
+      'node_modules',
+    ],
   },
 
   plugins: [

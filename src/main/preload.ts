@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
-import BoardIpcHandler from './ipc/BoardIpcHandler';
-import HandIpcHandler from './ipc/HandIpcHandler';
+import BoardIpcHandler from 'BoardIpcHandler';
+import HandIpcHandler from 'HandIpcHandler';
 
 const boardIpcHandler = new BoardIpcHandler();
 contextBridge.exposeInMainWorld('Board', boardIpcHandler);

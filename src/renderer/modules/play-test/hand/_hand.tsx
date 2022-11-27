@@ -1,6 +1,6 @@
 import { createRoot } from 'react-dom/client';
-import Hand from './Hand';
-import HandStore, { HandStoreProvider } from './HandStore';
+import Hand from 'Hand';
+import HandStore, { HandStoreProvider } from 'HandStore';
 
 const container = document.getElementById('hand')!;
 

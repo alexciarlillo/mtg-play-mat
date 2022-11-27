@@ -1,8 +1,8 @@
 import classNames from 'classnames';
 import { observer } from 'mobx-react';
-import { useBoardStore } from './BoardStore';
+import { useBoardStore } from 'BoardStore';
 import 'tailwindcss/tailwind.css';
-import CardImg from '../ui/CardImg';
+import CardImg from 'CardImg';
 
 const Library = () => {
   const board = useBoardStore();

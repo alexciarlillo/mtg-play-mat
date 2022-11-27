@@ -1,6 +1,6 @@
 import { observer } from 'mobx-react';
-import Card from '../ui/Card';
-import { useHandStore } from './HandStore';
+import Card from 'Card';
+import { useHandStore } from 'HandStore';
 import 'tailwindcss/tailwind.css';
 
 const Hand = () => {

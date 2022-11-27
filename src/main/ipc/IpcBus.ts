@@ -1,11 +1,11 @@
 import path from 'path';
 import { ipcMain } from 'electron';
-import IpcEvents from '../../shared/ipc/IpcEvents';
-import IpcChannel from './IpcChannel';
-import WindowTypes from './WindowTypes';
+import IpcEvents from 'IpcEvents';
+import IpcChannel from 'IpcChannel';
+import WindowTypes from 'WindowTypes';
+import DeckImporter from 'DeckImporter';
+import CardDB from 'CardDB';
 import webpackPaths from '../../../.erb/configs/webpack.paths';
-import DeckImporter from '../../util/DeckImporter';
-import CardDB from '../db/CardDB';
 
 export default class IpcBus {
   constructor() {

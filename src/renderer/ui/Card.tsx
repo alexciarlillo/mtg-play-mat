@@ -2,8 +2,8 @@ import PropTypes from 'prop-types';
 import Draggable from 'react-draggable';
 import classNames from 'classnames';
 import { useState, useEffect } from 'react';
-import CardImg from './CardImg';
-import { useContextMenu } from './ContextMenuProvider';
+import CardImg from 'CardImg';
+import { useContextMenu } from 'ContextMenuProvider';
 
 const Card = ({
   scryfallId,

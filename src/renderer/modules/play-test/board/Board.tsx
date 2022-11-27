@@ -1,10 +1,10 @@
 import { useEffect } from 'react';
 import { observer } from 'mobx-react';
-import Library from './Library';
-import Graveyard from './Graveyard';
-import Card from '../ui/Card';
-import { useBoardStore } from './BoardStore';
-import { useContextMenu } from '../ui/ContextMenuProvider';
+import Library from 'Library';
+import Graveyard from 'Graveyard';
+import Card from 'Card';
+import { useBoardStore } from 'BoardStore';
+import { useContextMenu } from 'ContextMenuProvider';
 import 'tailwindcss/tailwind.css';
 
 const Board = () => {
