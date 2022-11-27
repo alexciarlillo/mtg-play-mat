@@ -43,8 +43,10 @@ const configuration: webpack.Configuration = {
     extensions: ['.js', '.jsx', '.json', '.ts', '.tsx'],
     modules: [
       webpackPaths.srcMainPath,
-      path.join(webpackPaths.srcMainPath, 'db'),
-      path.join(webpackPaths.srcMainPath, 'ipc'),
+      path.join(webpackPaths.srcMainPath, 'shared'),
+      path.join(webpackPaths.srcMainPath, 'shared/db'),
+      path.join(webpackPaths.srcMainPath, 'shared/ipc'),
+      path.join(webpackPaths.srcMainPath, 'modules/play-test'),
       webpackPaths.srcPath,
       webpackPaths.srcSharedPath,
       path.join(webpackPaths.srcSharedPath, 'util'),

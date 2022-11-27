@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3';
 import path from 'path';
-import webpackPaths from '../../../.erb/configs/webpack.paths';
+import webpackPaths from '../../../../.erb/configs/webpack.paths';
 
 export default class DB {
   name = null;
