@@ -1,8 +1,23 @@
+import IpcEvents from 'IpcEvents';
+
 export default class BaseModule {
-  constructor({ name, windowManager, ipcBus }) {
+  constructor({ name, label, windowManager, ipcBus }) {
     this.name = name;
+    this.label = label;
     this.windowManager = windowManager;
     this.ipcBus = ipcBus;
+    this.windowsById = {};
+
+    this.ipcBus.registerHandler({
+      event: IpcEvents.OPEN_MODULE,
+      handle: (moduleName) => {
+        if (this.name === moduleName) {
+          Object.values(this.windowsById).forEach((_window) => {
+            _window.show();
+          });
+        }
+      },
+    });
   }
 
   registerModuleWindow = ({
@@ -11,9 +26,10 @@ export default class BaseModule {
     height = 500,
     html,
     onReady,
+    onClosed,
     ...windowProps
   }) => {
-    return this.windowManager.registerWindow({
+    const win = this.windowManager.registerWindow({
       type,
       width,
       height,
@@ -22,8 +38,18 @@ export default class BaseModule {
         if (process.env.START_MODULE === this.name) {
           _window.show();
         }
+
+        onReady?.({ window: _window });
+      },
+      onClosed: ({ windowId }) => {
+        delete this.windowsById[windowId];
+        onClosed?.({ windowId });
       },
       ...windowProps,
     });
+
+    this.windowsById[win.id] = win;
+
+    return win;
   };
 }

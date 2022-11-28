@@ -15,9 +15,11 @@ import log from 'electron-log';
 import MenuBuilder from './menu';
 import WindowManager from './shared/WindowManager';
 import IpcBus from './shared/ipc/IpcBus';
+import IpcEvents from '../shared/ipc/IpcEvents';
 import ModuleManager from './shared/ModuleManager';
 import WindowTypes from './shared/ipc/WindowTypes';
 import PlayTestModule from './modules/play-test/PlayTestModule';
+import DeckBuilderModule from './modules/deck-builder/DeckBuilderModule';
 
 export default class AppUpdater {
   constructor() {
@@ -64,12 +66,22 @@ const start = async () => {
   const ipcBus = new IpcBus();
 
   moduleManager.registerModule(new PlayTestModule({ windowManager, ipcBus }));
+  moduleManager.registerModule(
+    new DeckBuilderModule({ windowManager, ipcBus })
+  );
 
   startWindow = windowManager.registerWindow({
     type: WindowTypes.START,
     html: 'start.html',
     onReady: (window) => {
       window.show();
+    },
+  });
+
+  ipcBus.registerHandler({
+    event: IpcEvents.LIST_MODULES,
+    handle: () => {
+      startWindow.send(IpcEvents.LIST_MODULES, moduleManager.moduleList);
     },
   });
 

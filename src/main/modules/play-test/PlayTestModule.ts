@@ -5,7 +5,7 @@ import WindowTypes from '../../shared/ipc/WindowTypes';
 
 export default class PlayTestModule extends BaseModule {
   constructor({ ...rest }) {
-    super({ name: 'PlayTestModule', ...rest });
+    super({ name: 'PlayTest', label: 'Play Test', ...rest });
 
     this.cardDb = new CardDB();
 
@@ -14,10 +14,9 @@ export default class PlayTestModule extends BaseModule {
       width: 1560,
       height: 728,
       html: 'board.html',
-      onReady: (window) => {
-        if (process.env.START_MODULE === this.name) {
-          window.show();
-        }
+      onClosed: () => {
+        this.boardWindow = null;
+        this.handWindow?.close();
       },
     });
 
@@ -27,10 +26,9 @@ export default class PlayTestModule extends BaseModule {
       height: 330,
       html: 'hand.html',
       frame: false,
-      onReady: (window) => {
-        if (process.env.START_MODULE === this.name) {
-          window.show();
-        }
+      onClosed: () => {
+        this.handWindow = null;
+        this.boardWindow?.close();
       },
     });
 
@@ -45,14 +43,6 @@ export default class PlayTestModule extends BaseModule {
       event: IpcEvents.DRAW,
       handle: (arg) => {
         this.handWindow?.send(IpcEvents.DRAW, arg);
-      },
-    });
-
-    this.ipcBus.registerHandler({
-      event: IpcEvents.PLAY_TEST,
-      handle: () => {
-        this.handWindow?.show();
-        this.boardWindow?.show();
       },
     });
   }

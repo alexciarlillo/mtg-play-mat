@@ -54,6 +54,10 @@ const configuration: webpack.Configuration = {
       'modules/play-test/board/_board.tsx'
     ),
     path.join(webpackPaths.srcRendererPath, 'modules/play-test/hand/_hand.tsx'),
+    path.join(
+      webpackPaths.srcRendererPath,
+      'modules/deck-builder/_deck-builder.tsx'
+    ),
     path.join(webpackPaths.srcRendererPath, 'start/_start.tsx'),
   ],
 
@@ -193,6 +197,23 @@ const configuration: webpack.Configuration = {
     new HtmlWebpackPlugin({
       filename: path.join('start.html'),
       template: path.join(webpackPaths.srcRendererPath, 'start/start.ejs'),
+      minify: {
+        collapseWhitespace: true,
+        removeAttributeQuotes: true,
+        removeComments: true,
+      },
+      isBrowser: false,
+      env: process.env.NODE_ENV,
+      isDevelopment: process.env.NODE_ENV !== 'production',
+      nodeModules: webpackPaths.appNodeModulesPath,
+    }),
+
+    new HtmlWebpackPlugin({
+      filename: path.join('deck-builder.html'),
+      template: path.join(
+        webpackPaths.srcRendererPath,
+        'modules/deck-builder/deck-builder.ejs'
+      ),
       minify: {
         collapseWhitespace: true,
         removeAttributeQuotes: true,

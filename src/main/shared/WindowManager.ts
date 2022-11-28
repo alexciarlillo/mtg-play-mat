@@ -60,9 +60,11 @@ export default class WindowManager {
       }
     });
 
-    windows[type].on('closed', () => {
+    const windowId = window.id;
+
+    windows[type].on('closed', (arg) => {
       windows[type] = null;
-      onClosed?.();
+      onClosed?.({ windowId });
     });
 
     // Open urls in the user's browser

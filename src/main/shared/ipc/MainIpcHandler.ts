@@ -7,7 +7,11 @@ export default class MainIpcHandler {
     this.rendererChannel = new IpcChannel({ ipc: ipcRenderer });
   }
 
-  playTest = () => {
-    this.rendererChannel.Send(IpcEvents.PLAY_TEST);
+  openModule = ({ name }) => {
+    this.rendererChannel.Send(IpcEvents.OPEN_MODULE, name);
+  };
+
+  listModules = () => {
+    this.rendererChannel.Send(IpcEvents.LIST_MODULES);
   };
 }
