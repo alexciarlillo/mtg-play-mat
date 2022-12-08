@@ -8,16 +8,6 @@ export default class DeckBuilderModule extends BaseModule {
     super({ name: 'DeckBuilder', label: 'Deck Builder', ...rest });
 
     this.cardDb = new CardDB();
-
-    this.window = this.registerModuleWindow({
-      type: WindowTypes.BOARD,
-      width: 900,
-      height: 500,
-      html: 'deck-builder.html',
-      onClosed: () => {
-        this.window = null;
-      },
-    });
   }
 
   open = () => {};

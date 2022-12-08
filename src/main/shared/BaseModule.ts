@@ -7,17 +7,6 @@ export default class BaseModule {
     this.windowManager = windowManager;
     this.ipcBus = ipcBus;
     this.windowsById = {};
-
-    this.ipcBus.registerHandler({
-      event: IpcEvents.OPEN_MODULE,
-      handle: (moduleName) => {
-        if (this.name === moduleName) {
-          Object.values(this.windowsById).forEach((_window) => {
-            _window.show();
-          });
-        }
-      },
-    });
   }
 
   registerModuleWindow = ({

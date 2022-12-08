@@ -9,13 +9,12 @@
  * `./src/main.js` using webpack. This gives us some performance wins.
  */
 
-import { app, shell } from 'electron';
+import { app } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
 import MenuBuilder from './menu';
 import WindowManager from './shared/WindowManager';
 import IpcBus from './shared/ipc/IpcBus';
-import IpcEvents from '../shared/ipc/IpcEvents';
 import ModuleManager from './shared/ModuleManager';
 import WindowTypes from './shared/ipc/WindowTypes';
 import PlayTestModule from './modules/play-test/PlayTestModule';
@@ -72,16 +71,9 @@ const start = async () => {
 
   startWindow = windowManager.registerWindow({
     type: WindowTypes.START,
-    html: 'start.html',
+    html: '/app.html',
     onReady: (window) => {
       window.show();
-    },
-  });
-
-  ipcBus.registerHandler({
-    event: IpcEvents.LIST_MODULES,
-    handle: () => {
-      startWindow.send(IpcEvents.LIST_MODULES, moduleManager.moduleList);
     },
   });
 

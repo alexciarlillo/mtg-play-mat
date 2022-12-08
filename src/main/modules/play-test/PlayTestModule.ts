@@ -45,6 +45,14 @@ export default class PlayTestModule extends BaseModule {
         this.handWindow?.send(IpcEvents.DRAW, arg);
       },
     });
+
+    this.ipcBus.registerHandler({
+      event: IpcEvents.PLAY_TEST,
+      handle: (arg) => {
+        this.handWindow.show();
+        this.boardWindow.show();
+      },
+    });
   }
 
   open = () => {};
