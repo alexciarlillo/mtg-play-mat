@@ -4,6 +4,8 @@ import { routes } from './routes';
 
 const router = createHashRouter(routes);
 
-createRoot(document.getElementById('root')).render(
-  <RouterProvider router={router} />
-);
+const container = document.getElementById('root')!;
+
+if (container) {
+  createRoot(container).render(<RouterProvider router={router} />);
+}

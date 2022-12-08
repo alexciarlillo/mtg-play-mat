@@ -10,9 +10,9 @@ const modules = [
 ];
 
 const Start = () => {
-  useEffect(() => {
-    window.PlayTest.load({ deckId: 'asdf' });
-  }, []);
+  // useEffect(() => {
+  //   window.PlayTest.load({ deckId: 'asdf' });
+  // }, []);
 
   return (
     <div className="min-h-full flex flex-col">

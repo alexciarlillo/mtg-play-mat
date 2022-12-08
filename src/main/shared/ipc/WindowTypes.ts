@@ -1,4 +1,5 @@
 const WindowTypes = {
+  APP: 'APP',
   BOARD: 'BOARD',
   HAND: 'HAND',
 };

@@ -55,7 +55,7 @@ export default class WindowManager {
         if (type === WindowTypes.BOARD || type === WindowTypes.HAND) {
           windows[type].show();
         }
-      } else if (type === WindowTypes.START) {
+      } else if (type === WindowTypes.APP) {
         windows[type].show();
       }
     });

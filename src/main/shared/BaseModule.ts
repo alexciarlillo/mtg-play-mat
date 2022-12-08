@@ -1,5 +1,3 @@
-import IpcEvents from 'IpcEvents';
-
 export default class BaseModule {
   constructor({ name, label, windowManager, ipcBus }) {
     this.name = name;
@@ -24,10 +22,6 @@ export default class BaseModule {
       height,
       html,
       onReady: (_window) => {
-        if (process.env.START_MODULE === this.name) {
-          _window.show();
-        }
-
         onReady?.({ window: _window });
       },
       onClosed: ({ windowId }) => {

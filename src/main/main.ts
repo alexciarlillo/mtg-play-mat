@@ -70,8 +70,10 @@ const start = async () => {
   );
 
   startWindow = windowManager.registerWindow({
-    type: WindowTypes.START,
-    html: '/app.html',
+    type: WindowTypes.APP,
+    html: 'app.html',
+    width: 1500,
+    height: 500,
     onReady: (window) => {
       window.show();
     },
