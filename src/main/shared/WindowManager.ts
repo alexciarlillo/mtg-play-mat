@@ -16,6 +16,10 @@ export default class WindowManager {
     this.windows = {};
   }
 
+  get mainWindow() {
+    return this.windows[WindowTypes.APP];
+  }
+
   registerWindow = ({
     type,
     width = 500,

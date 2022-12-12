@@ -7,6 +7,10 @@ export default class BaseModule {
     this.windowsById = {};
   }
 
+  get mainWindow() {
+    return this.windowManager.mainWindow;
+  }
+
   registerModuleWindow = ({
     type,
     width = 500,

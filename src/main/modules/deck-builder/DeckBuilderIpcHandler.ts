@@ -11,4 +11,8 @@ export default class DeckBuilderIpcHandler {
   import = (arg) => {
     this.rendererChannel.Send(IpcEvents.IMPORT, arg);
   };
+
+  getDecks = () => {
+    this.rendererChannel.Send(IpcEvents.GET_DECKS);
+  };
 }

@@ -5,6 +5,15 @@ export default class CardDB extends DB {
     super({ name: 'AllPrintings', readonly: true });
   }
 
+  getCardById = ({ id }) => {
+    const query =
+      'SELECT name, uuid, scryfallId, setCode, number FROM cards WHERE uuid = ?';
+
+    const stmt = this.db.prepare(query);
+
+    return stmt.get([id].filter(Boolean));
+  };
+
   getCard = ({ name, setCode, number }) => {
     let query =
       'SELECT name, uuid, scryfallId, setCode, number FROM cards WHERE name = ? COLLATE NOCASE AND setCode = ? COLLATE NOCASE';
