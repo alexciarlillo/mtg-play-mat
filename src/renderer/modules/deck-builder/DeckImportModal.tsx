@@ -36,14 +36,40 @@ const DeckImportModal = ({ isOpen, onClose, onCancel, onSubmit }) => {
             Paste in a deck list to import it.
           </Dialog.Description>
 
-          <textarea
-            rows={12}
-            name="deck"
-            id="deck"
-            className="block w-full rounded-md border-2 border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-            value={deckList}
-            onChange={handleDeckListChange}
-          />
+          <div>
+            <label
+              htmlFor="name"
+              className="block text-sm font-medium text-gray-700"
+            >
+              Name
+            </label>
+            <div className="mt-1">
+              <input
+                id="name"
+                name="name"
+                type="text"
+                required
+                className="block w-full appearance-none rounded-md border border-gray-300 px-3 py-2 placeholder-gray-400 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-indigo-500 sm:text-sm"
+              />
+            </div>
+          </div>
+
+          <div className="mt-2">
+            <label
+              htmlFor="deck"
+              className="block text-sm font-medium text-gray-700"
+            >
+              Card list
+            </label>
+            <textarea
+              rows={12}
+              name="deck"
+              id="deck"
+              className="mt-1 block w-full rounded-md border-2 border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+              value={deckList}
+              onChange={handleDeckListChange}
+            />
+          </div>
 
           <div className="mt-2 flex justify-between">
             <button

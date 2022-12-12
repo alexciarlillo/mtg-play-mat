@@ -22,7 +22,7 @@ const DeckBuilder = () => {
 
   return (
     <div className="w-full h-full">
-      <div className="w-full h-full flex">
+      <div className="w-full h-full grid grid-cols-3">
         <button
           type="button"
           className="relative block aspect-card w-52 rounded-lg border-2 border-dashed border-gray-300 p-12 text-center hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 flex flex-col items-center justify-center"
@@ -35,8 +35,13 @@ const DeckBuilder = () => {
         </button>
         {store.decks.map((deck) => {
           return (
-            <div className="aspect-card w-52" key={deck.id}>
-              <CardImg scryfallId={deck.displayScryfallId} />
+            <div className="w-52" key={deck.id}>
+              <div className="aspect-card">
+                <CardImg scryfallId={deck.displayScryfallId} />
+              </div>
+              <span className="mt-2 block text-sm font-medium text-gray-900 text-center">
+                {deck.name}
+              </span>
             </div>
           );
         })}
