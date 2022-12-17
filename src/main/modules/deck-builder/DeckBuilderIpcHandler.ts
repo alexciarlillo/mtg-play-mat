@@ -12,6 +12,10 @@ export default class DeckBuilderIpcHandler {
     this.rendererChannel.Send(IpcEvents.IMPORT, arg);
   };
 
+  delete = (arg) => {
+    this.rendererChannel.Send(IpcEvents.DELETE_DECK, arg);
+  };
+
   getDecks = () => {
     this.rendererChannel.Send(IpcEvents.GET_DECKS);
   };

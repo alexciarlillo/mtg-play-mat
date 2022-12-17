@@ -13,31 +13,48 @@ export default class DeckBuilderModule extends BaseModule {
 
     this.ipcBus.registerHandler({
       event: IpcEvents.IMPORT,
-      handle: (deckList) => {
+      handle: ({ name, deckList }) => {
         const importer = new DeckImporter({ cardDb: this.cardDb });
         const cards = importer.importFromString({ string: deckList });
 
         this.deckDb.addDeck({
-          name: 'slimefoot',
-          displayCardId: 'f599550d-28ba-53ae-b725-20489667ad9d',
+          name,
+          displayCardId: cards[0].uuid,
           cardIds: cards.map((c) => c.uuid),
         });
+
+        this.mainWindow?.send(IpcEvents.GET_DECKS, this.getDecks());
       },
     });
 
     this.ipcBus.registerHandler({
       event: IpcEvents.GET_DECKS,
       handle: () => {
-        const decks = this.deckDb.getDecks();
-        decks.forEach((deck) => {
-          if (deck.display_card_id) {
-            const card = this.cardDb.getCardById({ id: deck.display_card_id });
-            deck.displayScryfallId = card.scryfallId;
-          }
+        this.mainWindow?.send(IpcEvents.GET_DECKS, this.getDecks());
+      },
+    });
+
+    this.ipcBus.registerHandler({
+      event: IpcEvents.DELETE_DECK,
+      handle: ({ id }) => {
+        this.deckDb.deleteDeck({
+          id,
         });
 
-        this.mainWindow?.send(IpcEvents.GET_DECKS, decks);
+        this.mainWindow?.send(IpcEvents.GET_DECKS, this.getDecks());
       },
     });
   }
+
+  getDecks = () => {
+    const decks = this.deckDb.getDecks();
+    decks.forEach((deck) => {
+      if (deck.display_card_id) {
+        const card = this.cardDb.getCardById({ id: deck.display_card_id });
+        deck.displayScryfallId = card.scryfallId;
+      }
+    });
+
+    return decks;
+  };
 }

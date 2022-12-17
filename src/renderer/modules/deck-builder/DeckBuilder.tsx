@@ -1,24 +1,38 @@
+import { Link } from 'react-router-dom';
 import { observer } from 'mobx-react';
 import CardImg from 'CardImg';
 import { useDeckStore } from 'DeckStore';
 import { useState, useEffect } from 'react';
+import { useContextMenu } from 'ContextMenuProvider';
 import DeckImportModal from 'DeckImportModal';
 import { PlusIcon } from '@heroicons/react/24/outline';
 import 'tailwindcss/tailwind.css';
 
 const DeckBuilder = () => {
   const store = useDeckStore();
+  const menu = useContextMenu();
 
   const [importingDeck, setImportingDeck] = useState(false);
 
-  handleImport = (deckList) => {
-    store.addDeck(deckList);
+  handleImport = ({ name, deckList }) => {
+    store.addDeck({ name, deckList });
     setImportingDeck(false);
   };
 
   useEffect(() => {
     store.refreshDecks();
   }, []);
+
+  deckMenu = (e, deck) => {
+    e.preventDefault();
+    menu.open({
+      specs: [
+        { title: 'Delete', action: () => store.deleteDeck({ id: deck.id }) },
+      ],
+      x: e.pageX,
+      y: e.pageY,
+    });
+  };
 
   return (
     <div className="w-full h-full">
@@ -35,14 +49,19 @@ const DeckBuilder = () => {
         </button>
         {store.decks.map((deck) => {
           return (
-            <div className="w-52" key={deck.id}>
+            <Link
+              className="w-52"
+              key={deck.id}
+              onContextMenu={(e) => deckMenu(e, deck)}
+              to={`/decks/${deck.id}`}
+            >
               <div className="aspect-card">
                 <CardImg scryfallId={deck.displayScryfallId} />
               </div>
               <span className="mt-2 block text-sm font-medium text-gray-900 text-center">
                 {deck.name}
               </span>
-            </div>
+            </Link>
           );
         })}
       </div>
@@ -50,7 +69,7 @@ const DeckBuilder = () => {
         isOpen={importingDeck}
         onClose={() => setImportingDeck(false)}
         onCancel={() => setImportingDeck(false)}
-        onSubmit={(deckList) => handleImport(deckList)}
+        onSubmit={({ name, deckList }) => handleImport({ name, deckList })}
       />
     </div>
   );

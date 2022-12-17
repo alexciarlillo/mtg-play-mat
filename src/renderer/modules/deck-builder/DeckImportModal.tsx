@@ -3,18 +3,24 @@ import { useState, useEffect } from 'react';
 
 const DeckImportModal = ({ isOpen, onClose, onCancel, onSubmit }) => {
   const [deckList, setDeckList] = useState('');
+  const [name, setName] = useState('');
 
-  const handleDeckListChange = (event) => {
+  handleDeckListChange = (event) => {
     setDeckList(event.target.value);
+  };
+
+  handleNameChange = (event) => {
+    setName(event.target.value);
   };
 
   handleSubmit = () => {
     // TODO: pre-validate
-    onSubmit(deckList);
+    onSubmit({ name, deckList });
   };
 
   useEffect(() => {
     setDeckList('');
+    setName('');
   }, [isOpen]);
 
   return (
@@ -50,6 +56,7 @@ const DeckImportModal = ({ isOpen, onClose, onCancel, onSubmit }) => {
                 type="text"
                 required
                 className="block w-full appearance-none rounded-md border border-gray-300 px-3 py-2 placeholder-gray-400 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-indigo-500 sm:text-sm"
+                onChange={handleNameChange}
               />
             </div>
           </div>
@@ -80,7 +87,7 @@ const DeckImportModal = ({ isOpen, onClose, onCancel, onSubmit }) => {
             </button>
             <button
               className="inline-flex items-center rounded border border-transparent bg-indigo-600 px-2.5 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-              onClick={() => onSubmit(deckList)}
+              onClick={handleSubmit}
             >
               Submit
             </button>

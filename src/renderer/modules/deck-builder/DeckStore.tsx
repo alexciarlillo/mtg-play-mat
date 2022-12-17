@@ -24,8 +24,12 @@ export default class DeckStore {
     window.DeckBuilder.getDecks();
   }
 
-  addDeck(deckList) {
-    window.DeckBuilder.import(deckList);
+  addDeck({ name, deckList }) {
+    window.DeckBuilder.import({ name, deckList });
+  }
+
+  deleteDeck({ id }) {
+    window.DeckBuilder.delete({ id });
   }
 }
 

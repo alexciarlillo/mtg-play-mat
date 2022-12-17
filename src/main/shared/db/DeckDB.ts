@@ -41,4 +41,14 @@ export default class CardDB extends DB {
 
     insertMany(cardIds);
   };
+
+  deleteDeck = ({ id }) => {
+    const cardStmt = this.db.prepare(
+      'DELETE FROM deck_cards WHERE deck_id = ?'
+    );
+    const deckStmt = this.db.prepare('DELETE FROM decks where id = ?');
+
+    cardStmt.run(id);
+    deckStmt.run(id);
+  };
 }
