@@ -1,8 +1,9 @@
+import classNames from 'classnames';
 import PropTypes from 'prop-types';
 import { useState, useEffect } from 'react';
 import cardBackImg from '../../../assets/back.jpg';
 
-const CardImg = ({ scryfallId }) => {
+const CardImg = ({ scryfallId, className }) => {
   const [imageUri, setImageUri] = useState(null);
 
   useEffect(() => {
@@ -19,7 +20,7 @@ const CardImg = ({ scryfallId }) => {
 
   return imageUri ? (
     <img
-      className="rounded-lg h-full"
+      className={classNames(className, 'rounded-lg h-full')}
       src={imageUri}
       draggable={false}
       alt=""

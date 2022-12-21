@@ -5,7 +5,15 @@ import 'tailwindcss/tailwind.css';
 const DeckViewer = () => {
   const store = useDeckStore();
 
-  return <div className="w-full h-full">DECK VIEWER</div>;
+  playTest = () => {
+    window.PlayTest.load({ deckId: 1 });
+  };
+
+  return (
+    <div className="w-full h-full">
+      <button onClick={playTest}>Play Test</button>
+    </div>
+  );
 };
 
 export default observer(DeckViewer);

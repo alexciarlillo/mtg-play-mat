@@ -1,5 +1,6 @@
 import IpcEvents from 'IpcEvents';
 import CardDB from '../../shared/db/CardDB';
+import DeckDB from '../../shared/db/DeckDB';
 import BaseModule from '../../shared/BaseModule';
 import WindowTypes from '../../shared/ipc/WindowTypes';
 
@@ -8,6 +9,7 @@ export default class PlayTestModule extends BaseModule {
     super({ name: 'PlayTest', label: 'Play Test', ...rest });
 
     this.cardDb = new CardDB();
+    this.deckDb = new DeckDB();
 
     this.boardWindow = this.registerModuleWindow({
       type: WindowTypes.BOARD,
@@ -48,9 +50,14 @@ export default class PlayTestModule extends BaseModule {
 
     this.ipcBus.registerHandler({
       event: IpcEvents.PLAY_TEST,
-      handle: (arg) => {
+      handle: (deckId) => {
+        const cards = this.deckDb.getDeckCards({ deckId }).map((card) => {
+          return this.cardDb.getCardById({ id: card.card_id });
+        });
+
         this.handWindow.show();
         this.boardWindow.show();
+        this.boardWindow?.send(IpcEvents.DECK_LOADED, cards);
       },
     });
   }

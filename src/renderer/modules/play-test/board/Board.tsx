@@ -29,10 +29,6 @@ const Board = () => {
     });
   };
 
-  useEffect(() => {
-    board.importDeck();
-  }, [board]);
-
   return (
     <div
       className="h-screen w-screen bg-slate-300 relative flex"

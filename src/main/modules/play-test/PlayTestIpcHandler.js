@@ -2,7 +2,7 @@ import { ipcRenderer } from 'electron';
 import IpcChannel from 'IpcChannel';
 import IpcEvents from 'IpcEvents';
 
-export default class BoardIpcHandler {
+export default class PlayTestIpcHandler {
   constructor() {
     this.rendererChannel = new IpcChannel({ ipc: ipcRenderer });
   }

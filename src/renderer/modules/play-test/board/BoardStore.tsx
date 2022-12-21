@@ -35,10 +35,6 @@ export default class BoardStore {
     window.Board.draw({ id: scryfallId });
   }
 
-  importDeck = () => {
-    window.Board.import();
-  };
-
   reset(deck) {
     this.battlefield = [];
     this.graveyard = [];

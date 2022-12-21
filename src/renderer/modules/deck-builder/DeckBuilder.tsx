@@ -50,13 +50,16 @@ const DeckBuilder = () => {
         {store.decks.map((deck) => {
           return (
             <Link
-              className="w-52"
+              className="w-52 aspect-card"
               key={deck.id}
               onContextMenu={(e) => deckMenu(e, deck)}
               to={`/decks/${deck.id}`}
             >
-              <div className="aspect-card">
-                <CardImg scryfallId={deck.displayScryfallId} />
+              <div>
+                <CardImg
+                  scryfallId={deck.displayScryfallId}
+                  className="hover:ring hover:ring-indigo-400"
+                />
               </div>
               <span className="mt-2 block text-sm font-medium text-gray-900 text-center">
                 {deck.name}
