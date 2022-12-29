@@ -1,14 +1,15 @@
-import { useDeckStore } from 'DeckStore';
+import { useParams } from 'react-router-dom';
 import { observer } from 'mobx-react';
 import 'tailwindcss/tailwind.css';
 
 const DeckViewer = () => {
-  const store = useDeckStore();
+  const { deckId } = useParams();
 
   playTest = () => {
-    window.PlayTest.load({ deckId: 1 });
+    window.PlayTest.load({ deckId });
   };
 
+  console.log({ deckId });
   return (
     <div className="w-full h-full">
       <button onClick={playTest}>Play Test</button>

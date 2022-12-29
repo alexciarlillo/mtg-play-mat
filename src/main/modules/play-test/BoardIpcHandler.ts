@@ -7,7 +7,7 @@ export default class BoardIpcHandler {
     this.rendererChannel = new IpcChannel({ ipc: ipcRenderer });
   }
 
-  draw = ({ id }) => {
-    this.rendererChannel.Send(IpcEvents.DRAW, id);
+  draw = (card) => {
+    this.rendererChannel.Send(IpcEvents.DRAW, card);
   };
 }

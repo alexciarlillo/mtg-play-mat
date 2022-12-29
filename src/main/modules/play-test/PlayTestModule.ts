@@ -3,6 +3,7 @@ import CardDB from '../../shared/db/CardDB';
 import DeckDB from '../../shared/db/DeckDB';
 import BaseModule from '../../shared/BaseModule';
 import WindowTypes from '../../shared/ipc/WindowTypes';
+import CardModel from '../../../shared/models/CardModel';
 
 export default class PlayTestModule extends BaseModule {
   constructor({ ...rest }) {
@@ -51,9 +52,18 @@ export default class PlayTestModule extends BaseModule {
     this.ipcBus.registerHandler({
       event: IpcEvents.PLAY_TEST,
       handle: (deckId) => {
-        const cards = this.deckDb.getDeckCards({ deckId }).map((card) => {
-          return this.cardDb.getCardById({ id: card.card_id });
-        });
+        const cards = this.deckDb
+          .getDeckCards({ deckId })
+          .map((card, index) => {
+            const _card = this.cardDb.getCardById({ id: card.card_id });
+            _card.keywords =
+              _card.keywords
+                ?.split(',')
+                .map((keyword) => keyword.toLowerCase()) || [];
+            _card.id = _card.uuid;
+            _card.key = index;
+            return new CardModel(_card);
+          });
 
         this.handWindow.show();
         this.boardWindow.show();

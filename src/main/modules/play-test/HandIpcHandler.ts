@@ -7,7 +7,7 @@ export default class HandIpcHandler {
     this.rendererChannel = new IpcChannel({ ipc: ipcRenderer });
   }
 
-  play = ({ id }) => {
-    this.rendererChannel.Send(IpcEvents.PLAY, id);
+  play = (card) => {
+    this.rendererChannel.Send(IpcEvents.PLAY, card);
   };
 }

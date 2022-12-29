@@ -21,7 +21,6 @@ const Board = () => {
 
   handleContextMenu = (e) => {
     e.preventDefault();
-    console.log('board menu', e);
     menu.open({
       specs: [{ title: 'Add Token', action: null }],
       x: e.pageX,
@@ -29,18 +28,21 @@ const Board = () => {
     });
   };
 
+  console.log(board.battlefield);
+
   return (
     <div
       className="h-screen w-screen bg-slate-300 relative flex"
       onContextMenu={handleContextMenu}
     >
-      <div className="w-4/5 h-full bg-neutral-400">
-        {board.battlefield.map((id) => (
+      <div className="w-4/5 h-full bg-neutral-400 px-12 py-8">
+        {board.battlefield.map((card, index) => (
           <Card
-            scryfallId={id}
-            key={id}
+            card={card}
+            key={card.key}
             onMoved={handleMoved}
             onDestroy={handleDestroyed}
+            location="battlefield"
           />
         ))}
       </div>

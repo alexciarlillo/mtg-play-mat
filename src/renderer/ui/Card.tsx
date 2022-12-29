@@ -3,10 +3,11 @@ import Draggable from 'react-draggable';
 import classNames from 'classnames';
 import { useState, useEffect } from 'react';
 import CardImg from 'CardImg';
+import AbilityIndicators from 'AbilityIndicators';
 import { useContextMenu } from 'ContextMenuProvider';
 
 const Card = ({
-  scryfallId,
+  card,
   draggable,
   tappable,
   playable,
@@ -14,6 +15,7 @@ const Card = ({
   onMoved,
   onDestroy,
   onExile,
+  location,
 }) => {
   const menu = useContextMenu();
   const [tapped, setTapped] = useState(false);
@@ -28,7 +30,7 @@ const Card = ({
     if (tappable && !playable) {
       toggleTapped();
     } else if (playable) {
-      onPlayed?.(scryfallId);
+      onPlayed?.(card);
     }
   };
 
@@ -44,7 +46,7 @@ const Card = ({
     if (dX <= 2 && dY <= 2) {
       handleClick();
     } else {
-      onMoved?.(scryfallId);
+      onMoved?.(card);
     }
 
     setLastPosition(null);
@@ -53,12 +55,26 @@ const Card = ({
   handleContextMenu = (e) => {
     e.preventDefault();
     e.stopPropagation();
-    console.log('card menu', e);
     menu.open({
       specs: [
-        { title: 'Destroy', action: () => onDestroy(scryfallId) },
-        { title: 'Exile', action: () => onExile(scryfallId) },
-      ],
+        location !== 'graveyard' && {
+          title: 'Destroy',
+          action: () => onDestroy(card),
+        },
+        { title: 'Exile', action: () => onExile(card) },
+        location === 'graveyard' && {
+          title: 'Return to battlefield',
+          action: () => {
+            /* todo */
+          },
+        },
+        location !== 'hand' && {
+          title: 'Return to hand',
+          action: () => {
+            /* todo */
+          },
+        },
+      ].filter(Boolean),
       x: e.pageX,
       y: e.pageY,
     });
@@ -96,7 +112,8 @@ const Card = ({
               }
             )}
           >
-            <CardImg scryfallId={scryfallId} />
+            <CardImg scryfallId={card.scryfallId} />
+            {draggable && <AbilityIndicators abilities={card.keywords} />}
           </div>
         </div>
       </Draggable>
@@ -122,7 +139,7 @@ const Card = ({
               'rotate-90': tapped,
             })}
           >
-            <CardImg scryfallId={scryfallId} />
+            <CardImg scryfallId={card.scryfallId} />
           </div>
         </div>
       )}

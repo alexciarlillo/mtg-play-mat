@@ -6,8 +6,8 @@ import 'tailwindcss/tailwind.css';
 const Hand = () => {
   const hand = useHandStore();
 
-  handlePlayed = (id) => {
-    hand.play(id);
+  handlePlayed = (card) => {
+    hand.play(card);
   };
 
   return (
@@ -19,13 +19,14 @@ const Hand = () => {
         Hand
       </div>
       <div className="grid grid-cols-7 gap-y-2">
-        {hand.cards.map((id) => (
+        {hand.cards.map((card, index) => (
           <Card
-            key={id}
-            scryfallId={id}
+            key={card.key}
+            card={card}
             playable
             onPlayed={handlePlayed}
             draggable={false}
+            location="hand"
           />
         ))}
       </div>

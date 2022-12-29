@@ -5,15 +5,37 @@ export default class CardModel {
 
   name;
 
-  set;
+  setCode;
 
   number;
 
-  constructor({ uuid, scryfallId, name, set, number }) {
-    this.uuid = uuid;
+  constructor({
+    name,
+    id,
+    scryfallId,
+    setCode,
+    number,
+    power,
+    toughness,
+    type,
+    types,
+    keywords,
+    life,
+    loyalty,
+    key,
+  }) {
+    this.id = id;
     this.scryfallId = scryfallId;
     this.name = name;
-    this.set = set;
+    this.setCode = setCode;
     this.number = number;
+    this.power = power;
+    this.toughness = toughness;
+    this.type = type;
+    this.types = types;
+    this.keywords = keywords;
+    this.life = life;
+    this.loyalty = loyalty;
+    this.key = key;
   }
 }

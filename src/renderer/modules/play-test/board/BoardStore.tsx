@@ -1,3 +1,4 @@
+import CardModel from 'CardModel';
 import React from 'react';
 import { makeAutoObservable } from 'mobx';
 import IpcEvents from 'IpcEvents';
@@ -12,8 +13,9 @@ export default class BoardStore {
   constructor() {
     makeAutoObservable(this);
 
-    window.Board.rendererChannel.On(IpcEvents.ETB, (event, id) => {
-      this.play(id);
+    window.Board.rendererChannel.On(IpcEvents.ETB, (event, _card) => {
+      const card = new CardModel(JSON.parse(_card));
+      this.play(card);
     });
 
     window.Board.rendererChannel.On(IpcEvents.DECK_LOADED, (event, cards) => {
@@ -21,18 +23,21 @@ export default class BoardStore {
     });
   }
 
-  play(id) {
-    this.battlefield.push(id);
+  play(card) {
+    this.battlefield.push(card);
   }
 
-  moved(id) {
-    this.battlefield.splice(this.battlefield.indexOf(id), 1);
-    this.battlefield.push(id);
+  moved(card) {
+    this.battlefield.splice(
+      this.battlefield.findIndex((_card) => _card.id === card.id),
+      1
+    );
+    this.battlefield.push(card);
   }
 
   drawCard() {
-    const { scryfallId } = this.library.shift();
-    window.Board.draw({ id: scryfallId });
+    const card = this.library.shift();
+    window.Board.draw(JSON.stringify(card));
   }
 
   reset(deck) {
@@ -49,9 +54,13 @@ export default class BoardStore {
       .map(({ value }) => value);
   }
 
-  destroy(id) {
-    this.graveyard.push(id);
-    this.battlefield.splice(this.battlefield.indexOf(id), 1);
+  destroy(card) {
+    console.log('destroy', card);
+    this.graveyard.push(card);
+    this.battlefield.splice(
+      this.battlefield.findIndex((_card) => _card.id === card.id),
+      1
+    );
   }
 }
 

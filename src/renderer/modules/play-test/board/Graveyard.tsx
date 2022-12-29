@@ -11,13 +11,13 @@ const Graveyard = () => {
       {board.graveyard.map((card, index) => (
         <div
           style={{ position: 'absolute', top: `${index * 30}px` }}
-          key={card}
+          key={card.key}
         >
           <Card
-            key={card}
-            scryfallId={card}
+            card={card}
             draggable={false}
             tappable={false}
+            location="graveyard"
           />
         </div>
       ))}

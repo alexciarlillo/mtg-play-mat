@@ -9,7 +9,7 @@ export const routes = [
     element: <App />,
     children: [
       { path: 'decks', element: <DeckBuilder />, index: true },
-      { path: 'decks/:id', element: <DeckViewer />, index: true },
+      { path: 'decks/:deckId', element: <DeckViewer />, index: true },
       { path: 'collection', element: <Collection /> },
     ],
   },

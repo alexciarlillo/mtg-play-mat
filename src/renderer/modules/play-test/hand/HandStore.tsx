@@ -1,3 +1,4 @@
+import CardModel from 'CardModel';
 import React from 'react';
 import { makeAutoObservable } from 'mobx';
 import IpcEvents from 'IpcEvents';
@@ -8,18 +9,22 @@ export default class HandStore {
   constructor() {
     makeAutoObservable(this);
 
-    window.Hand.rendererChannel.On(IpcEvents.DRAW, (event, id) => {
-      this.add(id);
+    window.Hand.rendererChannel.On(IpcEvents.DRAW, (event, cardString) => {
+      const card = new CardModel(JSON.parse(cardString));
+      this.add(card);
     });
   }
 
-  play = (id) => {
-    this.cards.splice(this.cards.indexOf(id), 1);
-    window.Hand.play({ id });
+  play = (card) => {
+    this.cards.splice(
+      this.cards.findIndex((_card) => _card.id === card.id),
+      1
+    );
+    window.Hand.play(JSON.stringify(card));
   };
 
-  add = (id) => {
-    this.cards.push(id);
+  add = (card) => {
+    this.cards.push(card);
   };
 }
 
