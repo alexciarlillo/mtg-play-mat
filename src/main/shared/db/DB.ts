@@ -1,5 +1,7 @@
-import Database from 'better-sqlite3';
 import path from 'path';
+
+import Database from 'better-sqlite3';
+
 import webpackPaths from '../../../../.erb/configs/webpack.paths';
 
 export default class DB {
@@ -7,7 +9,7 @@ export default class DB {
 
   filePath = null;
 
-  db = null;
+  db;
 
   constructor({ name, readonly, fileMustExist = true }) {
     this.name = name;

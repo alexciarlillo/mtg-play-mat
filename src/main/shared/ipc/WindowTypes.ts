@@ -1,8 +1,8 @@
-const WindowTypes = {
-  APP: 'APP',
-  BOARD: 'BOARD',
-  HAND: 'HAND',
-};
+enum WindowTypes {
+  APP = 'APP',
+  BOARD = 'BOARD',
+  HAND = 'HAND',
+}
 
 export const PlayTestWindows = [WindowTypes.BOARD, WindowTypes.HAND];
 

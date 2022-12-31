@@ -1,6 +1,6 @@
-import React from 'react';
-import { makeAutoObservable, action, observable } from 'mobx';
 import IpcEvents from 'IpcEvents';
+import { action, makeAutoObservable, observable } from 'mobx';
+import React from 'react';
 
 export default class DeckStore {
   decks = [];

@@ -1,10 +1,17 @@
 import DeckImporter from 'DeckImporter';
 import IpcEvents from 'IpcEvents';
+
+import BaseModule from '../../shared/BaseModule';
 import CardDB from '../../shared/db/CardDB';
 import DeckDB from '../../shared/db/DeckDB';
-import BaseModule from '../../shared/BaseModule';
 
 export default class DeckBuilderModule extends BaseModule {
+  cardDb;
+
+  deckDb;
+
+  ipcBus;
+
   constructor({ ...rest }) {
     super({ name: 'DeckBuilder', label: 'Deck Builder', ...rest });
 
@@ -51,6 +58,7 @@ export default class DeckBuilderModule extends BaseModule {
     decks.forEach((deck) => {
       if (deck.display_card_id) {
         const card = this.cardDb.getCardById({ id: deck.display_card_id });
+        console.log('card', card);
         deck.displayScryfallId = card.scryfallId;
       }
     });

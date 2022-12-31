@@ -10,15 +10,17 @@
  */
 
 import { app } from 'electron';
-import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
+import { autoUpdater } from 'electron-updater';
+
 import MenuBuilder from './menu';
-import WindowManager from './shared/WindowManager';
-import IpcBus from './shared/ipc/IpcBus';
-import ModuleManager from './shared/ModuleManager';
-import WindowTypes from './shared/ipc/WindowTypes';
-import PlayTestModule from './modules/play-test/PlayTestModule';
+import CollectionModule from './modules/collection/CollectionModule';
 import DeckBuilderModule from './modules/deck-builder/DeckBuilderModule';
+import PlayTestModule from './modules/play-test/PlayTestModule';
+import IpcBus from './shared/ipc/IpcBus';
+import WindowTypes from './shared/ipc/WindowTypes';
+import ModuleManager from './shared/ModuleManager';
+import WindowManager from './shared/WindowManager';
 
 export default class AppUpdater {
   constructor() {
@@ -68,6 +70,7 @@ const start = async () => {
   moduleManager.registerModule(
     new DeckBuilderModule({ windowManager, ipcBus })
   );
+  moduleManager.registerModule(new CollectionModule({ windowManager, ipcBus }));
 
   startWindow = windowManager.registerWindow({
     type: WindowTypes.APP,

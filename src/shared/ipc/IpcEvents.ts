@@ -1,0 +1,14 @@
+enum IpcEvents {
+  PLAY = 'PLAY',
+  DRAW = 'DRAW',
+  ETB = 'ETB',
+  IMPORT = 'IMPORT',
+  DELETE_DECK = 'DELETE_DECK',
+  DECK_LOADED = 'DECK_LOADED',
+  PLAY_TEST = 'PLAY_TEST',
+  GET_DECKS = 'GET_DECKS',
+  SEARCH_CARDS = 'SEARCH_CARDS',
+  SEARCH_RESULTS = 'SEARCH_RESULTS',
+}
+
+export default IpcEvents;
