@@ -28,6 +28,7 @@ export default class CollectionStore {
   }
 
   setSearchResults(results) {
+    console.log('results', results);
     this.searchResults = results;
   }
 }

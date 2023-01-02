@@ -1,8 +1,10 @@
-import { ipcRenderer, ipcMain } from 'electron';
-import IpcChannel from 'IpcChannel';
+import { ipcMain, ipcRenderer } from 'electron';
 import IpcEvents from 'IpcEvents';
+import IpcChannel from 'main/shared/ipc/IpcChannel';
 
 export default class DeckBuilderIpcHandler {
+  rendererChannel: any;
+  mainChannel: any;
   constructor() {
     this.rendererChannel = new IpcChannel({ ipc: ipcRenderer });
     this.mainChannel = new IpcChannel({ ipc: ipcMain });
