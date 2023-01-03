@@ -18,12 +18,9 @@ export default class CollectionModule extends BaseModule {
     this.ipcBus.registerHandler({
       event: IpcEvents.SEARCH_CARDS,
       handle: (searchOptions: SearchCardOptions) => {
-        console.log('am i here?', searchOptions);
         const cards = this.cardDb.searchCardsByName({
           keyword: searchOptions.keyword,
         });
-
-        console.log('cards', cards);
 
         this.mainWindow?.send(IpcEvents.SEARCH_RESULTS, cards);
       },

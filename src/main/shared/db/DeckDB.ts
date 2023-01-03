@@ -8,8 +8,6 @@ export default class CardDB extends DB {
   getDecks = () => {
     const query = 'SELECT name, id, display_card_id FROM decks';
 
-    console.log(query);
-
     const stmt = this.db.prepare(query);
     return stmt.all();
   };

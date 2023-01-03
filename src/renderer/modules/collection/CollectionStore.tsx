@@ -15,7 +15,6 @@ export default class CollectionStore {
     window.Collection.rendererChannel.On(
       IpcEvents.SEARCH_RESULTS,
       (event, results) => {
-        console.log(results);
         this.setSearchResults(results);
       }
     );
@@ -23,12 +22,10 @@ export default class CollectionStore {
 
   // eslint-disable-next-line class-methods-use-this
   findCard(options) {
-    console.log(window.Collection);
     window.Collection.searchCards(options);
   }
 
   setSearchResults(results) {
-    console.log('results', results);
     this.searchResults = results;
   }
 }

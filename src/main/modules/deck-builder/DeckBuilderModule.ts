@@ -58,7 +58,6 @@ export default class DeckBuilderModule extends BaseModule {
     decks.forEach((deck) => {
       if (deck.display_card_id) {
         const card = this.cardDb.getCardById({ id: deck.display_card_id });
-        console.log('card', card);
         deck.displayScryfallId = card.scryfallId;
       }
     });
