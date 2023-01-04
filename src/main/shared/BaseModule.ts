@@ -1,5 +1,34 @@
+import { BrowserWindow } from 'electron';
+
+import WindowManager, {
+  RegisterModuleWindowOptions,
+  WindowOnClosedOptions,
+} from './WindowManager';
+
+export interface BaseModuleConstructorOptions {
+  name: string;
+  label: string;
+  windowManager: WindowManager; // Need window types
+  ipcBus: any; // Need ipcBus types
+}
+
 export default class BaseModule {
-  constructor({ name, label, windowManager, ipcBus }) {
+  name: string;
+
+  label: string;
+
+  windowManager: WindowManager;
+
+  ipcBus: any;
+
+  windowsById: { [key: number]: BrowserWindow };
+
+  constructor({
+    name,
+    label,
+    windowManager,
+    ipcBus,
+  }: BaseModuleConstructorOptions) {
     this.name = name;
     this.label = label;
     this.windowManager = windowManager;
@@ -19,16 +48,16 @@ export default class BaseModule {
     onReady,
     onClosed,
     ...windowProps
-  }) => {
+  }: RegisterModuleWindowOptions) => {
     const win = this.windowManager.registerWindow({
       type,
       width,
       height,
       html,
-      onReady: (_window) => {
-        onReady?.({ window: _window });
+      onReady: (_window: BrowserWindow) => {
+        onReady?.(_window);
       },
-      onClosed: ({ windowId }) => {
+      onClosed: ({ windowId }: WindowOnClosedOptions) => {
         delete this.windowsById[windowId];
         onClosed?.({ windowId });
       },

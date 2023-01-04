@@ -1,14 +1,26 @@
 import { ipcMain } from 'electron';
 import IpcEvents from 'IpcEvents';
+
 import IpcChannel from './IpcChannel';
 
+interface RegsiterHandlerOptions {
+  event: IpcEvents;
+  handle<T>(options: T): void;
+}
+
+type EventHandlerType = Record<IpcEvents, any>;
+
 export default class IpcBus {
+  mainChannel;
+
+  eventHandlers: EventHandlerType; // function
+
   constructor() {
     this.mainChannel = new IpcChannel({ ipc: ipcMain });
-    this.eventHandlers = {};
+    this.eventHandlers = {} as EventHandlerType;
 
     Object.keys(IpcEvents).forEach((ipcEvent) => {
-      this.mainChannel.On(ipcEvent, async (event, arg) => {
+      this.mainChannel.On(ipcEvent, async (event: IpcEvents, arg: any) => {
         this.eventHandlers[ipcEvent]?.forEach((handle) => {
           handle(arg);
         });
@@ -18,7 +30,7 @@ export default class IpcBus {
     this.initializeMainHandlers();
   }
 
-  registerHandler = ({ event, handle }) => {
+  registerHandler = ({ event, handle }: RegsiterHandlerOptions) => {
     if (!this.eventHandlers[event]) {
       this.eventHandlers[event] = [];
     }

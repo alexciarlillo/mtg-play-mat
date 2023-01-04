@@ -1,9 +1,11 @@
 import { contextBridge } from 'electron';
-import PlayTestIpcHandler from 'PlayTestIpcHandler';
-import DeckBuilderIpcHandler from 'DeckBuilderIpcHandler';
-import BoardIpcHandler from 'BoardIpcHandler';
-import HandIpcHandler from 'HandIpcHandler';
-import MainIpcHandler from 'MainIpcHandler';
+
+import CollectionIpcHandler from './modules/collection/CollectionIpcHandler';
+import DeckBuilderIpcHandler from './modules/deck-builder/DeckBuilderIpcHandler';
+import BoardIpcHandler from './modules/play-test/BoardIpcHandler';
+import HandIpcHandler from './modules/play-test/HandIpcHandler';
+import PlayTestIpcHandler from './modules/play-test/PlayTestIpcHandler';
+import MainIpcHandler from './shared/ipc/MainIpcHandler';
 
 const deckBuilderIpcHandler = new DeckBuilderIpcHandler();
 contextBridge.exposeInMainWorld('DeckBuilder', deckBuilderIpcHandler);
@@ -19,3 +21,6 @@ contextBridge.exposeInMainWorld('PlayTest', playTestIpcHandler);
 
 const mainIpcHandler = new MainIpcHandler();
 contextBridge.exposeInMainWorld('Main', mainIpcHandler);
+
+const collectionIpcHandler = new CollectionIpcHandler();
+contextBridge.exposeInMainWorld('Collection', collectionIpcHandler);

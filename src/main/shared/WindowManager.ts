@@ -1,5 +1,7 @@
 import path from 'path';
-import { app, BrowserWindow } from 'electron';
+
+import { BrowserWindow, app } from 'electron';
+
 import { resolveHtmlPath } from '../util';
 import WindowTypes from './ipc/WindowTypes';
 
@@ -11,9 +13,26 @@ const getAssetPath = (...paths: string[]): string => {
   return path.join(RESOURCES_PATH, ...paths);
 };
 
+export interface RegisterModuleWindowOptions {
+  type: keyof typeof WindowTypes;
+  width: number;
+  height: number;
+  html: string;
+  onReady?(_window: BrowserWindow): void;
+  onClosed?(options: WindowOnClosedOptions): void;
+}
+
+export interface WindowOnClosedOptions {
+  windowId: number;
+}
+
+type Windowtype = Record<WindowTypes, BrowserWindow>;
+
 export default class WindowManager {
-  constructor(ipcBus) {
-    this.windows = {};
+  windows: Windowtype;
+
+  constructor() {
+    this.windows = {} as Windowtype;
   }
 
   get mainWindow() {
@@ -28,7 +47,7 @@ export default class WindowManager {
     onReady,
     onClosed,
     ...windowProps
-  }) => {
+  }: RegisterModuleWindowOptions) => {
     const { windows } = this;
 
     const window = new BrowserWindow({
@@ -66,21 +85,21 @@ export default class WindowManager {
 
     const windowId = window.id;
 
-    windows[type].on('closed', (arg) => {
-      windows[type] = null;
+    windows[type].on('closed', () => {
+      delete windows[type];
       onClosed?.({ windowId });
     });
 
     // Open urls in the user's browser
-    windows[type].webContents.setWindowOpenHandler((edata) => {
-      shell.openExternal(edata.url);
+    windows[type].webContents.setWindowOpenHandler((edata: any) => {
+      // shell.openExternal(edata.url); // ?
       return { action: 'deny' };
     });
 
     return windows[type];
   };
 
-  closeWindow = ({ type }) => {
-    windows[type]?.close();
+  closeWindow = ({ type }: { type: keyof typeof WindowTypes }) => {
+    this.windows[type]?.close();
   };
 }

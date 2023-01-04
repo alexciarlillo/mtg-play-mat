@@ -1,5 +1,9 @@
 import DB from './DB';
 
+interface SearchCardsByNameOptions {
+  keyword: string;
+}
+
 export default class CardDB extends DB {
   constructor() {
     super({ name: 'AllPrintings', readonly: true });
@@ -27,11 +31,11 @@ export default class CardDB extends DB {
     return stmt.get([name, setCode, number].filter(Boolean));
   };
 
-  searchCardsByName = ({ keyword }) => {
+  searchCardsByName = (options: SearchCardsByNameOptions) => {
     const stmt = this.db.prepare(
       'SELECT name, uuid, scryfallId, originalText FROM cards WHERE name LIKE ?'
     );
 
-    return stmt.all(`%${keyword}%`);
+    return stmt.all(`%${options.keyword}%`);
   };
 }

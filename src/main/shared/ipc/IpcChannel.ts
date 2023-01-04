@@ -1,7 +1,13 @@
-export default class IpcChannel {
-  ipc = null;
+import { IpcMain, IpcRenderer } from 'electron';
 
-  constructor({ ipc }) {
+interface ConstructorOptions {
+  ipc: IpcMain | IpcRenderer;
+}
+
+export default class IpcChannel {
+  ipc;
+
+  constructor({ ipc }: ConstructorOptions) {
     this.ipc = ipc;
   }
 
