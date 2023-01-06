@@ -1,39 +1,31 @@
 import classNames from 'classnames';
-import PropTypes from 'prop-types';
-import { useState, useEffect } from 'react';
+
 import cardBackImg from '../../../assets/back.jpg';
 
-const CardImg = ({ scryfallId, className }) => {
-  const [imageUri, setImageUri] = useState(null);
+interface Props {
+  name?: string;
+  scryfallId: string;
+  className?: string;
+}
 
-  useEffect(() => {
-    if (scryfallId) {
-      setImageUri(
-        `https://cards.scryfall.io/normal/front/${scryfallId.charAt(
-          0
-        )}/${scryfallId.charAt(1)}/${scryfallId}.jpg`
-      );
-    } else {
-      setImageUri(cardBackImg);
-    }
-  }, [scryfallId]);
+const ScryfallImageGen = (scryfallId?: string): string => {
+  if (scryfallId) {
+    return `https://cards.scryfall.io/normal/front/${scryfallId.charAt(
+      0
+    )}/${scryfallId.charAt(1)}/${scryfallId}.jpg`;
+  }
+  return cardBackImg;
+};
 
-  return imageUri ? (
+const CardImg = ({ scryfallId, className = '', name = '' }: Props) => {
+  return (
     <img
       className={classNames(className, 'rounded-lg h-full')}
-      src={imageUri}
+      src={ScryfallImageGen(scryfallId)}
       draggable={false}
-      alt=""
+      alt={name}
     />
-  ) : null;
-};
-
-CardImg.propTypes = {
-  scryfallId: PropTypes.string,
-};
-
-CardImg.defaultProps = {
-  scryfallId: null,
+  );
 };
 
 export default CardImg;

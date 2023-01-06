@@ -1,44 +1,34 @@
 import IpcEvents from 'IpcEvents';
+import {
+  SearchCardsByNameOptions,
+  SearchCardsByNameRet,
+} from 'main/shared/db/CardDB';
 // import { SearchCardOptions } from 'main/modules/collection/CollectionModule';
-import { action, makeAutoObservable, observable } from 'mobx';
-import React from 'react';
+import { action, computed, makeAutoObservable, observable } from 'mobx';
 
 export default class CollectionStore {
-  searchResults = [];
+  searchResults: Array<SearchCardsByNameRet> = [];
 
   constructor() {
     makeAutoObservable(this, {
-      searchResults: observable,
       setSearchResults: action,
+      findCard: action,
+      searchResults: observable,
     });
 
     window.Collection.rendererChannel.On(
       IpcEvents.SEARCH_RESULTS,
-      (event, results) => {
+      (_: IpcEvents, results: SearchCardsByNameRet[]) => {
         this.setSearchResults(results);
       }
     );
   }
 
-  // eslint-disable-next-line class-methods-use-this
-  findCard(options) {
+  findCard = (options: SearchCardsByNameOptions) => {
     window.Collection.searchCards(options);
-  }
+  };
 
-  setSearchResults(results) {
+  setSearchResults = (results: SearchCardsByNameRet[]) => {
     this.searchResults = results;
-  }
+  };
 }
-
-const CollectionStoreContext = React.createContext(CollectionStore);
-
-export const CollectionStoreProvider = ({ children, store }) => {
-  return (
-    <CollectionStoreContext.Provider value={store}>
-      {children}
-    </CollectionStoreContext.Provider>
-  );
-};
-
-export const useCollectionStore = () =>
-  React.useContext(CollectionStoreContext);
