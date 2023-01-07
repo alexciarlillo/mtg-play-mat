@@ -42,7 +42,7 @@ export default class CardDB extends DB {
     options: SearchCardsByNameOptions
   ): SearchCardsByNameRet[] => {
     const stmt = this.db.prepare(
-      'SELECT name, uuid, scryfallId, originalText FROM cards WHERE name LIKE ?'
+      'SELECT name, uuid, scryfallId, originalText FROM cards WHERE name LIKE ? limit 50'
     );
 
     return stmt.all(`%${options.keyword}%`);
