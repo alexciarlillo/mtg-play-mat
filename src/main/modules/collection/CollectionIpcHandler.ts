@@ -1,10 +1,7 @@
 import { ipcMain, ipcRenderer } from 'electron';
 import IpcEvents from 'IpcEvents';
+import { SearchCardsByNameOptions } from 'main/shared/db/CardDB';
 import IpcChannel from 'main/shared/ipc/IpcChannel';
-
-export interface SearchOptions {
-  title: string;
-}
 
 export default class CollectionIpcHandler {
   rendererChannel;
@@ -16,7 +13,7 @@ export default class CollectionIpcHandler {
     this.mainChannel = new IpcChannel({ ipc: ipcMain });
   }
 
-  searchCards = (options: SearchOptions) => {
+  searchCards = (options: SearchCardsByNameOptions) => {
     this.rendererChannel.Send(IpcEvents.SEARCH_CARDS, options);
   };
 }

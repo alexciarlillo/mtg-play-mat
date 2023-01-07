@@ -2,14 +2,11 @@ import 'tailwindcss/tailwind.css';
 
 import { Disclosure } from '@headlessui/react';
 import { Bars3Icon, XMarkIcon } from '@heroicons/react/24/outline';
-import { ContextMenuProvider } from 'ContextMenuProvider';
-import DeckStore, { DeckStoreProvider } from 'DeckStore';
-import { Fragment } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 
-import CollectionStore, {
-  CollectionStoreProvider,
-} from './modules/collection/CollectionStore';
+import { RootStoreProvider } from './core/rootContext';
+import DeckStore, { DeckStoreProvider } from './modules/deck-builder/DeckStore';
+import { ContextMenuProvider } from './ui/ContextMenuProvider';
 
 const modules = [
   { label: 'Deck Builder', route: 'decks' },
@@ -17,13 +14,12 @@ const modules = [
 ];
 
 const deckStore = new DeckStore();
-const collectionStore = new CollectionStore();
 
 const Start = () => {
   return (
     <ContextMenuProvider>
-      <DeckStoreProvider store={deckStore}>
-        <CollectionStoreProvider store={collectionStore}>
+      <RootStoreProvider>
+        <DeckStoreProvider store={deckStore}>
           <div className="min-h-full flex flex-col">
             <div className="bg-gray-800 pb-32 flex-0">
               <Disclosure as="nav" className="bg-gray-800">
@@ -103,8 +99,8 @@ const Start = () => {
               </div>
             </main>
           </div>
-        </CollectionStoreProvider>
-      </DeckStoreProvider>
+        </DeckStoreProvider>
+      </RootStoreProvider>
     </ContextMenuProvider>
   );
 };

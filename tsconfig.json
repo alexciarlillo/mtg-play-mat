@@ -3,6 +3,7 @@
     "target": "es2021",
     "module": "commonjs",
     "lib": ["dom", "es2021"],
+    "experimentalDecorators": true,
     "declaration": true,
     "declarationMap": true,
     "jsx": "react-jsx",

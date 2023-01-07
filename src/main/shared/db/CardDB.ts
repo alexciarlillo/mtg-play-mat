@@ -1,7 +1,14 @@
 import DB from './DB';
 
-interface SearchCardsByNameOptions {
+export interface SearchCardsByNameOptions {
   keyword: string;
+}
+
+export interface SearchCardsByNameRet {
+  name: string;
+  uuid: string;
+  originalText: string;
+  scryfallId: string;
 }
 
 export default class CardDB extends DB {
@@ -31,7 +38,9 @@ export default class CardDB extends DB {
     return stmt.get([name, setCode, number].filter(Boolean));
   };
 
-  searchCardsByName = (options: SearchCardsByNameOptions) => {
+  searchCardsByName = (
+    options: SearchCardsByNameOptions
+  ): SearchCardsByNameRet[] => {
     const stmt = this.db.prepare(
       'SELECT name, uuid, scryfallId, originalText FROM cards WHERE name LIKE ?'
     );
