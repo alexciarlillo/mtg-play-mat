@@ -5,10 +5,12 @@ export interface SearchCardsByNameOptions {
 }
 
 export interface SearchCardsByNameRet {
+  id: number;
   name: string;
   uuid: string;
   originalText: string;
   scryfallId: string;
+  setCode: string;
 }
 
 export default class CardDB extends DB {
@@ -42,7 +44,7 @@ export default class CardDB extends DB {
     options: SearchCardsByNameOptions
   ): SearchCardsByNameRet[] => {
     const stmt = this.db.prepare(
-      'SELECT name, uuid, scryfallId, originalText FROM cards WHERE name LIKE ? limit 50'
+      'SELECT id, name, uuid, scryfallId, setCode, originalText FROM cards WHERE name LIKE ? limit 50'
     );
 
     return stmt.all(`%${options.keyword}%`);
