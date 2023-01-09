@@ -1,15 +1,9 @@
+import {
+  CurrentSetListReturn,
+  SearchCardsByNameOptions,
+  SearchCardsByNameRet,
+} from './CardDB.d';
 import DB from './DB';
-
-export interface SearchCardsByNameOptions {
-  keyword: string;
-}
-
-export interface SearchCardsByNameRet {
-  name: string;
-  uuid: string;
-  originalText: string;
-  scryfallId: string;
-}
 
 export default class CardDB extends DB {
   constructor() {
@@ -41,10 +35,33 @@ export default class CardDB extends DB {
   searchCardsByName = (
     options: SearchCardsByNameOptions
   ): SearchCardsByNameRet[] => {
-    const stmt = this.db.prepare(
-      'SELECT name, uuid, scryfallId, originalText FROM cards WHERE name LIKE ?'
+    let condition = '1 ';
+    console.log('options', options);
+    const conditionStmts = [];
+    if (options.keyword) {
+      condition += `and c.name LIKE ? `;
+      conditionStmts.push(`%${options.keyword}%`);
+    }
+    if (options.setCode) {
+      condition += `and sets.code=? `;
+      conditionStmts.push(options.setCode);
+    }
+    console.log(
+      `SELECT c.id, c.name, c.uuid, c.scryfallId, c.originalText, sets.keyruneCode FROM cards as c left join sets on c.setCode = sets.code WHERE ${condition} limit 50`
     );
 
-    return stmt.all(`%${options.keyword}%`);
+    const stmt = this.db.prepare(
+      `SELECT c.id, c.name, c.uuid, c.scryfallId, c.originalText, sets.keyruneCode FROM cards as c left join sets on c.setCode = sets.code WHERE ${condition} limit 50`
+    );
+
+    return stmt.all(conditionStmts);
+  };
+
+  getCurrentSetList = (): CurrentSetListReturn[] => {
+    const stmt = this.db.prepare(
+      'select name, releaseDate, code, keyruneCode from sets where releaseDate < DATE() order by releaseDate desc'
+    );
+
+    return stmt.all();
   };
 }

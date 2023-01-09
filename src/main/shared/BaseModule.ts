@@ -8,7 +8,7 @@ import WindowManager, {
 export interface BaseModuleConstructorOptions {
   name: string;
   label: string;
-  windowManager: WindowManager; // Need window types
+  windowManager: WindowManager;
   ipcBus: any; // Need ipcBus types
 }
 

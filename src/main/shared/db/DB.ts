@@ -1,15 +1,16 @@
 import path from 'path';
 
 import Database from 'better-sqlite3';
+import { getErrorMessage } from 'main/util';
 
 import webpackPaths from '../../../../.erb/configs/webpack.paths';
 
 export default class DB {
+  db!: Database.Database;
+
   name = null;
 
-  filePath = null;
-
-  db;
+  filePath = '';
 
   constructor({ name, readonly, fileMustExist = true }) {
     this.name = name;
@@ -23,7 +24,7 @@ export default class DB {
       this.db = new Database(this.filePath, { readonly, fileMustExist });
     } catch (err) {
       console.error('[DB Load Error]', {
-        message: err.message,
+        message: getErrorMessage(err),
         name: this.name,
         filePath: this.filePath,
       });

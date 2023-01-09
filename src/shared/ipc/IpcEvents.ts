@@ -9,6 +9,7 @@ enum IpcEvents {
   GET_DECKS = 'GET_DECKS',
   SEARCH_CARDS = 'SEARCH_CARDS',
   SEARCH_RESULTS = 'SEARCH_RESULTS',
+  GET_SETS = 'GET_SETS',
 }
 
 export default IpcEvents;
