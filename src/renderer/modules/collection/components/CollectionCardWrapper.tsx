@@ -34,17 +34,19 @@ const CollectionCardWrapper = ({
       role="button"
       className={classNames(
         'w-52 aspect-card p-4 h-66 border-gray-300 border-solid border',
-        selected && 'bg-gray-300'
+        selected && 'bg-blue-200'
       )}
       key={card.id}
       onClick={setSelected}
     >
       <div className="flex justify-between items-center pb-2">
-        <div className="truncate">{card.name}</div>
-        <i className={classNames(`ss ss-${card.setCode.toLowerCase()} pl-2`)} />
+        <div className="truncate font-sans text-sm">{card.name}</div>
+        <i
+          className={classNames(`ss ss-${card.keyruneCode.toLowerCase()} pl-2`)}
+        />
       </div>
       <CardImg
-        className="hover:ring hover:ring-indigo-400"
+        className={classNames(!selected && 'opacity-60')}
         scryfallId={card.scryfallId}
       />
     </div>

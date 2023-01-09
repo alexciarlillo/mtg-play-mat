@@ -1,19 +1,24 @@
 import IpcEvents from 'IpcEvents';
 import {
+  CurrentSetListReturn,
   SearchCardsByNameOptions,
   SearchCardsByNameRet,
-} from 'main/shared/db/CardDB';
+} from 'main/shared/db/CardDB.d';
 // import { SearchCardOptions } from 'main/modules/collection/CollectionModule';
 import { action, computed, makeAutoObservable, observable } from 'mobx';
 
 export default class CollectionStore {
   searchResults: Array<SearchCardsByNameRet> = [];
 
+  sets: Array<CurrentSetListReturn> = [];
+
   constructor() {
     makeAutoObservable(this, {
+      searchResults: observable,
+      sets: observable,
       setSearchResults: action,
       findCard: action,
-      searchResults: observable,
+      setSets: action,
     });
 
     window.Collection.rendererChannel.On(
@@ -22,7 +27,18 @@ export default class CollectionStore {
         this.setSearchResults(results);
       }
     );
+
+    window.Collection.rendererChannel.On(
+      IpcEvents.GET_SETS,
+      (_: IpcEvents, sets: CurrentSetListReturn[]) => {
+        this.setSets(sets);
+      }
+    );
   }
+
+  getSets = () => {
+    window.Collection.getSets();
+  };
 
   findCard = (options: SearchCardsByNameOptions) => {
     window.Collection.searchCards(options);
@@ -30,5 +46,9 @@ export default class CollectionStore {
 
   setSearchResults = (results: SearchCardsByNameRet[]) => {
     this.searchResults = results;
+  };
+
+  setSets = (sets: CurrentSetListReturn[]) => {
+    this.sets = sets;
   };
 }

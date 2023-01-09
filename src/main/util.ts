@@ -1,6 +1,6 @@
+import path from 'path';
 /* eslint import/prefer-default-export: off, import/no-mutable-exports: off */
 import { URL } from 'url';
-import path from 'path';
 
 export let resolveHtmlPath: (htmlFileName: string) => string;
 
@@ -16,3 +16,8 @@ if (process.env.NODE_ENV === 'development') {
     return `file://${path.resolve(__dirname, '../renderer/', htmlFileName)}`;
   };
 }
+
+export const getErrorMessage = (error: unknown): string => {
+  if (error instanceof Error) return error.message;
+  return String(error);
+};
