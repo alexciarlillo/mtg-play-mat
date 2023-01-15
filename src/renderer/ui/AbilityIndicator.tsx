@@ -1,12 +1,24 @@
 import 'tailwindcss/tailwind.css';
 import Abilities from 'AbilityConsts';
 import classNames from 'classnames';
-import FlyingIcon from '../icons/feathered-wing.svg';
-import DefenderIcon from '../icons/crenulated-shield.svg';
+import FlyingIcon from '../icons/flying.svg';
+import DefenderIcon from '../icons/defender.svg';
+import LandwalkIcon from '../icons/landwalk.svg';
+import VigilanceIcon from '../icons/vigilance.svg';
+import LifelinkIcon from '../icons/lifelink.svg';
+import DeathtouchIcon from '../icons/deathtouch.svg';
+import ProtectionIcon from '../icons/protection.svg';
+import ReachIcon from '../icons/reach.svg';
 
 const AbilityIconMap = {
   [Abilities.Flying]: FlyingIcon,
   [Abilities.Defender]: DefenderIcon,
+  [Abilities.Landwalk]: LandwalkIcon,
+  [Abilities.Vigilance]: VigilanceIcon,
+  [Abilities.Lifelink]: LifelinkIcon,
+  [Abilities.Deathtouch]: DeathtouchIcon,
+  [Abilities.Protection]: ProtectionIcon,
+  [Abilities.Reach]: ReachIcon,
 };
 
 const AbilityIndicator = ({ ability }) => {
