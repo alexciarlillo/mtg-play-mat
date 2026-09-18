@@ -23,6 +23,7 @@ const handCard = (n: number): CardView => ({
   faceIndex: 0,
   counters: {},
   isToken: false,
+  attachedTo: null,
 });
 
 const viewOf = (patch: Partial<PrivateView> = {}): PrivateView => ({
@@ -132,5 +133,66 @@ describe('Hand', () => {
     dispatch.mockClear();
     fireEvent.keyDown(window, { key: 'm' });
     expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it('plays a card face down, or a modal DFC as its back face', () => {
+    const mdfc: CardView = {
+      ...handCard(0),
+      ref: {
+        id: 'ea7e4c65-b4c4-4795-9475-3cba71c50ea5',
+        name: 'Valki, God of Lies // Tibalt, Cosmic Impostor',
+        typeLine: 'Legendary Creature — God // Legendary Planeswalker',
+        layout: 'modal_dfc',
+        faces: [
+          { name: 'Valki, God of Lies', typeLine: 'Legendary Creature — God' },
+          {
+            name: 'Tibalt, Cosmic Impostor',
+            typeLine: 'Legendary Planeswalker — Tibalt',
+          },
+        ],
+      },
+    };
+    renderHand(viewOf({ keptHand: true, hand: [mdfc] }));
+    const open = () => fireEvent.contextMenu(screen.getByTestId('card'));
+
+    open();
+    fireEvent.click(
+      screen.getByRole('menuitem', { name: 'Play as Tibalt, Cosmic Impostor' })
+    );
+    expect(dispatch).toHaveBeenCalledWith({
+      type: 'moveCard',
+      instanceId: 'p1:0',
+      to: 'battlefield',
+      faceIndex: 1,
+    });
+    open();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Play face down' }));
+    expect(dispatch).toHaveBeenLastCalledWith({
+      type: 'moveCard',
+      instanceId: 'p1:0',
+      to: 'battlefield',
+      faceDown: true,
+    });
+  });
+
+  it('lets the owner peek at their face-down permanents', () => {
+    const hidden: CardView = {
+      ...handCard(9),
+      zone: 'battlefield',
+      position: { x: 0, y: 0 },
+      faceDown: true,
+    };
+    renderHand(
+      viewOf({
+        keptHand: true,
+        zones: { battlefield: [hidden], graveyard: [], exile: [], command: [] },
+      })
+    );
+    const peek = screen.getByTestId('face-down-peek');
+    expect(peek.querySelector('[data-instance-id="p1:9"]')).toHaveAttribute(
+      'data-card-name',
+      'Card 9'
+    );
+    expect(screen.getByAltText('Card 9')).toBeInTheDocument();
   });
 });

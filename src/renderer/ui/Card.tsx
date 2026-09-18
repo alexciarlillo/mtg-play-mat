@@ -2,8 +2,9 @@ import type { CardView } from '@shared/game';
 import classNames from 'classnames';
 import { type MouseEvent, useEffect } from 'react';
 
+import CardArt from './CardArt';
+import CardBadges from './CardBadges';
 import { useCardPreview } from './CardPreview';
-import CardImg from './CardImg';
 import { type CardSize, cardWidths } from './cardSizes';
 import { useContextMenu } from './ContextMenuProvider';
 import type { ContextMenuSpec } from './ContextMenuStore';
@@ -14,15 +15,25 @@ interface Props {
   menu?: ContextMenuSpec[];
   size?: CardSize;
   className?: string;
+  // Shows the owner the front of their own face-down card.
+  reveal?: boolean;
 }
 
 // A card face that renders whatever view main sent. Any change goes back
 // to main as an action; nothing about the card is kept locally.
-const Card = ({ card, onClick, menu = [], size = 'lg', className }: Props) => {
+const Card = ({
+  card,
+  onClick,
+  menu = [],
+  size = 'lg',
+  className,
+  reveal = false,
+}: Props) => {
   const contextMenu = useContextMenu();
   const preview = useCardPreview();
   const interactive = Boolean(onClick) || menu.length > 0;
   const { instanceId } = card;
+  const hidden = card.faceDown && !reveal;
 
   // A card that leaves the window while hovered never gets mouseleave.
   useEffect(() => () => preview.hide(instanceId), [preview, instanceId]);
@@ -41,7 +52,10 @@ const Card = ({ card, onClick, menu = [], size = 'lg', className }: Props) => {
     <div
       data-testid="card"
       data-instance-id={instanceId}
-      data-card-name={card.faceDown ? undefined : card.ref?.name}
+      data-card-name={hidden ? undefined : card.ref?.name}
+      data-face-index={card.faceIndex}
+      data-face-down={card.faceDown || undefined}
+      data-token={card.isToken || undefined}
       className={classNames(
         'handle',
         'relative',
@@ -62,13 +76,13 @@ const Card = ({ card, onClick, menu = [], size = 'lg', className }: Props) => {
       )}
       onClick={onClick && (() => onClick(card))}
       onContextMenu={handleContextMenu}
-      onMouseEnter={(e) => preview.show(card, e.clientX)}
+      onMouseEnter={(e) => preview.show(card, e.clientX, reveal)}
       onMouseLeave={() => preview.hide(instanceId)}
     >
-      <CardImg
-        scryfallId={card.faceDown ? undefined : card.ref?.id}
-        face={card.faceIndex}
-        name={card.faceDown ? 'Face-down card' : card.ref?.name}
+      <CardArt
+        cardRef={card.ref}
+        faceIndex={card.faceIndex}
+        faceDown={hidden}
       />
       {card.isCommander && (
         <span
@@ -78,6 +92,9 @@ const Card = ({ card, onClick, menu = [], size = 'lg', className }: Props) => {
         >
           ♛
         </span>
+      )}
+      {(card.zone === 'battlefield' || card.zone === 'exile') && (
+        <CardBadges card={card} />
       )}
     </div>
   );

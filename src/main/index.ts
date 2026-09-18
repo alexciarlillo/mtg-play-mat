@@ -21,6 +21,7 @@ import {
   setupNetplay,
 } from './modules/netplay/setupNetplay';
 import PlayTest from './modules/play-test/PlayTest';
+import createTokenHandlers from './modules/play-test/tokenHandlers';
 import CardDB from './shared/db/CardDB';
 import DeckDB from './shared/db/DeckDB';
 import {
@@ -104,6 +105,7 @@ const start = (onDeepLink: ReturnType<typeof watchDeepLinks>) => {
       ...createCollectionHandlers({ cardDb }),
       ...createCardDataHandlers({ cardData }),
       ...playTest.handlers,
+      ...createTokenHandlers({ cardDb }),
       ...online.handlers,
     },
     online.guards

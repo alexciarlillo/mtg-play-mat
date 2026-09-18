@@ -8,10 +8,11 @@ import {
   useState,
 } from 'react';
 
-import CardImg from './CardImg';
+import CardArt from './CardArt';
 
 interface Preview {
-  show(card: CardView, clientX: number): void;
+  // reveal lets the owner preview their own face-down card.
+  show(card: CardView, clientX: number, reveal?: boolean): void;
   hide(instanceId: string): void;
 }
 
@@ -54,8 +55,8 @@ export const CardPreviewProvider = ({
 
   const preview = useMemo<Preview>(
     () => ({
-      show: (card, clientX) => {
-        if (!card.ref || card.faceDown) return;
+      show: (card, clientX, reveal = false) => {
+        if (!card.ref || (card.faceDown && !reveal)) return;
         const free = window.innerWidth - reserveRight;
         setShown({ card, pointerLeft: clientX < free / 2 });
       },
@@ -79,11 +80,7 @@ export const CardPreviewProvider = ({
           className="fixed top-2 z-30 aspect-card h-[min(600px,calc(100vh-1rem))] pointer-events-none drop-shadow-2xl"
           style={side}
         >
-          <CardImg
-            scryfallId={card.ref.id}
-            face={card.faceIndex}
-            name={card.ref.name}
-          />
+          <CardArt cardRef={card.ref} faceIndex={card.faceIndex} />
         </div>
       )}
     </PreviewContext.Provider>

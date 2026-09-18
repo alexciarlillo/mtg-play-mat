@@ -141,6 +141,8 @@ export const toSummary = ({
 const NON_CARD_LAYOUTS = `('art_series', 'token', 'double_faced_token',
   'emblem')`;
 
+const TOKEN_LAYOUTS = `('token', 'double_faced_token')`;
+
 interface FindPrintingOptions {
   name: string;
   setCode?: string;
@@ -365,6 +367,25 @@ export default class CardDB {
          LIMIT ${SEARCH_LIMIT}`
       )
       .all(...params) as unknown as SearchCardsByNameRet[];
+  };
+
+  // Token printings whose name contains the query, names that start with
+  // it first, then newest paper printings, so the art choice is up front.
+  searchTokens = (query: string, limit = SEARCH_LIMIT): Printing[] => {
+    const key = nameKey(query);
+    if (!this.db || key === '') return [];
+    return (
+      this.db
+        .prepare(
+          `SELECT * FROM printings
+           WHERE layout IN ${TOKEN_LAYOUTS}
+             AND name_key LIKE '%' || ?1 || '%'
+           ORDER BY name_key LIKE ?1 || '%' DESC, name COLLATE NOCASE,
+             digital, released_at DESC
+           LIMIT CAST(?2 AS INTEGER)`
+        )
+        .all(key, limit) as unknown as PrintingRow[]
+    ).map(toPrinting);
   };
 
   getCurrentSetList = (): CurrentSetListReturn[] => {

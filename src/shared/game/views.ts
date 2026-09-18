@@ -64,6 +64,7 @@ const toView = (card: CardInstance, hideFaceDown: boolean): CardView => ({
     isCommander: true,
     commanderCasts: card.commanderCasts ?? 0,
   }),
+  attachedTo: card.attachedTo,
 });
 
 const copyDamage = (entries: CommanderDamage[] = []) =>

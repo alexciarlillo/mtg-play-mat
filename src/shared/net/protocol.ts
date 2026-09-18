@@ -1,14 +1,12 @@
-import { isScryfallId } from '../cardImages';
-import type {
-  CardFace,
-  CardRef,
-  CardView,
-  CommanderDamage,
-  DummyOpponent,
-  PlayerId,
-  Position,
-  PublicView,
-  PublicZoneId,
+import {
+  type CardView,
+  type CommanderDamage,
+  type DummyOpponent,
+  parseCardRef,
+  type PlayerId,
+  type Position,
+  type PublicView,
+  type PublicZoneId,
 } from '../game';
 
 export const PROTOCOL_VERSION = 1;
@@ -73,11 +71,6 @@ const text = (
   return value;
 };
 
-const optionalText = (fields: Fields, key: string) =>
-  fields[key] === undefined
-    ? {}
-    : { [key]: text(fields, key, { max: 20, allowEmpty: true }) };
-
 const int = (fields: Fields, key: string, min: number, max: number) => {
   const value = fields[key];
   if (!Number.isInteger(value) || (value as number) < min) {
@@ -109,35 +102,9 @@ const counters = (fields: Fields, key: string): Record<string, number> => {
   return Object.fromEntries(
     entries.map(([name]) => {
       if (name.length === 0 || name.length > 40) fail(`${key} name`);
-      return [name, int(value, name, -MAX_LIFE, MAX_LIFE)];
+      return [name, int(value, name, 0, MAX_LIFE)];
     })
   );
-};
-
-const face = (value: unknown): CardFace => {
-  const fields = object(value, 'face');
-  return {
-    name: text(fields, 'name'),
-    typeLine: text(fields, 'typeLine', { allowEmpty: true }),
-    ...optionalText(fields, 'power'),
-    ...optionalText(fields, 'toughness'),
-    ...optionalText(fields, 'loyalty'),
-  };
-};
-
-const cardRef = (value: unknown): CardRef => {
-  const fields = object(value, 'ref');
-  const id = text(fields, 'id');
-  if (!isScryfallId(id)) fail('ref.id must be a Scryfall id');
-  return {
-    id,
-    name: text(fields, 'name'),
-    typeLine: text(fields, 'typeLine', { allowEmpty: true }),
-    faces: list(fields.faces, 'faces', 4).map(face),
-    ...optionalText(fields, 'power'),
-    ...optionalText(fields, 'toughness'),
-    ...optionalText(fields, 'loyalty'),
-  };
 };
 
 const position = (value: unknown): Position | null => {
@@ -153,6 +120,14 @@ const position = (value: unknown): Position | null => {
   return { x: coord('x'), y: coord('y') };
 };
 
+// Optional so views from builds without attachments still parse.
+const attachedTo = (fields: Fields, zone: PublicZoneId): string | null => {
+  const value = fields.attachedTo;
+  if (value === undefined || value === null) return null;
+  const host = text(fields, 'attachedTo');
+  return zone === 'battlefield' ? host : null;
+};
+
 const cardView = (value: unknown, zone: PublicZoneId): CardView => {
   const fields = object(value, 'card');
   if (fields.zone !== zone) fail(`card in ${zone} claims another zone`);
@@ -160,7 +135,8 @@ const cardView = (value: unknown, zone: PublicZoneId): CardView => {
   return {
     instanceId: text(fields, 'instanceId'),
     // A face-down card's identity is never shown, whatever the peer sent.
-    ref: faceDown || fields.ref === null ? null : cardRef(fields.ref),
+    ref:
+      faceDown || fields.ref === null ? null : parseCardRef(fields.ref, fail),
     owner: text(fields, 'owner'),
     controller: text(fields, 'controller'),
     zone,
@@ -170,6 +146,7 @@ const cardView = (value: unknown, zone: PublicZoneId): CardView => {
     faceIndex: faceDown ? 0 : int(fields, 'faceIndex', 0, 3),
     counters: counters(fields, 'counters'),
     isToken: bool(fields, 'isToken'),
+    attachedTo: attachedTo(fields, zone),
     ...(fields.isCommander !== undefined &&
       bool(fields, 'isCommander') && {
         isCommander: true,
@@ -306,6 +283,7 @@ export const namespaceView = (
       cards.map((card) => ({
         ...card,
         instanceId: `${peerId}/${card.instanceId}`,
+        attachedTo: card.attachedTo && `${peerId}/${card.attachedTo}`,
       })),
     ])
   ) as Record<PublicZoneId, CardView[]>,

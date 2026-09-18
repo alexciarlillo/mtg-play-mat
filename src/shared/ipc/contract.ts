@@ -11,6 +11,7 @@ import type {
   CurrentSetListReturn,
   SearchCardsByNameOptions,
   SearchCardsByNameRet,
+  TokenSearchResult,
 } from '../types/cards';
 import type {
   CardNameResult,
@@ -81,6 +82,8 @@ export const requests = {
   // Only the hidden net window may call this.
   netReport: request<[report: NetReport]>(),
   getOpponentView: request<[], OpponentState>(),
+  // Token printings by name, for creating tokens in a play test.
+  searchTokens: request<[query: string], TokenSearchResult[]>(),
 };
 
 // Main -> renderer pushes. The preload exposes each as on<Name>(listener).

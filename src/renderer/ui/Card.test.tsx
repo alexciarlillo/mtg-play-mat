@@ -22,6 +22,7 @@ const bears: CardView = {
   faceIndex: 0,
   counters: {},
   isToken: false,
+  attachedTo: null,
 };
 
 const renderCard = (props: Partial<Parameters<typeof Card>[0]> = {}) =>

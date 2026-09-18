@@ -27,6 +27,7 @@ const commander = (
   faceIndex: 0,
   counters: {},
   isToken: false,
+  attachedTo: null,
   isCommander: true,
   commanderCasts: 0,
   ...patch,

@@ -27,4 +27,5 @@ export const toCardRef = (printing: Printing): CardRef => ({
   typeLine: printing.typeLine ?? printing.faces[0]?.typeLine ?? '',
   faces: printing.faces.map(toFace),
   ...stats(printing),
+  layout: printing.layout,
 });

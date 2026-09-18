@@ -1,3 +1,5 @@
+import type { CardRef } from '../game';
+
 export interface SearchCardsByNameOptions {
   keyword?: string;
   setCode?: string;
@@ -61,4 +63,11 @@ export interface Printing {
   rarity: string | null;
   digital: boolean;
   faces: PrintingFace[];
+}
+
+// A token printing, ready to put onto the battlefield.
+export interface TokenSearchResult {
+  ref: CardRef;
+  setCode: string;
+  setName: string;
 }

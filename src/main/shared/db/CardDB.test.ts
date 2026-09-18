@@ -61,3 +61,35 @@ describe('CardDB upgrade', () => {
     raw.close();
   });
 });
+
+describe('CardDB.searchTokens', () => {
+  it('finds token printings by name, prefix matches first', () => {
+    const raw = new DatabaseSync(dbPath);
+    migrate(raw, cardMigrations);
+    const insert = raw.prepare(
+      `INSERT INTO printings (id, oracle_id, name, lang, set_code, set_name,
+         set_type, collector_number, released_at, layout, type_line, colors,
+         color_identity, keywords, digital, faces, name_key, front_key)
+       VALUES (?1, 'o', ?2, 'en', ?3, 'Set', 'token', '1', ?4, ?5,
+         'Token Creature', '[]', '[]', '[]', 0,
+         json_array(json_object('name', ?2, 'typeLine', 'Token Creature')),
+         lower(?2), lower(?2))`
+    );
+    insert.run('t-old', 'Soldier', 'tm19', '2018-07-13', 'token');
+    insert.run('t-new', 'Soldier', 'tm21', '2020-07-03', 'token');
+    insert.run('t-dfc', 'Human Soldier', 'tznr', '2020-09-25', 'token');
+    insert.run('c-1', 'Soldier of Fortune', 'm21', '2020-07-03', 'normal');
+    raw.close();
+
+    const db = new CardDB(dbPath);
+    expect(db.searchTokens('SOLD').map((p) => p.id)).toEqual([
+      't-new',
+      't-old',
+      't-dfc',
+    ]);
+    expect(db.searchTokens('soldier')[0].faces[0].name).toBe('Soldier');
+    expect(db.searchTokens('  ')).toEqual([]);
+    expect(db.searchTokens('zombie')).toEqual([]);
+    db.close();
+  });
+});

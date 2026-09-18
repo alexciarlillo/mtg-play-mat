@@ -157,6 +157,58 @@ describe('publicView', () => {
     );
   });
 
+  it('never leaks a card turned or played face down', () => {
+    let state = midGame();
+    const [onField] = zone(state, P1, 'battlefield');
+    const [fromHand] = zone(state, P1, 'hand');
+    state = applyAll(state, [
+      { type: 'setFaceDown', instanceId: onField, faceDown: true },
+      {
+        type: 'moveCard',
+        instanceId: fromHand,
+        to: 'battlefield',
+        faceDown: true,
+      },
+      {
+        type: 'adjustCounter',
+        instanceId: fromHand,
+        counter: '+1/+1',
+        delta: 1,
+      },
+    ]);
+
+    const view = publicView(state, P1);
+    const json = JSON.stringify(view);
+    [onField, fromHand].forEach((id) => {
+      expect(json).not.toContain(state.cards[id].ref.name);
+      expect(json).not.toContain(state.cards[id].ref.id);
+    });
+    // Counters on a face-down permanent are public.
+    expect(
+      view?.zones.battlefield.find((card) => card.instanceId === fromHand)
+    ).toMatchObject({ ref: null, faceDown: true, counters: { '+1/+1': 1 } });
+
+    const own = privateView(state, P1)?.zones.battlefield;
+    expect(own?.map((card) => card.ref?.name)).toEqual([
+      state.cards[onField].ref.name,
+      state.cards[fromHand].ref.name,
+    ]);
+  });
+
+  it('carries attachments, faces, and tokens', () => {
+    let state = midGame();
+    const [host] = zone(state, P1, 'battlefield');
+    const [aura] = zone(state, P1, 'hand');
+    state = applyAll(state, [
+      { type: 'moveCard', instanceId: aura, to: 'battlefield' },
+      { type: 'attach', instanceId: aura, to: host },
+      { type: 'copyCard', instanceId: host },
+    ]);
+    const cards = publicView(state, P1)?.zones.battlefield ?? [];
+    expect(cards.find((c) => c.instanceId === aura)?.attachedTo).toBe(host);
+    expect(cards.at(-1)).toMatchObject({ isToken: true, attachedTo: null });
+  });
+
   it('is plain JSON', () => {
     const view = publicView(midGame(), P1);
     expect(JSON.parse(JSON.stringify(view))).toEqual(view);

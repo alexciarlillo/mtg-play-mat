@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { publicView, type PublicView } from '../game';
 import { applyAll, startGame, zone } from '../game/testFixtures';
-import type { CardRef, GameState } from '../game/types';
+import type { CardRef, GameAction, GameState } from '../game/types';
 import {
   encodeNetMessage,
   MAX_MESSAGE_BYTES,
@@ -105,6 +105,139 @@ describe('net messages', () => {
     });
     expect(wide.length).toBeLessThan(MAX_MESSAGE_BYTES);
     expect(() => parseNetMessage(wide)).toThrow(/larger than/);
+  });
+});
+
+// A board using every card manipulation: counters, a transformed DFC, a
+// face-down permanent, an attachment, a custom token, and player counters.
+const richView = (): PublicView => {
+  let state = startGame([
+    {
+      id: 'alice',
+      name: 'Alice',
+      deck: [
+        ...deck.slice(0, 3),
+        {
+          ...deck[3],
+          layout: 'transform',
+          faces: [
+            { name: 'Front', typeLine: 'Creature', power: '1', toughness: '1' },
+            { name: 'Back', typeLine: 'Creature', power: '3', toughness: '2' },
+          ],
+        },
+      ],
+    },
+  ]);
+  state = applyAll(state, [{ type: 'draw', playerId: 'alice', count: 4 }]);
+  const [host, aura, hidden, dfc] = zone(state, 'alice', 'hand');
+  state = applyAll(state, [
+    ...[host, aura, hidden, dfc].map((instanceId): GameAction => ({
+      type: 'moveCard',
+      instanceId,
+      to: 'battlefield',
+    })),
+    { type: 'attach', instanceId: aura, to: host },
+    { type: 'setFaceDown', instanceId: hidden, faceDown: true },
+    { type: 'transform', instanceId: dfc },
+    { type: 'adjustCounter', instanceId: host, counter: '+1/+1', delta: 2 },
+    { type: 'adjustCounter', instanceId: dfc, counter: 'Shield', delta: 1 },
+    {
+      type: 'createTokens',
+      playerId: 'alice',
+      count: 1,
+      ref: {
+        id: '',
+        custom: true,
+        name: 'Zombie Army',
+        typeLine: 'Token Creature — Zombie Army',
+        faces: [{ name: 'Zombie Army', typeLine: 'Token Creature' }],
+        power: '0',
+        toughness: '0',
+      },
+    },
+    {
+      type: 'adjustPlayerCounter',
+      playerId: 'alice',
+      counter: 'poison',
+      delta: 3,
+    },
+  ]);
+  const v = publicView(state, 'alice');
+  if (!v) throw new Error('no view');
+  return v;
+};
+
+describe('card manipulation over the wire', () => {
+  it('round-trips counters, faces, face-down, attachments and tokens', () => {
+    const v = richView();
+    const parsed = parsePublicView(JSON.parse(JSON.stringify(v)));
+    expect(parsed).toEqual(v);
+
+    const [host, aura, hidden, dfc, token] = parsed.zones.battlefield;
+    expect(host.counters).toEqual({ '+1/+1': 2 });
+    expect(aura.attachedTo).toBe(host.instanceId);
+    expect(hidden).toMatchObject({ faceDown: true, ref: null });
+    expect(dfc).toMatchObject({ faceIndex: 1, counters: { Shield: 1 } });
+    expect(dfc.ref?.layout).toBe('transform');
+    expect(token).toMatchObject({ isToken: true, ref: { custom: true } });
+    expect(parsed.counters).toEqual({ poison: 3 });
+  });
+
+  it('accepts views from peers without attachments', () => {
+    const v = JSON.parse(JSON.stringify(richView())) as PublicView;
+    v.zones.battlefield.forEach((card) => {
+      delete (card as Partial<typeof card>).attachedTo;
+    });
+    const parsed = parsePublicView(v);
+    parsed.zones.battlefield.forEach((card) =>
+      expect(card.attachedTo).toBeNull()
+    );
+  });
+
+  it('namespaces attachment targets along with instance ids', () => {
+    const spaced = namespaceView(richView(), 'peer-1');
+    const [host, aura] = spaced.zones.battlefield;
+    expect(aura.attachedTo).toBe(host.instanceId);
+    expect(host.attachedTo).toBeNull();
+  });
+
+  it.each([
+    [
+      'a custom token with an image id',
+      (v: PublicView) => {
+        v.zones.battlefield[4].ref!.id = uuid(1);
+      },
+    ],
+    [
+      'a real card with no id',
+      (v: PublicView) => {
+        v.zones.battlefield[0].ref!.id = '';
+      },
+    ],
+    [
+      'a non-string attachment',
+      (v: PublicView) => {
+        (v.zones.battlefield[1] as { attachedTo: unknown }).attachedTo = 7;
+      },
+    ],
+    [
+      'a negative counter',
+      (v: PublicView) => {
+        v.zones.battlefield[0].counters['+1/+1'] = -1;
+      },
+    ],
+    [
+      'a face index out of range',
+      (v: PublicView) => {
+        v.zones.battlefield[3].faceIndex = 9;
+      },
+    ],
+  ])('rejects %s', (_label, corrupt) => {
+    const v = structuredClone(richView());
+    corrupt(v);
+    expect(() => parsePublicView(JSON.parse(JSON.stringify(v)))).toThrow(
+      /bad message/
+    );
   });
 });
 

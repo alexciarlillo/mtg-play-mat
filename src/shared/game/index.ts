@@ -9,8 +9,21 @@ export {
   MAX_DUMMIES,
   startingLife,
 } from './commander';
+export {
+  canTransform,
+  currentFace,
+  isModalDfc,
+  parseCardRef,
+} from './cardRefs';
 export { cascadePosition, emptyGame, getPlayer } from './core';
-export { mtgRules, OPENING_HAND_SIZE } from './mtg';
+export {
+  ATTACH_OFFSET,
+  counterNames,
+  MAX_TOKENS,
+  mtgRules,
+  OPENING_HAND_SIZE,
+  playerCounterNames,
+} from './mtg';
 export { reduce, replay } from './reducer';
 export { nextRandom, seedRng, shuffle } from './rng';
 export * from './types';

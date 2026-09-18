@@ -176,6 +176,7 @@ test('window.api is a narrow typed bridge', async () => {
       'netResend',
       'netReport',
       'getOpponentView',
+      'searchTokens',
       'onNetState',
       'onNetCommand',
       'onOpponentView',

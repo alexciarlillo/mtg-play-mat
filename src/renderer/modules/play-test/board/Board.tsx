@@ -1,4 +1,4 @@
-import { MAX_DUMMIES, type PublicView } from '@shared/game';
+import { type CardView, MAX_DUMMIES, type PublicView } from '@shared/game';
 import type { OpponentState } from '@shared/net/remoteViews';
 import classNames from 'classnames';
 import { type MouseEvent, type ReactNode, useCallback, useState } from 'react';
@@ -9,6 +9,7 @@ import { ConfirmDialog, NumberPrompt } from '../common/Dialogs';
 import ShortcutHelp from '../common/ShortcutHelp';
 import { useGameShortcuts } from '../common/useGameShortcuts';
 import { dispatch, useView, type ViewStore } from '../viewStore';
+import AttachDialog from './AttachDialog';
 import BattlefieldCard from './BattlefieldCard';
 import CommanderPrompt from './CommanderPrompt';
 import {
@@ -19,11 +20,14 @@ import {
 } from './commanders';
 import { CommanderDamageTaken, DummyOpponents } from './CommanderTracker';
 import CommandZone from './CommandZone';
+import CounterDialog from './CounterDialog';
 import Library from './Library';
-import { SIDE_PANEL_WIDTH } from './layout';
+import { SIDE_PANEL_WIDTH, stackOrder } from './layout';
 import LifeCounter from './LifeCounter';
 import OpponentSide from './OpponentSide';
+import PlayerCounters from './PlayerCounters';
 import ScaledField from './ScaledField';
+import TokenDialog from './TokenDialog';
 import ZoneBrowser from './ZoneBrowser';
 import ZonePile from './ZonePile';
 
@@ -33,7 +37,10 @@ const noOpponent: ViewStore<OpponentState> = {
 };
 
 type Dialog =
-  'help' | 'drawMany' | 'setLife' | 'restart' | 'graveyard' | 'exile';
+  'help' | 'drawMany' | 'setLife' | 'restart' | 'graveyard' | 'exile' | 'token';
+
+// Dialogs about one permanent, opened from its menu.
+type CardDialog = { kind: 'counter' | 'attach'; card: CardView };
 
 const ToolButton = ({
   onClick,
@@ -74,7 +81,17 @@ const Board = ({ store, opponent }: Props) => {
   const duel = peer !== null;
   const menu = useContextMenu();
   const [dialog, setDialog] = useState<Dialog | null>(null);
+  const [cardDialog, setCardDialog] = useState<CardDialog | null>(null);
   const close = useCallback(() => setDialog(null), []);
+  const closeCardDialog = useCallback(() => setCardDialog(null), []);
+  const onAddCounter = useCallback(
+    (card: CardView) => setCardDialog({ kind: 'counter', card }),
+    []
+  );
+  const onAttach = useCallback(
+    (card: CardView) => setCardDialog({ kind: 'attach', card }),
+    []
+  );
   const toggleHelp = useCallback(
     () => setDialog((open) => (open === 'help' ? null : 'help')),
     []
@@ -83,7 +100,7 @@ const Board = ({ store, opponent }: Props) => {
   const prompts = useCommanderPrompts();
 
   useGameShortcuts(view, {
-    enabled: dialog === null && prompts.length === 0,
+    enabled: dialog === null && cardDialog === null && prompts.length === 0,
     onHelp: toggleHelp,
   });
 
@@ -105,6 +122,7 @@ const Board = ({ store, opponent }: Props) => {
     if (!playerId || inDialog) return;
     menu.open({
       specs: [
+        { title: 'Create token…', action: () => setDialog('token') },
         {
           title: 'Draw a card',
           action: () => dispatch({ type: 'draw', playerId, count: 1 }),
@@ -148,11 +166,14 @@ const Board = ({ store, opponent }: Props) => {
           {/* Positions are relative to this box, in logical field units. */}
           <ScaledField testId="battlefield">
             {(scale) =>
-              view?.zones.battlefield.map((card) => (
+              view &&
+              stackOrder(view.zones.battlefield).map((card) => (
                 <BattlefieldCard
                   key={card.instanceId}
                   card={card}
                   scale={scale}
+                  onAddCounter={onAddCounter}
+                  onAttach={onAttach}
                 />
               ))
             }
@@ -173,6 +194,10 @@ const Board = ({ store, opponent }: Props) => {
                 life={view.life}
                 compact={duel}
                 onSetLife={() => setDialog('setLife')}
+              />
+              <PlayerCounters
+                counters={view.counters}
+                playerId={view.playerId}
               />
               {!view.keptHand && (
                 <div
@@ -199,6 +224,9 @@ const Board = ({ store, opponent }: Props) => {
                   }
                 >
                   Shuffle
+                </ToolButton>
+                <ToolButton onClick={() => setDialog('token')}>
+                  Token…
                 </ToolButton>
                 <ToolButton onClick={() => setDialog('restart')}>
                   Restart
@@ -336,6 +364,19 @@ const Board = ({ store, opponent }: Props) => {
       {dialog === 'help' && <ShortcutHelp onClose={close} />}
       {prompts[0] && (
         <CommanderPrompt key={prompts[0].instanceId} prompt={prompts[0]} />
+      )}
+      {view && dialog === 'token' && (
+        <TokenDialog playerId={view.playerId} onClose={close} />
+      )}
+      {cardDialog?.kind === 'counter' && (
+        <CounterDialog card={cardDialog.card} onClose={closeCardDialog} />
+      )}
+      {view && cardDialog?.kind === 'attach' && (
+        <AttachDialog
+          card={cardDialog.card}
+          battlefield={view.zones.battlefield}
+          onClose={closeCardDialog}
+        />
       )}
     </div>
   );

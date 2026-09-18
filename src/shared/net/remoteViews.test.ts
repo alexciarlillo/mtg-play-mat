@@ -26,6 +26,7 @@ const view = (life: number): PublicView => ({
         faceIndex: 0,
         counters: {},
         isToken: false,
+        attachedTo: null,
       },
     ],
     graveyard: [],

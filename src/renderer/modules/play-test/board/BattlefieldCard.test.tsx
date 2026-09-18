@@ -22,6 +22,7 @@ const card: CardView = {
   faceIndex: 0,
   counters: {},
   isToken: false,
+  attachedTo: null,
 };
 
 const dispatch = vi.fn(() => Promise.resolve());
@@ -34,12 +35,34 @@ afterEach(() => {
   dispatch.mockClear();
 });
 
-const renderCard = () =>
+const renderCard = (
+  view: CardView = card,
+  props: Partial<Parameters<typeof BattlefieldCard>[0]> = {}
+) =>
   render(
     <ContextMenuProvider>
-      <BattlefieldCard card={card} />
+      <BattlefieldCard card={view} {...props} />
     </ContextMenuProvider>
   );
+
+const dfc: CardView = {
+  ...card,
+  ref: {
+    id: '11bf83bb-c95b-4b4f-9a56-ce7a1816307a',
+    name: 'Delver of Secrets // Insectile Aberration',
+    typeLine: 'Creature — Human Wizard // Creature — Human Insect',
+    layout: 'transform',
+    faces: [
+      { name: 'Delver of Secrets', typeLine: 'Creature — Human Wizard' },
+      { name: 'Insectile Aberration', typeLine: 'Creature — Human Insect' },
+    ],
+  },
+};
+
+const clickMenu = (name: string) => {
+  fireEvent.contextMenu(screen.getByTestId('card'));
+  fireEvent.click(screen.getByRole('menuitem', { name }));
+};
 
 describe('BattlefieldCard', () => {
   it('sits at its view position in a sized wrapper', () => {
@@ -117,5 +140,89 @@ describe('BattlefieldCard', () => {
       to: 'exile',
     });
     exile.remove();
+  });
+
+  it.each([
+    [
+      'Add +1/+1 counter',
+      { type: 'adjustCounter', counter: '+1/+1', delta: 1 },
+    ],
+    [
+      'Add -1/-1 counter',
+      { type: 'adjustCounter', counter: '-1/-1', delta: 1 },
+    ],
+    ['Turn face down', { type: 'setFaceDown', faceDown: true }],
+    ['Create copy', { type: 'copyCard' }],
+  ])('%s from its context menu', (name, action) => {
+    renderCard();
+    clickMenu(name);
+    expect(dispatch).toHaveBeenCalledWith({ instanceId: 'p1:7', ...action });
+  });
+
+  it('transforms a double-faced card to its next face', () => {
+    renderCard(dfc);
+    clickMenu('Transform to Insectile Aberration');
+    expect(dispatch).toHaveBeenCalledWith({
+      type: 'transform',
+      instanceId: 'p1:7',
+    });
+  });
+
+  it('offers no transform to single-faced or face-down cards', () => {
+    renderCard({ ...dfc, ref: null, faceDown: true });
+    fireEvent.contextMenu(screen.getByTestId('card'));
+    const names = screen.getAllByRole('menuitem').map((i) => i.textContent);
+    expect(names.some((n) => n?.startsWith('Transform'))).toBe(false);
+    expect(names).toContain('Turn face up');
+  });
+
+  it('opens the attach and counter dialogs, and detaches', () => {
+    const onAttach = vi.fn();
+    const onAddCounter = vi.fn();
+    renderCard({ ...card, attachedTo: 'p1:2' }, { onAttach, onAddCounter });
+    clickMenu('Attach to…');
+    expect(onAttach).toHaveBeenCalledWith({ ...card, attachedTo: 'p1:2' });
+    clickMenu('Add counter…');
+    expect(onAddCounter).toHaveBeenCalled();
+    clickMenu('Detach');
+    expect(dispatch).toHaveBeenCalledWith({
+      type: 'attach',
+      instanceId: 'p1:7',
+      to: null,
+    });
+  });
+
+  it('steps counters from its hover controls without tapping', () => {
+    renderCard({ ...card, counters: { charge: 2 } });
+    const remove = screen.getByRole('button', {
+      name: 'Remove charge counter',
+    });
+    fireEvent.mouseDown(remove);
+    fireEvent.mouseUp(remove);
+    fireEvent.click(remove);
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect(dispatch).toHaveBeenCalledWith({
+      type: 'adjustCounter',
+      instanceId: 'p1:7',
+      counter: 'charge',
+      delta: -1,
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add +1/+1 counter' }));
+    expect(dispatch).toHaveBeenLastCalledWith({
+      type: 'adjustCounter',
+      instanceId: 'p1:7',
+      counter: '+1/+1',
+      delta: 1,
+    });
+  });
+
+  it('shows counters and a modified P/T badge', () => {
+    renderCard({
+      ...card,
+      ref: { ...card.ref!, power: '2', toughness: '2' },
+      counters: { '+1/+1': 2 },
+    });
+    expect(screen.getByTestId('pt-badge')).toHaveTextContent('4/4');
+    expect(screen.getByTestId('counter-chip')).toHaveTextContent('+1/+1 ×2');
   });
 });

@@ -45,6 +45,7 @@ describe('toCardRef', () => {
       typeLine: 'Creature — Bear',
       power: '2',
       toughness: '2',
+      layout: 'normal',
       faces: [
         {
           name: 'Grizzly Bears',

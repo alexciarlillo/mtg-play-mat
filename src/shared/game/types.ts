@@ -34,7 +34,7 @@ export interface CardFace {
 // Self-describing display data, copied into each instance so a state (or a
 // peer receiving it) never needs a card database lookup.
 export interface CardRef {
-  // Scryfall id of the printing.
+  // Scryfall id of the printing; empty for a custom token.
   id: string;
   name: string;
   typeLine: string;
@@ -42,6 +42,10 @@ export interface CardRef {
   power?: string;
   toughness?: string;
   loyalty?: string;
+  // Scryfall layout (e.g. transform, modal_dfc, flip), when known.
+  layout?: string;
+  // A user-made token with no printing, so no image to show.
+  custom?: true;
 }
 
 export interface CardInstance {
@@ -61,6 +65,8 @@ export interface CardInstance {
   isCommander?: boolean;
   // Casts from the command zone; the commander tax is 2 per cast.
   commanderCasts?: number;
+  // The permanent this aura or equipment is attached to.
+  attachedTo: InstanceId | null;
 }
 
 export interface PlayerState {
@@ -146,6 +152,10 @@ export interface MoveCardAction {
   index?: number;
   // Battlefield placement; defaults to a cascade so cards don't stack.
   position?: Position;
+  // How a card enters the battlefield: face down (morph, manifest), or on
+  // another face (the back of a modal double-faced card).
+  faceDown?: boolean;
+  faceIndex?: number;
 }
 
 export interface SetPositionAction {
@@ -204,14 +214,73 @@ export interface KeepHandAction {
   bottom: InstanceId[];
 }
 
+// Adds (or with a negative delta, removes) counters on a card.
+export interface AdjustCounterAction {
+  type: 'adjustCounter';
+  instanceId: InstanceId;
+  counter: string;
+  delta: number;
+}
+
+// Poison, energy, experience, and other counters on a player.
+export interface AdjustPlayerCounterAction {
+  type: 'adjustPlayerCounter';
+  playerId: PlayerId;
+  counter: string;
+  delta: number;
+}
+
+// Puts count new tokens onto the player's battlefield.
+export interface CreateTokensAction {
+  type: 'createTokens';
+  playerId: PlayerId;
+  ref: CardRef;
+  count: number;
+}
+
+// Creates a token that copies a permanent.
+export interface CopyCardAction {
+  type: 'copyCard';
+  instanceId: InstanceId;
+}
+
+export interface SetFaceDownAction {
+  type: 'setFaceDown';
+  instanceId: InstanceId;
+  faceDown: boolean;
+}
+
+// Turns a multi-face permanent to its next face.
+export interface TransformAction {
+  type: 'transform';
+  instanceId: InstanceId;
+}
+
+// Attaches a permanent to another, or detaches it when to is null.
+export interface AttachAction {
+  type: 'attach';
+  instanceId: InstanceId;
+  to: InstanceId | null;
+}
+
+export type MtgCardAction =
+  | TapAction
+  | AdjustCounterAction
+  | CopyCardAction
+  | SetFaceDownAction
+  | TransformAction
+  | AttachAction;
+
 export type MtgPlayerAction =
   | UntapAllAction
   | AdjustLifeAction
   | SetLifeAction
   | MulliganAction
-  | KeepHandAction;
+  | KeepHandAction
+  | AdjustPlayerCounterAction
+  | CreateTokensAction;
 
-export type MtgAction = TapAction | MtgPlayerAction;
+export type MtgAction = MtgCardAction | MtgPlayerAction;
 
 // Commander tax: changes a commander's cast count by delta (not below 0).
 export interface AdjustCommanderCastsAction {

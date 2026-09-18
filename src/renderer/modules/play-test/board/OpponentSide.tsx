@@ -9,7 +9,8 @@ import CardImg from '../../../ui/CardImg';
 import { hasCommanders } from './commanders';
 import { CommanderDamageTaken } from './CommanderTracker';
 import CommandZone from './CommandZone';
-import { SIDE_PANEL_WIDTH } from './layout';
+import { SIDE_PANEL_WIDTH, stackOrder } from './layout';
+import PlayerCounters from './PlayerCounters';
 import ScaledField from './ScaledField';
 import ZoneBrowser from './ZoneBrowser';
 import ZonePile from './ZonePile';
@@ -28,6 +29,7 @@ const OpponentCard = ({ card }: { card: CardView }) => {
   return (
     <div
       data-testid="opponent-card"
+      data-attached-to={card.attachedTo ?? undefined}
       className="absolute left-0 top-0"
       style={{ transform: `translate(${x}px, ${y}px)` }}
     >
@@ -89,7 +91,7 @@ const OpponentSide = ({
         {view ? (
           <ScaledField testId="opponent-battlefield">
             {() =>
-              view.zones.battlefield.map((card) => (
+              stackOrder(view.zones.battlefield).map((card) => (
                 <OpponentCard key={card.instanceId} card={card} />
               ))
             }
@@ -126,6 +128,12 @@ const OpponentSide = ({
             </div>
           )}
         </div>
+        {view && (
+          <PlayerCounters
+            counters={view.counters}
+            testId="opponent-player-counters"
+          />
+        )}
         {view && !view.keptHand && (
           <div
             data-testid="opponent-mulligan-status"

@@ -1,4 +1,4 @@
-import type { CardRef } from '@shared/game';
+import type { CardFace, CardRef } from '@shared/game';
 
 interface SampleCard {
   copies: number;
@@ -7,6 +7,9 @@ interface SampleCard {
   typeLine: string;
   power?: string;
   toughness?: string;
+  layout?: string;
+  // Multi-face cards list every face; others use the card itself.
+  faces?: CardFace[];
 }
 
 const sampleCards: SampleCard[] = [
@@ -33,10 +36,31 @@ const sampleCards: SampleCard[] = [
     toughness: '2',
   },
   {
-    copies: 6,
+    copies: 4,
     id: '78472540-b085-4ee1-848c-de4631274919',
     name: 'Rampant Growth',
     typeLine: 'Sorcery',
+  },
+  {
+    copies: 2,
+    id: '11bf83bb-c95b-4b4f-9a56-ce7a1816307a',
+    name: 'Delver of Secrets // Insectile Aberration',
+    typeLine: 'Creature — Human Wizard // Creature — Human Insect',
+    layout: 'transform',
+    faces: [
+      {
+        name: 'Delver of Secrets',
+        typeLine: 'Creature — Human Wizard',
+        power: '1',
+        toughness: '1',
+      },
+      {
+        name: 'Insectile Aberration',
+        typeLine: 'Creature — Human Insect',
+        power: '3',
+        toughness: '2',
+      },
+    ],
   },
   {
     copies: 6,
@@ -50,9 +74,9 @@ const sampleCards: SampleCard[] = [
 
 // A fixed 60-card deck for trying the play test without a card database.
 const buildSampleDeck = (): CardRef[] =>
-  sampleCards.flatMap(({ copies, ...card }) => {
-    const { id: _id, ...face } = card;
-    const ref: CardRef = { ...card, faces: [face] };
+  sampleCards.flatMap(({ copies, faces, ...card }) => {
+    const { id: _id, layout: _layout, ...face } = card;
+    const ref: CardRef = { ...card, faces: faces ?? [face] };
     return Array.from({ length: copies }, () => ref);
   });
 

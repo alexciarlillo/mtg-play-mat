@@ -1,3 +1,4 @@
+import { parseCardRef } from './cardRefs';
 import type {
   GameState,
   PlayerAction,
@@ -5,6 +6,7 @@ import type {
   Position,
   ZoneId,
 } from './types';
+import { MAX_TOKENS } from './mtg';
 import { zoneIds } from './types';
 
 export class InvalidActionError extends Error {
@@ -76,6 +78,22 @@ const position = (fields: Fields, key: string): Position => {
 
 const MAX_COUNT = 1000;
 const MAX_LIFE = 1_000_000;
+const MAX_COUNTER_NAME = 40;
+
+const bool = (fields: Fields, key: string): boolean =>
+  typeof fields[key] === 'boolean'
+    ? (fields[key] as boolean)
+    : fail(`${key} must be a boolean`);
+
+// Counter names are free text typed by the player, so trim and bound them.
+const counterName = (fields: Fields, key: string): string => {
+  const value = fields[key];
+  const name = typeof value === 'string' ? value.trim() : '';
+  if (name.length === 0 || name.length > MAX_COUNTER_NAME) {
+    return fail(`${key} must be 1-${MAX_COUNTER_NAME} chars`);
+  }
+  return name;
+};
 
 // Actions arrive from renderers, so check their shape and rebuild them from
 // known fields only; nothing unexpected reaches the reducer or the log.
@@ -102,6 +120,12 @@ export const parsePlayerAction = (input: unknown): PlayerAction => {
         ...(input.position !== undefined && {
           position: position(input, 'position'),
         }),
+        ...(input.faceDown !== undefined && {
+          faceDown: bool(input, 'faceDown'),
+        }),
+        ...(input.faceIndex !== undefined && {
+          faceIndex: integer(input, 'faceIndex', 0, 3),
+        }),
       };
     case 'setPosition':
       return {
@@ -113,7 +137,42 @@ export const parsePlayerAction = (input: unknown): PlayerAction => {
     case 'tap':
     case 'untap':
     case 'toggleTap':
+    case 'copyCard':
+    case 'transform':
       return { type: input.type, instanceId: string(input, 'instanceId') };
+    case 'adjustCounter':
+      return {
+        type: 'adjustCounter',
+        instanceId: string(input, 'instanceId'),
+        counter: counterName(input, 'counter'),
+        delta: signed(input, 'delta', MAX_COUNT),
+      };
+    case 'adjustPlayerCounter':
+      return {
+        type: 'adjustPlayerCounter',
+        playerId: string(input, 'playerId'),
+        counter: counterName(input, 'counter'),
+        delta: signed(input, 'delta', MAX_COUNT),
+      };
+    case 'createTokens':
+      return {
+        type: 'createTokens',
+        playerId: string(input, 'playerId'),
+        ref: parseCardRef(input.ref, fail),
+        count: integer(input, 'count', 1, MAX_TOKENS),
+      };
+    case 'setFaceDown':
+      return {
+        type: 'setFaceDown',
+        instanceId: string(input, 'instanceId'),
+        faceDown: bool(input, 'faceDown'),
+      };
+    case 'attach':
+      return {
+        type: 'attach',
+        instanceId: string(input, 'instanceId'),
+        to: input.to === null ? null : string(input, 'to'),
+      };
     case 'untapAll':
     case 'mulligan':
       return { type: input.type, playerId: string(input, 'playerId') };

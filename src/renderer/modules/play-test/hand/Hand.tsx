@@ -1,14 +1,64 @@
-import type { CardView, PrivateView } from '@shared/game';
+import { type CardView, isModalDfc, type PrivateView } from '@shared/game';
 import classNames from 'classnames';
 import { useCallback, useState } from 'react';
 
 import Card from '../../../ui/Card';
+import type { ContextMenuSpec } from '../../../ui/ContextMenuStore';
 import { moveMenu, moveTo } from '../common/cardMenus';
 import ShortcutHelp from '../common/ShortcutHelp';
 import { useGameShortcuts } from '../common/useGameShortcuts';
 import { dispatch, useView, type ViewStore } from '../viewStore';
 
 const play = (card: CardView) => moveTo(card, 'battlefield');
+
+const playAs = (
+  card: CardView,
+  options: { faceDown?: boolean; faceIndex?: number }
+) =>
+  dispatch({
+    type: 'moveCard',
+    instanceId: card.instanceId,
+    to: 'battlefield',
+    ...options,
+  });
+
+// Play, discard and the other moves, plus the alternate ways to play:
+// face down (morph, manifest), or as the back of a modal DFC.
+const handMenu = (card: CardView): ContextMenuSpec[] => {
+  const moves = moveMenu(card, { battlefield: 'Play', graveyard: 'Discard' });
+  const back = card.ref && isModalDfc(card.ref) ? card.ref.faces[1] : undefined;
+  const extras: ContextMenuSpec[] = [
+    ...(back
+      ? [
+          {
+            title: `Play as ${back.name}`,
+            action: () => playAs(card, { faceIndex: 1 }),
+          },
+        ]
+      : []),
+    { title: 'Play face down', action: () => playAs(card, { faceDown: true }) },
+  ];
+  const at = moves.findIndex((item) => item.title === 'Play') + 1;
+  return [...moves.slice(0, at), ...extras, ...moves.slice(at)];
+};
+
+// The owner's private look at their face-down permanents. Only the hand
+// window has their identities; the board never does.
+const FaceDownPeek = ({ cards }: { cards: CardView[] }) => (
+  <div
+    data-testid="face-down-peek"
+    className="flex shrink-0 flex-col gap-1 border-l border-slate-600 pl-3"
+  >
+    <div className="text-xs font-semibold uppercase tracking-wide text-slate-300">
+      Face down ({cards.length})
+    </div>
+    <div className="flex gap-2">
+      {cards.map((card) => (
+        <Card key={card.instanceId} card={card} size="sm" reveal />
+      ))}
+    </div>
+  </div>
+);
 
 const barButton =
   'rounded px-3 py-0.5 text-sm font-semibold disabled:opacity-40 [-webkit-app-region:no-drag]';
@@ -99,6 +149,8 @@ const Hand = ({ store }: { store: ViewStore<PrivateView> }) => {
   useGameShortcuts(view, { enabled: !helpOpen, onHelp: toggleHelp });
 
   const handIds = new Set(view?.hand.map((card) => card.instanceId));
+  const faceDown =
+    view?.zones.battlefield.filter((card) => card.faceDown) ?? [];
   const chosen = picked.filter((id) => handIds.has(id));
   const selecting = Boolean(view && !view.keptHand && choosing);
 
@@ -172,18 +224,12 @@ const Hand = ({ store }: { store: ViewStore<PrivateView> }) => {
                 card={card}
                 size="md"
                 onClick={selecting ? togglePick : play}
-                menu={
-                  selecting
-                    ? []
-                    : moveMenu(card, {
-                        battlefield: 'Play',
-                        graveyard: 'Discard',
-                      })
-                }
+                menu={selecting ? [] : handMenu(card)}
               />
             </div>
           );
         })}
+        {faceDown.length > 0 && <FaceDownPeek cards={faceDown} />}
       </div>
       {helpOpen && <ShortcutHelp onClose={() => setHelpOpen(false)} />}
     </div>

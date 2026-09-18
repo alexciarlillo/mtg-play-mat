@@ -117,11 +117,32 @@ identities. A reloaded window fetches its current view, so nothing is lost.
 A new game shuffles and draws seven. The hand window offers **Keep** or **Mulligan**
 (London: each mulligan draws a fresh seven; on keep you pick one card per mulligan to
 put on the bottom). The board shows life (click the number to set it), Untap all,
-Draw N, Shuffle, and Restart, plus the library, hand count, graveyard, and exile.
+Draw N, Shuffle, Token…, and Restart, plus the library, hand count, graveyard, and exile.
 Right-click any card for "Move to…" (hand, battlefield, graveyard, exile, library
 top/bottom) or "Shuffle into library". Click the graveyard or exile to browse it.
 Drag a battlefield card onto a pile to move it there. Hovering a card shows a large
 preview in that window only.
+
+Card manipulation (right-click a permanent unless noted):
+
+- **Counters:** add +1/+1 or -1/-1 (they cancel in pairs), loyalty ± on planeswalkers
+  (which enter with their printed loyalty), or any named counter via "Add counter…".
+  Hovering a permanent shows small ± steppers. A P/T badge appears when counters change
+  a creature's stats. Poison, energy, and experience sit under the life total.
+- **Tokens:** right-click the battlefield (or use **Token…**) to search token printings
+  in the card database, pick one and a quantity, or make a custom token (name, type,
+  P/T; drawn as a plain frame). "Create copy" makes a token copy of a permanent. Tokens
+  cease to exist when they leave the battlefield.
+- **Face down:** "Turn face down/up", or "Play face down" from the hand. The board
+  shows a card back with a 2/2 badge; only the hand window's "Face down" strip shows
+  what it is.
+- **Transform:** double-faced, flip, and meld cards cycle faces. A modal DFC in hand can
+  be played as its back face.
+- **Attach:** "Attach to…" picks a host. Attachments sit behind the host and move with
+  it. Dragging an attachment away (or "Detach") frees it, and it stays on the
+  battlefield when its host leaves.
+
+The opponent's half of an online board shows all of the above read-only.
 
 Shortcuts (in either window): **D** draw, **U** untap all, **S** shuffle, **M**
 mulligan (until you keep), **?** help. Keys with Cmd/Ctrl/Alt are left alone.

@@ -93,27 +93,72 @@ export const cascadePosition = (count: number): Position => ({
   y: (count % 8) * 24,
 });
 
+const newCard = (
+  instanceId: InstanceId,
+  ref: CardRef,
+  owner: PlayerId,
+  zone: ZoneId
+): CardInstance => ({
+  instanceId,
+  ref,
+  owner,
+  controller: owner,
+  zone,
+  position: null,
+  tapped: false,
+  faceDown: false,
+  faceIndex: 0,
+  counters: {},
+  isToken: false,
+  attachedTo: null,
+});
+
+// Puts new cards (tokens, copies) straight onto a player's battlefield,
+// cascading from the cards already there.
+export const createOnBattlefield = (
+  state: GameState,
+  playerId: PlayerId,
+  cards: Pick<
+    CardInstance,
+    'ref' | 'faceDown' | 'faceIndex' | 'isToken' | 'counters'
+  >[]
+): GameState => {
+  const player = getPlayer(state, playerId);
+  if (!player || cards.length === 0) return state;
+
+  const count = player.zones.battlefield.length;
+  const created = cards.map((card, i): CardInstance => {
+    const instanceId = `${playerId}:${state.nextInstanceId + i}`;
+    return {
+      ...newCard(instanceId, card.ref, playerId, 'battlefield'),
+      ...card,
+      position: cascadePosition(count + i),
+    };
+  });
+
+  const placed = updateZone(state, playerId, 'battlefield', (ids) => [
+    ...ids,
+    ...created.map((card) => card.instanceId),
+  ]);
+  return {
+    ...placed,
+    cards: {
+      ...placed.cards,
+      ...Object.fromEntries(created.map((card) => [card.instanceId, card])),
+    },
+    nextInstanceId: state.nextInstanceId + created.length,
+  };
+};
+
 const newGame = (state: GameState, action: NewGameAction): GameState => {
   const cards: Record<InstanceId, CardInstance> = {};
   let nextInstanceId = 0;
 
   const place = (ref: CardRef, owner: PlayerId, zone: ZoneId) => {
-    const instanceId = `${owner}:${nextInstanceId}`;
+    const card = newCard(`${owner}:${nextInstanceId}`, ref, owner, zone);
     nextInstanceId += 1;
-    cards[instanceId] = {
-      instanceId,
-      ref,
-      owner,
-      controller: owner,
-      zone,
-      position: null,
-      tapped: false,
-      faceDown: false,
-      faceIndex: 0,
-      counters: {},
-      isToken: false,
-    };
-    return instanceId;
+    cards[card.instanceId] = card;
+    return card.instanceId;
   };
 
   const players = action.players.map((setup): PlayerState => ({
@@ -142,12 +187,47 @@ const newGame = (state: GameState, action: NewGameAction): GameState => {
   };
 };
 
+// Cards attached to one that left the battlefield stay where they are,
+// but no longer attached to anything.
+const detachFrom = (state: GameState, hostId: InstanceId): GameState => {
+  const attached = Object.values(state.cards).filter(
+    (card) => card.attachedTo === hostId
+  );
+  if (attached.length === 0) return state;
+  const cards = { ...state.cards };
+  attached.forEach((card) => {
+    cards[card.instanceId] = { ...card, attachedTo: null };
+  });
+  return { ...state, cards };
+};
+
+// Everything attached to a card, directly or through another attachment.
+export const attachmentsOf = (
+  state: GameState,
+  hostId: InstanceId
+): CardInstance[] => {
+  const direct = Object.values(state.cards).filter(
+    (card) => card.attachedTo === hostId && card.zone === 'battlefield'
+  );
+  return direct.flatMap((card) => [
+    card,
+    ...attachmentsOf(state, card.instanceId),
+  ]);
+};
+
+export interface MoveOptions {
+  index?: number;
+  position?: Position;
+  faceDown?: boolean;
+  faceIndex?: number;
+}
+
 export const moveCard = (
   state: GameState,
   rules: Rules,
   instanceId: InstanceId,
   to: ZoneId,
-  options: { index?: number; position?: Position } = {}
+  options: MoveOptions = {}
 ): GameState => {
   const card = state.cards[instanceId];
   if (!card) return state;
@@ -158,12 +238,22 @@ export const moveCard = (
   );
 
   let moved: CardInstance | null = { ...card, zone: to };
-  if (from !== to) moved = rules.onZoneChange(moved, from, to);
+  if (from !== to) {
+    // How it enters is known before the rules see it arrive.
+    if (to === 'battlefield') {
+      moved = {
+        ...moved,
+        faceDown: options.faceDown ?? moved.faceDown,
+        faceIndex: validFace(moved, options.faceIndex),
+      };
+    }
+    moved = rules.onZoneChange({ ...moved, attachedTo: null }, from, to);
+  }
 
   if (!moved) {
     const cards = { ...removed.cards };
     delete cards[instanceId];
-    return { ...removed, cards };
+    return detachFrom({ ...removed, cards }, instanceId);
   }
 
   const holder = zoneHolder(moved);
@@ -179,10 +269,49 @@ export const moveCard = (
   const placed = updateZone(removed, holder, to, (ids) =>
     insertAt(ids, instanceId, options.index)
   );
-  return {
+  const next = {
     ...placed,
     cards: { ...placed.cards, [instanceId]: { ...moved, position } },
   };
+  return from === 'battlefield' && to !== 'battlefield'
+    ? detachFrom(next, instanceId)
+    : next;
+};
+
+const validFace = (card: CardInstance, faceIndex?: number) =>
+  faceIndex !== undefined && faceIndex < card.ref.faces.length
+    ? faceIndex
+    : card.faceIndex;
+
+// Moving a permanent carries its attachments along by the same distance.
+// Moving an attachment on its own takes it off its host.
+const setPosition = (
+  state: GameState,
+  rules: Rules,
+  card: CardInstance,
+  position: Position
+): GameState => {
+  const from = card.position ?? { x: 0, y: 0 };
+  const dx = position.x - from.x;
+  const dy = position.y - from.y;
+  const followers = attachmentsOf(state, card.instanceId);
+
+  // Re-appending puts the card on top of the others it was dropped on.
+  const moved = moveCard(state, rules, card.instanceId, 'battlefield', {
+    position,
+  });
+  const cards = { ...moved.cards };
+  if (card.attachedTo !== null) {
+    cards[card.instanceId] = { ...cards[card.instanceId], attachedTo: null };
+  }
+  followers.forEach((follower) => {
+    const at = follower.position ?? { x: 0, y: 0 };
+    cards[follower.instanceId] = {
+      ...follower,
+      position: { x: at.x + dx, y: at.y + dy },
+    };
+  });
+  return { ...moved, cards };
 };
 
 export const shuffleLibrary = (
@@ -234,15 +363,14 @@ export const reduceCore = (
       return moveCard(state, rules, action.instanceId, action.to, {
         index: action.index,
         position: action.position,
+        faceDown: action.faceDown,
+        faceIndex: action.faceIndex,
       });
 
     case 'setPosition': {
       const card = state.cards[action.instanceId];
       if (card?.zone !== 'battlefield') return state;
-      // Re-appending puts the card on top of the others it was dropped on.
-      return moveCard(state, rules, card.instanceId, 'battlefield', {
-        position: action.position,
-      });
+      return setPosition(state, rules, card, action.position);
     }
   }
 };

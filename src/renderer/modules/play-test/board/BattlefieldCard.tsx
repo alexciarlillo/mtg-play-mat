@@ -7,10 +7,15 @@ import Draggable, {
 } from 'react-draggable';
 
 import Card from '../../../ui/Card';
+import CardArt from '../../../ui/CardArt';
 import { cardWidths } from '../../../ui/cardSizes';
-import CardImg from '../../../ui/CardImg';
-import { moveMenu, moveTo } from '../common/cardMenus';
+import { moveTo } from '../common/cardMenus';
 import { dispatch } from '../viewStore';
+import {
+  battlefieldMenu,
+  type BattlefieldMenuOptions,
+} from './battlefieldMenu';
+import CounterControls from './CounterControls';
 import { dropZoneAt } from './dropZones';
 
 const ORIGIN: Position = { x: 0, y: 0 };
@@ -26,13 +31,18 @@ const pointOf = (e: DraggableEvent) => {
 const clamp = (value: number, max: number) =>
   Math.max(0, Math.min(value, Math.max(0, max)));
 
-interface Props {
+interface Props extends BattlefieldMenuOptions {
   card: CardView;
   // The field's CSS scale, so drags track the pointer when it is shrunk.
   scale?: number;
 }
 
-const BattlefieldCard = ({ card, scale = 1 }: Props) => {
+const BattlefieldCard = ({
+  card,
+  scale = 1,
+  onAddCounter,
+  onAttach,
+}: Props) => {
   const nodeRef = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState(false);
   // Holds the drop point until main's next view of this card arrives, so
@@ -90,14 +100,7 @@ const BattlefieldCard = ({ card, scale = 1 }: Props) => {
     });
   };
 
-  const menu = [
-    {
-      title: card.tapped ? 'Untap' : 'Tap',
-      action: () =>
-        dispatch({ type: 'toggleTap', instanceId: card.instanceId }),
-    },
-    ...moveMenu(card),
-  ];
+  const menu = battlefieldMenu(card, { onAddCounter, onAttach });
 
   return (
     <>
@@ -110,7 +113,11 @@ const BattlefieldCard = ({ card, scale = 1 }: Props) => {
           style={{ transform: `translate(${home.x}px, ${home.y}px)` }}
         >
           <div className={classNames('h-full', { 'rotate-90': card.tapped })}>
-            <CardImg scryfallId={card.ref?.id} />
+            <CardArt
+              cardRef={card.ref}
+              faceIndex={card.faceIndex}
+              faceDown={card.faceDown}
+            />
           </div>
         </div>
       )}
@@ -119,6 +126,7 @@ const BattlefieldCard = ({ card, scale = 1 }: Props) => {
         position={position}
         scale={scale}
         handle=".handle"
+        cancel=".no-drag"
         onDrag={handleDrag}
         onStop={handleStop}
         enableUserSelectHack={false}
@@ -126,11 +134,13 @@ const BattlefieldCard = ({ card, scale = 1 }: Props) => {
         <div
           ref={nodeRef}
           data-testid="battlefield-card"
-          className={classNames('absolute left-0 top-0', {
+          data-attached-to={card.attachedTo ?? undefined}
+          className={classNames('group absolute left-0 top-0', {
             'z-20': dragging,
           })}
         >
           <Card card={card} menu={menu} size="md" />
+          {!dragging && <CounterControls card={card} />}
         </div>
       </Draggable>
     </>

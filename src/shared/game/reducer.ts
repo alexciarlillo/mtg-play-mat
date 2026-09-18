@@ -21,6 +21,13 @@ const mtgActionTypes: ReadonlySet<string> = new Set<MtgAction['type']>([
   'setLife',
   'mulligan',
   'keepHand',
+  'adjustCounter',
+  'adjustPlayerCounter',
+  'createTokens',
+  'copyCard',
+  'setFaceDown',
+  'transform',
+  'attach',
 ]);
 
 const isMtgAction = (action: GameAction): action is MtgAction =>
