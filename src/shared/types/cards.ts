@@ -62,11 +62,3 @@ export interface Printing {
   digital: boolean;
   faces: PrintingFace[];
 }
-
-export interface DeckRow {
-  id: number;
-  name: string;
-  // Scryfall id of the card shown as the deck's cover.
-  display_card_id: string | null;
-  displayScryfallId?: string;
-}

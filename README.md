@@ -31,12 +31,34 @@ Everything lives in `<userData>`:
 
 - `db/cards.sqlite`: printings, sets, and metadata. It's fully rebuildable; delete
   it to force a fresh download.
-- `db/Decks.sqlite`: your decks. Card ids are Scryfall ids.
+- `db/Decks.sqlite`: your decks. Each card row is a Scryfall printing id, a
+  quantity, and a board (main, side, or commander).
 - `image-cache/`: card images. Pages load images as
   `card://<scryfallId>/<face>/<size>`. The main process serves those from this cache,
   fetching from Scryfall's CDN only on a miss, so an image seen once works offline.
 
 SQLite is Node's built-in `node:sqlite`, so there's no native module to rebuild.
+
+## Decks
+
+**Import a deck** takes a pasted list in plain text (`4 Name`, `4x Name`), MTGA
+(`4 Name (SET) 123`, with `About`/`Name`, `Commander`, `Deck`, `Sideboard`, and
+`Companion` sections, or a sideboard after the last blank line), or Moxfield
+(`*F*`/`*E*` finish markers and `#tags` are ignored). `Maybeboard`/`Considering`
+lines are skipped and reported. Names match regardless of case, accents, and
+punctuation, and `Front // Back` cards match by full or front-face name.
+
+Each line resolves by set and collector number, then name and set, then name only.
+Name only picks the newest English, paper, non-promo printing with an image. Before
+anything is saved, a report lists resolved, unresolved, and ignored lines. Every
+unresolved line must be fixed (search for the right card) or skipped. A commander
+section makes the deck a Commander deck.
+
+The deck page groups cards by board and type. You can change quantities, move
+cards between boards, remove or add cards, switch any card's printing, pick the
+cover card, rename the deck, change its format, and copy it as MTGA or Moxfield
+text. **Play test** shuffles the main board into the library and puts the commander
+board in the command zone; the sideboard stays out.
 
 ## Development
 

@@ -1,3 +1,5 @@
+import { frontKey, nameKey } from '@shared/cardNames';
+
 import type { Migration } from './migrate';
 
 // The card database is rebuilt from Scryfall on every update, so a schema
@@ -50,6 +52,27 @@ export const cardMigrations: Migration[] = [
     value TEXT NOT NULL
   );
   `,
+  // Deck import matches on normalized names and prefers non-promo paper
+  // printings. Existing files are upgraded in place, so promo falls back
+  // to the set type there until the next download fills in the real flag.
+  (db) => {
+    db.function('name_key', { deterministic: true }, (name) =>
+      nameKey(String(name))
+    );
+    db.function('front_key', { deterministic: true }, (name) =>
+      frontKey(String(name))
+    );
+    db.exec(`
+      ALTER TABLE printings ADD COLUMN name_key TEXT NOT NULL DEFAULT '';
+      ALTER TABLE printings ADD COLUMN front_key TEXT NOT NULL DEFAULT '';
+      ALTER TABLE printings ADD COLUMN promo INTEGER NOT NULL DEFAULT 0;
+      UPDATE printings SET name_key = name_key(name),
+        front_key = front_key(name),
+        promo = (set_type = 'promo');
+      CREATE INDEX printings_name_key ON printings (name_key);
+      CREATE INDEX printings_front_key ON printings (front_key);
+    `);
+  },
 ];
 
 export const CARD_SCHEMA_VERSION = cardMigrations.length;

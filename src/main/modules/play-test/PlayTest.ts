@@ -24,6 +24,11 @@ import { createWindow, whenLoaded } from '../../windows';
 import { toCardRef } from './cardRef';
 import buildSampleDeck from './sampleDeck';
 
+export interface LoadedDeck {
+  library: CardRef[];
+  command: CardRef[];
+}
+
 interface Deps {
   cardDb: CardDB;
   deckDb: DeckDB;
@@ -57,7 +62,7 @@ export default class PlayTest {
 
   private state: GameState = emptyGame();
 
-  private deck: CardRef[] = [];
+  private deck: LoadedDeck = { library: [], command: [] };
 
   private readonly playerId: PlayerId;
 
@@ -107,16 +112,26 @@ export default class PlayTest {
 
   // A fixed seed is only passed by end-to-end tests.
   openSampleDeck = (seed?: number) =>
-    this.start(buildSampleDeck(), seed).catch((err) => {
-      console.error('[PlayTest] failed to open sample deck', err);
-    });
+    this.start({ library: buildSampleDeck(), command: [] }, seed).catch(
+      (err) => {
+        console.error('[PlayTest] failed to open sample deck', err);
+      }
+    );
 
-  private loadDeck = (deckId: number): CardRef[] =>
-    this.deckDb
-      .getDeckCards({ deckId })
-      .map((card) => this.cardDb.getCardById({ id: card.card_id }))
-      .filter((row) => row !== undefined)
-      .map(toCardRef);
+  // The sideboard stays out of the game; commanders start in the
+  // command zone.
+  private loadDeck = (deckId: number): LoadedDeck => {
+    const refs = (board: 'main' | 'commander') =>
+      this.deckDb
+        .getDeckCards(deckId)
+        .filter((card) => card.board === board)
+        .flatMap((card) => {
+          const printing = this.cardDb.getCardById({ id: card.printingId });
+          if (!printing) return [];
+          return Array.from({ length: card.qty }, () => toCardRef(printing));
+        });
+    return { library: refs('main'), command: refs('commander') };
+  };
 
   // Windows may only act on the local player's cards; stale actions on
   // cards that no longer exist are dropped the same way.
@@ -136,12 +151,19 @@ export default class PlayTest {
     this.notifyPublic();
   };
 
-  private newGame = (deck: CardRef[], seed = randomInt(2 ** 32)) => {
+  private newGame = (deck: LoadedDeck, seed = randomInt(2 ** 32)) => {
     const actions: GameAction[] = [
       {
         type: 'newGame',
         seed,
-        players: [{ id: this.playerId, name: this.playerName(), deck }],
+        players: [
+          {
+            id: this.playerId,
+            name: this.playerName(),
+            deck: deck.library,
+            command: deck.command,
+          },
+        ],
       },
       { type: 'shuffle', playerId: this.playerId },
       { type: 'draw', playerId: this.playerId, count: OPENING_HAND_SIZE },
@@ -156,7 +178,7 @@ export default class PlayTest {
     this.pushViews();
   };
 
-  private start = async (deck: CardRef[], seed?: number) => {
+  private start = async (deck: LoadedDeck, seed?: number) => {
     this.newGame(deck, seed);
 
     const { board, hand } = this.ensureWindows();

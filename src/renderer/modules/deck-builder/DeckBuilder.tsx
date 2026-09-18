@@ -1,13 +1,14 @@
 import { PlusIcon } from '@heroicons/react/24/outline';
-import { DeckRow } from '@shared/types/cards';
+import type { DeckSummary } from '@shared/types/decks';
 import { observer } from 'mobx-react-lite';
-import { MouseEvent, useEffect, useState } from 'react';
+import { type MouseEvent, useEffect, useState } from 'react';
 import { Link } from 'react-router';
 
 import CardImg from '../../ui/CardImg';
 import { useContextMenu } from '../../ui/ContextMenuProvider';
-import DeckImportModal, { DeckImportValues } from './DeckImportModal';
+import DeckImportModal from './DeckImportModal';
 import { useDeckStore } from './DeckStoreContext';
+import { formatLabels } from './deckUi';
 
 const DeckBuilder = () => {
   const store = useDeckStore();
@@ -15,16 +16,11 @@ const DeckBuilder = () => {
 
   const [importingDeck, setImportingDeck] = useState(false);
 
-  const handleImport = ({ name, deckList }: DeckImportValues) => {
-    store.addDeck({ name, deckList });
-    setImportingDeck(false);
-  };
-
   useEffect(() => {
     store.refreshDecks();
   }, [store]);
 
-  const deckMenu = (e: MouseEvent, deck: DeckRow) => {
+  const deckMenu = (e: MouseEvent, deck: DeckSummary) => {
     e.preventDefault();
     menu.open({
       specs: [
@@ -37,7 +33,10 @@ const DeckBuilder = () => {
 
   return (
     <div className="w-full h-full">
-      <div className="w-full h-full grid grid-cols-3">
+      <div
+        data-testid="deck-list"
+        className="grid grid-cols-[repeat(auto-fill,13rem)] gap-6"
+      >
         <button
           type="button"
           className="relative aspect-card w-52 rounded-lg border-2 border-dashed border-gray-300 p-12 text-center hover:border-gray-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 flex flex-col items-center justify-center"
@@ -45,35 +44,40 @@ const DeckBuilder = () => {
         >
           <PlusIcon className="h-6 w-6" />
           <span className="mt-2 block text-sm font-medium text-gray-900">
-            Add a new deck
+            Import a deck
           </span>
         </button>
-        {store.decks.map((deck) => {
-          return (
-            <Link
-              className="w-52 aspect-card"
-              key={deck.id}
-              onContextMenu={(e) => deckMenu(e, deck)}
-              to={`/decks/${deck.id}`}
-            >
-              <div>
-                <CardImg
-                  scryfallId={deck.displayScryfallId}
-                  className="hover:ring-3 hover:ring-indigo-400"
-                />
-              </div>
-              <span className="mt-2 block text-sm font-medium text-gray-900 text-center">
-                {deck.name}
-              </span>
-            </Link>
-          );
-        })}
+        {store.decks.map((deck) => (
+          <Link
+            className="w-52"
+            key={deck.id}
+            data-testid="deck-tile"
+            onContextMenu={(e) => deckMenu(e, deck)}
+            to={`/decks/${deck.id}`}
+          >
+            <div className="aspect-card">
+              <CardImg
+                scryfallId={deck.displayPrintingId ?? undefined}
+                name={deck.name}
+                className="hover:ring-3 hover:ring-indigo-400"
+              />
+            </div>
+            <span className="mt-2 block truncate text-sm font-medium text-gray-900 text-center">
+              {deck.name}
+            </span>
+            <span className="block text-xs text-gray-500 text-center">
+              {formatLabels[deck.format]} · {deck.cardCount} cards
+            </span>
+          </Link>
+        ))}
       </div>
       <DeckImportModal
         isOpen={importingDeck}
         onClose={() => setImportingDeck(false)}
-        onCancel={() => setImportingDeck(false)}
-        onSubmit={handleImport}
+        onSaved={() => {
+          setImportingDeck(false);
+          store.refreshDecks();
+        }}
       />
     </div>
   );

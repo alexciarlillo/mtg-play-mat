@@ -1,0 +1,17 @@
+About
+Name Mono-White Angels
+
+Deck
+4 Alpine Watchdog (M21) 2
+4 Anointed Chorister (M21) 4
+4 Baneslayer Angel (M21) 6
+4 Celestial Enforcer (M21) 11
+4 Daybreak Charger (M21) 14
+4 Defiant Strike (M21) 15
+4 Angelic Ascension (M21) 3
+4 Basri's Solidarity (M21) 10
+4 Concordia Pegasus (M21) 12
+24 Island (M21) 263
+
+2 Containment Priest (M21) 13
+3 Basri's Lieutenant (M21) 9

@@ -1,6 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
-import { createServer, type Server } from 'node:http';
-import type { AddressInfo } from 'node:net';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -12,22 +10,18 @@ import {
   test,
 } from '@playwright/test';
 
-// A local stand-in for Scryfall: the bulk-data endpoint and a small real
-// bulk file, so the full download -> ingest -> swap path runs offline.
-const fixture = readFileSync(
-  path.join(
-    __dirname,
-    '../src/main/cardData/fixtures/default-cards.sample.jsonl.gz'
-  )
-);
-const FIXTURE_CARDS = 39;
+import {
+  type FakeScryfall,
+  fixture,
+  FIXTURE_CARDS,
+  startFakeScryfall,
+} from './fakeScryfall';
 
 test.describe.configure({ mode: 'serial' });
 
-let server: Server;
+let scryfall: FakeScryfall;
 let app: ElectronApplication;
 let userDataDir: string;
-const bulkRequests: { url?: string; userAgent?: string }[] = [];
 const errors: string[] = [];
 
 const appWindow = async (): Promise<Page> => {
@@ -40,38 +34,14 @@ const appWindow = async (): Promise<Page> => {
 };
 
 test.beforeAll(async () => {
-  server = createServer((req, res) => {
-    const { port } = server.address() as AddressInfo;
-    if (req.url === '/bulk-data/default-cards') {
-      bulkRequests.push({ url: req.url, userAgent: req.headers['user-agent'] });
-      res.setHeader('Content-Type', 'application/json');
-      res.end(
-        JSON.stringify({
-          object: 'bulk_data',
-          type: 'default_cards',
-          updated_at: '2026-09-18T09:05:32.127+00:00',
-          jsonl_download_uri: `http://127.0.0.1:${port}/cards.jsonl.gz`,
-          compressed_size: fixture.length,
-        })
-      );
-    } else if (req.url === '/cards.jsonl.gz') {
-      res.setHeader('Content-Length', fixture.length);
-      res.end(fixture);
-    } else {
-      res.statusCode = 404;
-      res.end();
-    }
-  });
-  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
-  const { port } = server.address() as AddressInfo;
-
+  scryfall = await startFakeScryfall();
   userDataDir = mkdtempSync(path.join(tmpdir(), 'mtg-play-mat-e2e-data-'));
   app = await electron.launch({
     args: ['.', `--user-data-dir=${userDataDir}`],
     env: {
       ...process.env,
       MTG_PLAY_MAT_TEST_HOOKS: '1',
-      MTG_PLAY_MAT_BULK_DATA_URL: `http://127.0.0.1:${port}/bulk-data/default-cards`,
+      MTG_PLAY_MAT_BULK_DATA_URL: scryfall.bulkDataUrl,
     },
   });
   const watch = (page: Page) => {
@@ -86,7 +56,7 @@ test.beforeAll(async () => {
 
 test.afterAll(async () => {
   await app?.close();
-  server?.close();
+  scryfall?.close();
   rmSync(userDataDir, { recursive: true, force: true });
 });
 
@@ -97,7 +67,7 @@ test('first launch downloads and ingests card data', async () => {
   await expect(status).toHaveAttribute('data-phase', 'idle');
   await expect(status).toContainText(`(${FIXTURE_CARDS} cards)`);
   await expect(status).toContainText('Card data from Sep 18, 2026');
-  expect(bulkRequests[0]?.userAgent).toMatch(/^MTGPlayMat\/\d/);
+  expect(scryfall.bulkRequests[0]?.userAgent).toMatch(/^MTGPlayMat\/\d/);
 
   const result = await page.evaluate(() => window.api.getCardDataStatus());
   expect(result.local?.printings).toBe(FIXTURE_CARDS);
@@ -126,7 +96,7 @@ test('progress events are pushed during a manual update', async () => {
       })
   );
   expect(phases).toEqual(['checking', 'idle']);
-  expect(bulkRequests).toHaveLength(2);
+  expect(scryfall.bulkRequests).toHaveLength(2);
 });
 
 test('collection search works on the new data', async () => {
@@ -149,17 +119,29 @@ test('collection search works on the new data', async () => {
 
 test('an imported deck resolves printings and plays', async () => {
   const page = await appWindow();
-  const decks = await page.evaluate(() =>
-    window.api.importDeck({
-      name: 'Fixture deck',
-      deckList: '4 Llanowar Elves (DOM)\n2 Delver of Secrets\n1 Not A Card',
-    })
+  const report = await page.evaluate(() =>
+    window.api.previewDeckImport(
+      '4 Llanowar Elves (DOM)\n2 Delver of Secrets\n1 Not A Card'
+    )
   );
+  expect(report.resolved.map((r) => r.matchedBy)).toEqual(['name+set', 'name']);
+  expect(report.unresolved.map((u) => u.name)).toEqual(['Not A Card']);
+
+  const deckId = await page.evaluate(
+    (cards) =>
+      window.api.createDeck({ name: 'Fixture deck', format: 'other', cards }),
+    report.resolved.map((r) => ({
+      printingId: r.printing.id,
+      qty: r.qty,
+      board: r.board,
+    }))
+  );
+  const decks = await page.evaluate(() => window.api.listDecks());
   expect(decks).toHaveLength(1);
-  expect(decks[0].displayScryfallId).toMatch(/^[0-9a-f-]{36}$/);
+  expect(decks[0].displayPrintingId).toMatch(/^[0-9a-f-]{36}$/);
 
   // Six cards all go into the opening hand, faces filled from the DB.
-  await page.evaluate((id) => window.api.startPlayTest(id), decks[0].id);
+  await page.evaluate((id) => window.api.startPlayTest(id), deckId);
   const board = app.windows().find((w) => w.url().includes('board.html'))!;
   await expect(board.getByTestId('library')).toHaveAttribute('data-count', '0');
   const hand = await page.evaluate(() => window.api.getHandView());
@@ -169,6 +151,7 @@ test('an imported deck resolves printings and plays', async () => {
     'Delver of Secrets',
     'Insectile Aberration',
   ]);
+  await page.evaluate((id) => window.api.deleteDeck(id), deckId);
 });
 
 test('no renderer console errors', () => {

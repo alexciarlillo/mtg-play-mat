@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 
+import { nameKey } from '@shared/cardNames';
 import type { LocalCardData } from '@shared/types/cardData';
 import type {
   CurrentSetListReturn,
@@ -9,10 +10,11 @@ import type {
   SearchCardsByNameOptions,
   SearchCardsByNameRet,
 } from '@shared/types/cards';
+import type { PrintingSummary } from '@shared/types/decks';
 
 import { getErrorMessage } from '../../util';
-import { CARD_SCHEMA_VERSION, metaKeys } from './cardSchema';
-import { userVersion } from './migrate';
+import { CARD_SCHEMA_VERSION, cardMigrations, metaKeys } from './cardSchema';
+import { migrate, userVersion } from './migrate';
 
 interface PrintingRow {
   id: string;
@@ -66,6 +68,79 @@ const toPrinting = (row: PrintingRow): Printing => ({
   faces: JSON.parse(row.faces) as PrintingFace[],
 });
 
+// A printing plus the fields default-printing ranking needs.
+export interface PrintingCandidate extends PrintingSummary {
+  nameKey: string;
+  frontKey: string;
+  setType: string | null;
+  hasImage: boolean;
+}
+
+interface SummaryRow {
+  id: string;
+  oracle_id: string | null;
+  name: string;
+  layout: string;
+  type_line: string | null;
+  mana_cost: string | null;
+  cmc: number | null;
+  set_code: string;
+  set_name: string;
+  collector_number: string;
+  keyrune_code: string | null;
+  released_at: string | null;
+  lang: string;
+  digital: number;
+  promo: number;
+  name_key: string;
+  front_key: string;
+  set_type: string | null;
+  has_image: number;
+}
+
+const SUMMARY_COLUMNS = `p.id, p.oracle_id, p.name, p.layout, p.type_line,
+  p.mana_cost, p.cmc, p.set_code, p.set_name, p.collector_number,
+  COALESCE(s.keyrune_code, p.set_code) AS keyrune_code, p.released_at,
+  p.lang, p.digital, p.promo, p.name_key, p.front_key, p.set_type,
+  json_extract(p.faces, '$[0].image') IS NOT NULL AS has_image`;
+
+const SUMMARY_FROM =
+  'printings AS p LEFT JOIN sets AS s ON s.code = p.set_code';
+
+const toCandidate = (row: SummaryRow): PrintingCandidate => ({
+  id: row.id,
+  oracleId: row.oracle_id,
+  name: row.name,
+  layout: row.layout,
+  typeLine: row.type_line,
+  manaCost: row.mana_cost,
+  cmc: row.cmc,
+  setCode: row.set_code,
+  setName: row.set_name,
+  collectorNumber: row.collector_number,
+  keyruneCode: row.keyrune_code ?? row.set_code,
+  releasedAt: row.released_at,
+  lang: row.lang,
+  digital: row.digital === 1,
+  promo: row.promo === 1,
+  nameKey: row.name_key,
+  frontKey: row.front_key,
+  setType: row.set_type,
+  hasImage: row.has_image === 1,
+});
+
+export const toSummary = ({
+  nameKey: _n,
+  frontKey: _f,
+  setType: _s,
+  hasImage: _h,
+  ...summary
+}: PrintingCandidate): PrintingSummary => summary;
+
+// Layouts that are never a deck card.
+const NON_CARD_LAYOUTS = `('art_series', 'token', 'double_faced_token',
+  'emblem')`;
+
 interface FindPrintingOptions {
   name: string;
   setCode?: string;
@@ -94,6 +169,7 @@ export default class CardDB {
     if (!existsSync(this.filePath)) return false;
 
     try {
+      this.upgrade();
       const db = new DatabaseSync(this.filePath, { readOnly: true });
       if (userVersion(db) !== CARD_SCHEMA_VERSION) {
         db.close();
@@ -108,6 +184,20 @@ export default class CardDB {
       });
     }
     return this.db !== null;
+  };
+
+  // Older files get new columns in place, which is far cheaper than a
+  // fresh download and keeps the app usable offline.
+  private upgrade = () => {
+    const db = new DatabaseSync(this.filePath);
+    try {
+      const version = userVersion(db);
+      if (version > 0 && version < CARD_SCHEMA_VERSION) {
+        migrate(db, cardMigrations);
+      }
+    } finally {
+      db.close();
+    }
   };
 
   close = () => {
@@ -181,6 +271,69 @@ export default class CardDB {
       )
       .get(...params) as PrintingRow | undefined;
     return row && toPrinting(row);
+  };
+
+  // Every printing whose full or front-face name matches the key.
+  candidatesByName = (key: string): PrintingCandidate[] => {
+    if (!this.db || key === '') return [];
+    return (
+      this.db
+        .prepare(
+          `SELECT ${SUMMARY_COLUMNS} FROM ${SUMMARY_FROM}
+           WHERE (p.name_key = ?1 OR p.front_key = ?1)
+             AND p.layout != 'art_series'`
+        )
+        .all(key) as unknown as SummaryRow[]
+    ).map(toCandidate);
+  };
+
+  // Printings of the given ids, in no particular order.
+  summariesByIds = (ids: string[]): PrintingCandidate[] => {
+    if (!this.db || ids.length === 0) return [];
+    const stmt = this.db.prepare(
+      `SELECT ${SUMMARY_COLUMNS} FROM ${SUMMARY_FROM} WHERE p.id = ?`
+    );
+    return ids
+      .map((id) => stmt.get(id) as SummaryRow | undefined)
+      .filter((row) => row !== undefined)
+      .map(toCandidate);
+  };
+
+  // All printings of one card, newest first.
+  printingsOf = (printingId: string): PrintingCandidate[] => {
+    if (!this.db) return [];
+    return (
+      this.db
+        .prepare(
+          `SELECT ${SUMMARY_COLUMNS} FROM ${SUMMARY_FROM}
+           WHERE p.layout != 'art_series' AND (p.id = ?1 OR p.oracle_id =
+             (SELECT oracle_id FROM printings WHERE id = ?1))
+           ORDER BY p.released_at DESC, p.set_code, p.collector_number`
+        )
+        .all(printingId) as unknown as SummaryRow[]
+    ).map(toCandidate);
+  };
+
+  // Printings of up to `limit` cards whose name contains the query,
+  // preferring names that start with it.
+  candidatesMatching = (query: string, limit = 30): PrintingCandidate[] => {
+    const key = nameKey(query);
+    if (!this.db || key === '') return [];
+    return (
+      this.db
+        .prepare(
+          `SELECT ${SUMMARY_COLUMNS} FROM ${SUMMARY_FROM}
+           WHERE p.layout NOT IN ${NON_CARD_LAYOUTS}
+             AND COALESCE(p.oracle_id, p.id) IN (
+               SELECT COALESCE(oracle_id, id) FROM printings
+               WHERE name_key LIKE '%' || ?1 || '%'
+                 AND layout NOT IN ${NON_CARD_LAYOUTS}
+               GROUP BY 1
+               ORDER BY MAX(name_key LIKE ?1 || '%') DESC, MIN(name)
+               LIMIT CAST(?2 AS INTEGER))`
+        )
+        .all(key, limit) as unknown as SummaryRow[]
+    ).map(toCandidate);
   };
 
   searchCardsByName = (

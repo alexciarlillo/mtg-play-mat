@@ -1,0 +1,20 @@
+Commander
+1 Atraxa, Praetors' Voice (C16) 28 *F*
+
+Deck
+1 Sol Ring (C21) 263
+1 Command Tower (C21) 284
+1 Counterspell (MH2) 267 *E*
+1 Lightning Bolt (M10) 146
+1 Jace, the Mind Sculptor (WWK) 31 #Wincon
+1 Delver of Secrets // Insectile Aberration (ISD) 51
+1 Valki, God of Lies // Tibalt, Cosmic Impostor (KHM) 114
+1 Bonecrusher Giant // Stomp (ELD) 115
+1 Baneslayer Angel (m21) 6
+10 Island (M21) 263
+10 Forest (DOM) 266
+1 Llanowar Elves
+
+Maybeboard
+1 Ugin, the Spirit Dragon (M21) 1
+1 Basri Ket (M21) 7

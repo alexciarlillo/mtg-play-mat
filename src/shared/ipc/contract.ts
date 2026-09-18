@@ -4,10 +4,19 @@ import type { OpponentState } from '../net/remoteViews';
 import type { CardDataStatus } from '../types/cardData';
 import type {
   CurrentSetListReturn,
-  DeckRow,
   SearchCardsByNameOptions,
   SearchCardsByNameRet,
 } from '../types/cards';
+import type {
+  CardNameResult,
+  DeckCardEdit,
+  DeckDetail,
+  DeckImportReport,
+  DeckPatch,
+  DeckSummary,
+  NewDeck,
+  PrintingSummary,
+} from '../types/decks';
 
 // Only the keys exist at runtime (preload and main iterate them); the
 // generic parameters carry the argument, result, and payload types.
@@ -21,16 +30,20 @@ const request = <Args extends unknown[] = [], Result = void>(): Spec<
 
 const event = <Payload>(): Spec<Payload> => ({});
 
-export interface ImportDeckArgs {
-  name: string;
-  deckList: string;
-}
-
 // Renderer -> main, via invoke/handle.
 export const requests = {
-  listDecks: request<[], DeckRow[]>(),
-  importDeck: request<[deck: ImportDeckArgs], DeckRow[]>(),
-  deleteDeck: request<[id: number], DeckRow[]>(),
+  listDecks: request<[], DeckSummary[]>(),
+  // Parses and resolves a pasted list without saving anything.
+  previewDeckImport: request<[deckList: string], DeckImportReport>(),
+  // Resolves to the new deck's id.
+  createDeck: request<[deck: NewDeck], number>(),
+  getDeck: request<[id: number], DeckDetail | null>(),
+  updateDeck: request<[id: number, patch: DeckPatch], DeckDetail | null>(),
+  editDeckCards: request<[id: number, edit: DeckCardEdit], DeckDetail | null>(),
+  deleteDeck: request<[id: number], DeckSummary[]>(),
+  searchCardNames: request<[query: string], CardNameResult[]>(),
+  // Every printing of the same card as the given printing.
+  listPrintings: request<[printingId: string], PrintingSummary[]>(),
   searchCards: request<
     [options: SearchCardsByNameOptions],
     SearchCardsByNameRet[]

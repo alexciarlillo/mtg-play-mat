@@ -1,3 +1,4 @@
+import { frontKey, nameKey } from '@shared/cardNames';
 import type { PrintingFace } from '@shared/types/cards';
 
 // The subset of a Scryfall card object that we store.
@@ -31,6 +32,7 @@ export interface ScryfallCard extends ScryfallFace {
   keywords?: string[];
   rarity?: string;
   digital?: boolean;
+  promo?: boolean;
   card_faces?: ScryfallFace[];
 }
 
@@ -60,6 +62,9 @@ export interface PrintingRecord {
   rarity: string | null;
   digital: number;
   faces: string;
+  name_key: string;
+  front_key: string;
+  promo: number;
 }
 
 export const printingColumns: (keyof PrintingRecord)[] = [
@@ -87,6 +92,9 @@ export const printingColumns: (keyof PrintingRecord)[] = [
   'rarity',
   'digital',
   'faces',
+  'name_key',
+  'front_key',
+  'promo',
 ];
 
 const toFace = (face: ScryfallFace, fallbackImage?: string): PrintingFace => {
@@ -149,6 +157,9 @@ export const toPrintingRecord = (card: ScryfallCard): PrintingRecord => {
     rarity: card.rarity ?? null,
     digital: card.digital ? 1 : 0,
     faces: JSON.stringify(faces),
+    name_key: nameKey(card.name),
+    front_key: frontKey(card.name),
+    promo: card.promo || card.set_type === 'promo' ? 1 : 0,
   };
 };
 
