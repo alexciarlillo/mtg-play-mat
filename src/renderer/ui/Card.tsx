@@ -66,6 +66,7 @@ const Card = ({ card, onClick, menu = [], size = 'lg', className }: Props) => {
     >
       <CardImg
         scryfallId={card.faceDown ? undefined : card.ref?.id}
+        face={card.faceIndex}
         name={card.faceDown ? 'Face-down card' : card.ref?.name}
       />
     </div>

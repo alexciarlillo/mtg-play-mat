@@ -11,6 +11,7 @@ import { observer } from 'mobx-react-lite';
 import { ReactElement, useEffect, useMemo, useState } from 'react';
 
 import { useRootStore } from '../../../core/rootContext';
+import useCardDataStatus from '../../card-data/useCardDataStatus';
 
 const CollectionSidebar = (): ReactElement => {
   const [searchKey, setSearchKey] = useState('');
@@ -20,29 +21,35 @@ const CollectionSidebar = (): ReactElement => {
   );
   const [query, setQuery] = useState('');
 
+  // Reload sets whenever a card data update lands.
+  const ingestedAt = useCardDataStatus()?.local?.ingestedAt;
   useEffect(() => {
     collectionStore.getSets();
-  }, [collectionStore]);
+  }, [collectionStore, ingestedAt]);
 
-  const handleSearch = (): void => {
-    if (searchKey || selectedSet) {
-      collectionStore.findCard({
-        keyword: searchKey,
-        setCode: selectedSet?.code,
-      });
+  const search = (keyword: string, set: CurrentSetListReturn | null) => {
+    if (keyword.trim() || set) {
+      collectionStore.findCard({ keyword, setCode: set?.code });
     }
+  };
+
+  const handleSearch = (): void => search(searchKey, selectedSet);
+
+  const selectSet = (set: CurrentSetListReturn | null) => {
+    setSelectedSet(set);
+    search(searchKey, set);
   };
 
   const filteredSets = useMemo(() => {
     if (query === '') {
       return collectionStore.sets;
     }
-    return collectionStore.sets.filter((set) => {
-      return set.name
-        .toLowerCase()
-        .replace(/\s+/g, '')
-        .includes(query.toLowerCase().replace(/\s+/g, ''));
-    });
+    const needle = query.toLowerCase().replace(/\s+/g, '');
+    return collectionStore.sets.filter(
+      (set) =>
+        set.code.toLowerCase() === needle ||
+        set.name.toLowerCase().replace(/\s+/g, '').includes(needle)
+    );
   }, [collectionStore.sets, query]);
 
   return (
@@ -50,7 +57,9 @@ const CollectionSidebar = (): ReactElement => {
       <input
         id="name"
         name="name"
-        type="text"
+        type="search"
+        placeholder="Card name"
+        aria-label="Card name"
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
             handleSearch();
@@ -64,13 +73,15 @@ const CollectionSidebar = (): ReactElement => {
       <div className="w-full py-4">
         <Combobox
           value={selectedSet}
-          onChange={setSelectedSet}
+          onChange={selectSet}
           onClose={() => setQuery('')}
         >
           <div className="relative mt-1">
             <div className="relative w-full cursor-default overflow-hidden rounded-lg bg-white text-left shadow-md focus:outline-hidden focus-visible:ring-2 focus-visible:ring-white/75 focus-visible:ring-offset-2 focus-visible:ring-offset-teal-300 sm:text-sm">
               <ComboboxInput
                 className="w-full border-none py-2 pl-3 pr-10 text-sm leading-5 text-gray-900 focus:ring-0"
+                placeholder="Any set"
+                aria-label="Set"
                 displayValue={(set: CurrentSetListReturn | null) =>
                   set?.name ?? ''
                 }
@@ -109,6 +120,9 @@ const CollectionSidebar = (): ReactElement => {
                             selected ? 'font-medium' : 'font-normal'
                           }`}
                         >
+                          <i
+                            className={`ss ss-${set.keyruneCode} ss-fw pr-1`}
+                          />
                           {set.name}
                         </span>
                         {selected ? (

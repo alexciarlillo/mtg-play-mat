@@ -16,12 +16,12 @@ type DeckHandlers = Pick<
 >;
 
 const createDeckHandlers = ({ cardDb, deckDb }: Deps): DeckHandlers => {
+  // Deck card ids are Scryfall ids, so the cover needs no lookup.
   const listDecks = (): DeckRow[] =>
-    deckDb.getDecks().map((deck) => {
-      if (!deck.display_card_id) return deck;
-      const card = cardDb.getCardById({ id: deck.display_card_id });
-      return { ...deck, displayScryfallId: card?.scryfallId };
-    });
+    deckDb.getDecks().map((deck) => ({
+      ...deck,
+      displayScryfallId: deck.display_card_id ?? undefined,
+    }));
 
   return {
     listDecks,
@@ -32,8 +32,8 @@ const createDeckHandlers = ({ cardDb, deckDb }: Deps): DeckHandlers => {
       if (cards.length > 0) {
         deckDb.addDeck({
           name,
-          displayCardId: cards[0].uuid,
-          cardIds: cards.map((c) => c.uuid),
+          displayCardId: cards[0].id,
+          cardIds: cards.map((c) => c.id),
         });
       } else {
         console.warn('[decks] no cards resolved; deck not saved');

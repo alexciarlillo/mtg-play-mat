@@ -7,6 +7,7 @@ import { Bars3Icon, XMarkIcon } from '@heroicons/react/24/outline';
 import { NavLink, Outlet } from 'react-router';
 
 import { RootStoreProvider } from './core/rootContext';
+import CardDataPanel from './modules/card-data/CardDataPanel';
 import DeckStore from './modules/deck-builder/DeckStore';
 import { DeckStoreProvider } from './modules/deck-builder/DeckStoreContext';
 import { ContextMenuProvider } from './ui/ContextMenuProvider';
@@ -51,6 +52,7 @@ const Start = () => {
                               </div>
                             </div>
                           </div>
+                          <CardDataPanel />
                           <div className="-mr-2 flex md:hidden">
                             {/* Mobile menu button */}
                             <DisclosureButton className="inline-flex items-center justify-center rounded-md bg-gray-800 p-2 text-gray-400 hover:bg-gray-700 hover:text-white focus:outline-hidden focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-gray-800">

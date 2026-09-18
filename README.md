@@ -13,11 +13,30 @@ Built with Electron, electron-vite, React 19, TypeScript, Tailwind CSS 4, and Mo
 
 ## Status
 
-This is an early-stage personal project and is being revived. The app starts and the
-play test windows work with a built-in sample deck. Card data isn't set up yet: the
-app looks for SQLite databases in `<userData>/db/` (`AllPrintings.sqlite`,
-`Decks.sqlite`). If they're missing, the deck and collection views are empty.
-Automatic card data download is planned.
+This is an early-stage personal project and is being revived. The play test windows
+work with imported decks or a built-in sample deck.
+
+## Card data
+
+Card data comes from Scryfall's `default_cards` bulk file (about 80 MB compressed).
+On launch the app asks Scryfall when the file was last updated. It downloads when
+there's no local data, or when Scryfall has newer data and the local copy is more
+than 7 days old. **Update card data** in the app window's top bar checks right away
+and skips the age limit. The download streams through gunzip into SQLite in a
+utility process, with progress shown in the top bar. The new database is built in a
+scratch file and swapped in once it's complete, so a failed or offline update keeps
+the old data.
+
+Everything lives in `<userData>`:
+
+- `db/cards.sqlite`: printings, sets, and metadata. It's fully rebuildable; delete
+  it to force a fresh download.
+- `db/Decks.sqlite`: your decks. Card ids are Scryfall ids.
+- `image-cache/`: card images. Pages load images as
+  `card://<scryfallId>/<face>/<size>`. The main process serves those from this cache,
+  fetching from Scryfall's CDN only on a miss, so an image seen once works offline.
+
+SQLite is Node's built-in `node:sqlite`, so there's no native module to rebuild.
 
 ## Development
 
@@ -44,7 +63,9 @@ npm run test:e2e       # builds, then runs the Playwright Electron smoke test
 
 The end-to-end test launches real windows, so it needs a desktop session (or a
 virtual display such as `xvfb-run` on Linux). It sets `MTG_PLAY_MAT_TEST_HOOKS=1`,
-which lets it open the sample play test from the main process.
+which lets it open the sample play test from the main process and skips the launch
+card data check. The card data test sets `MTG_PLAY_MAT_BULK_DATA_URL` to a local
+server that serves a small fixture bulk file, so no test downloads the real one.
 
 ## IPC
 

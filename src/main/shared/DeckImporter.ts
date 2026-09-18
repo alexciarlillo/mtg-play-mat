@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 
-import type { CardRow } from '@shared/types/cards';
+import type { Printing } from '@shared/types/cards';
 
 import type CardDB from './db/CardDB';
 
@@ -23,7 +23,7 @@ export default class DeckImporter {
     return this.importFromString({ string: contents });
   };
 
-  importFromString = ({ string }: { string: string }): CardRow[] => {
+  importFromString = ({ string }: { string: string }): Printing[] => {
     const lines = string.split('\n');
 
     return lines
@@ -31,10 +31,10 @@ export default class DeckImporter {
       .map(({ count, name, setCode, number }) => {
         const result = this.cardDb.getCard({ name, setCode, number });
         const copies = Number.isInteger(count) && count > 0 ? count : 0;
-        return Array<CardRow | undefined>(copies).fill(result);
+        return Array<Printing | undefined>(copies).fill(result);
       })
       .flat()
-      .filter((card): card is CardRow => Boolean(card));
+      .filter((card): card is Printing => Boolean(card));
   };
 
   static ParseLine(line: string): ParsedLine {

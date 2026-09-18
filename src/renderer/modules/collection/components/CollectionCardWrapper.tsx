@@ -40,14 +40,14 @@ const CollectionCardWrapper = ({
       <div className="flex justify-between items-center pb-2">
         <div className="truncate font-sans text-sm">{card.name}</div>
         <i
-          className={classNames(
-            `ss ss-${card.keyruneCode?.toLowerCase()} pl-2`
-          )}
+          className={`ss ss-${card.keyruneCode.toLowerCase()} pl-2`}
+          title={`${card.setName} #${card.collectorNumber}`}
         />
       </div>
       <CardImg
         className={classNames(!selected && 'opacity-60')}
-        scryfallId={card.scryfallId}
+        scryfallId={card.id}
+        name={card.name}
       />
     </div>
   );

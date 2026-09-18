@@ -1,4 +1,5 @@
 import type { PlayerAction, PrivateView, PublicView } from '../game';
+import type { CardDataStatus } from '../types/cardData';
 import type {
   CurrentSetListReturn,
   DeckRow,
@@ -41,12 +42,16 @@ export const requests = {
   // Board and hand fetch their view on load, so a reload restores it.
   getBoardView: request<[], PublicView | null>(),
   getHandView: request<[], PrivateView | null>(),
+  getCardDataStatus: request<[], CardDataStatus>(),
+  // Starts a check-and-download; progress arrives as cardDataStatus.
+  updateCardData: request<[], CardDataStatus>(),
 };
 
 // Main -> renderer pushes. The preload exposes each as on<Name>(listener).
 export const events = {
   boardView: event<PublicView>(),
   handView: event<PrivateView>(),
+  cardDataStatus: event<CardDataStatus>(),
 };
 
 type SpecType<S> = S extends Spec<infer T> ? T : never;

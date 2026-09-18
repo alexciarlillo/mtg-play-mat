@@ -1,15 +1,40 @@
-import { app, BrowserWindow } from 'electron';
+import { mkdirSync } from 'node:fs';
 
-import { registerRequestHandlers } from './ipc';
+import { CARD_SCHEME } from '@shared/cardImages';
+import { app, BrowserWindow, net, protocol } from 'electron';
+
+import CardDataService from './cardData/CardDataService';
+import runIngestProcess from './cardData/runIngestProcess';
+import { BULK_DATA_URL, scryfallHeaders } from './cardData/scryfall';
+import {
+  cardSchemePrivileges,
+  createCardImageHandler,
+} from './imageCache/cardProtocol';
+import { registerRequestHandlers, sendEvent } from './ipc';
 import MenuBuilder from './menu';
+import createCardDataHandlers from './modules/card-data/cardDataHandlers';
 import createCollectionHandlers from './modules/collection/collectionHandlers';
 import createDeckHandlers from './modules/decks/deckHandlers';
 import PlayTest from './modules/play-test/PlayTest';
 import CardDB from './shared/db/CardDB';
 import DeckDB from './shared/db/DeckDB';
+import {
+  cardDbPath,
+  deckDbPath,
+  getDbDir,
+  imageCacheDir,
+} from './shared/db/paths';
 import { createWindow } from './windows';
 
+protocol.registerSchemesAsPrivileged([cardSchemePrivileges]);
+
 let appWindow: BrowserWindow | null = null;
+
+const testHooksEnabled = process.env.MTG_PLAY_MAT_TEST_HOOKS === '1';
+
+// Tests point this at a local fixture server. Without one, tests skip the
+// launch check so they never pull the real ~80 MB bulk file.
+const bulkDataUrlOverride = process.env.MTG_PLAY_MAT_BULK_DATA_URL;
 
 const createAppWindow = (playTest: PlayTest) => {
   const window = createWindow({ html: 'app.html', width: 1500, height: 500 });
@@ -29,17 +54,43 @@ const createAppWindow = (playTest: PlayTest) => {
 };
 
 const start = () => {
-  const cardDb = new CardDB();
-  const deckDb = new DeckDB();
+  mkdirSync(getDbDir(), { recursive: true });
+  const appVersion = app.getVersion();
+  const cardDb = new CardDB(cardDbPath());
+  const deckDb = new DeckDB(deckDbPath());
   const playTest = new PlayTest({ cardDb, deckDb });
+
+  const cardData = new CardDataService({
+    cardDb,
+    appVersion,
+    bulkDataUrl: bulkDataUrlOverride ?? BULK_DATA_URL,
+    runIngest: runIngestProcess,
+    onStatus: (status) => {
+      BrowserWindow.getAllWindows().forEach((window) => {
+        sendEvent(window, 'cardDataStatus', status);
+      });
+    },
+  });
+
+  protocol.handle(
+    CARD_SCHEME,
+    createCardImageHandler({
+      cacheDir: imageCacheDir(),
+      lookupImage: cardDb.getFaceImage,
+      fetch: (url) => net.fetch(url, { headers: scryfallHeaders(appVersion) }),
+    })
+  );
 
   registerRequestHandlers({
     ...createDeckHandlers({ cardDb, deckDb }),
     ...createCollectionHandlers({ cardDb }),
+    ...createCardDataHandlers({ cardData }),
     ...playTest.handlers,
   });
 
   createAppWindow(playTest);
+
+  if (!testHooksEnabled || bulkDataUrlOverride) void cardData.check();
 
   if (process.env.START_MODULE === 'play-test') {
     void playTest.openSampleDeck();
@@ -47,7 +98,7 @@ const start = () => {
 
   // Lets end-to-end tests open a play test in any build without driving
   // the dev-only menu. Never set outside tests.
-  if (process.env.MTG_PLAY_MAT_TEST_HOOKS === '1') {
+  if (testHooksEnabled) {
     Object.assign(globalThis, {
       testHooks: { openSamplePlayTest: playTest.openSampleDeck },
     });

@@ -1,5 +1,5 @@
 // @vitest-environment node
-import type { CardRow } from '@shared/types/cards';
+import type { Printing } from '@shared/types/cards';
 import { describe, expect, it, vi } from 'vitest';
 
 import type CardDB from './db/CardDB';
@@ -26,7 +26,7 @@ describe('DeckImporter.ParseLine', () => {
 });
 
 describe('DeckImporter.importFromString', () => {
-  const forest = { name: 'Forest', uuid: 'forest-uuid' } as CardRow;
+  const forest = { name: 'Forest', id: 'forest-id' } as Printing;
 
   const makeImporter = () => {
     const getCard = vi.fn(({ name }: { name: string }) =>
@@ -41,7 +41,7 @@ describe('DeckImporter.importFromString', () => {
     const cards = importer.importFromString({ string: '3 Forest (M21) 272' });
 
     expect(cards).toHaveLength(3);
-    expect(cards.every((card) => card.uuid === 'forest-uuid')).toBe(true);
+    expect(cards.every((card) => card.id === 'forest-id')).toBe(true);
   });
 
   it('skips blank lines and unresolved cards instead of throwing', () => {

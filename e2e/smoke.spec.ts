@@ -119,6 +119,10 @@ test('app window loads with an empty deck list', async () => {
   const appWindow = await windowByPage('app.html');
 
   await expect(appWindow.getByText('Add a new deck')).toBeVisible();
+  // Test hooks skip the launch check, so no real bulk download starts.
+  const cardData = appWindow.getByTestId('card-data-status');
+  await expect(cardData).toContainText('No card data yet');
+  await expect(cardData).toHaveAttribute('data-phase', 'idle');
   await appWindow.getByText('Collection').first().click();
   await expect(appWindow).toHaveURL(/#\/collection/);
 
@@ -148,9 +152,12 @@ test('window.api is a narrow typed bridge', async () => {
       'importDeck',
       'listDecks',
       'listSets',
+      'getCardDataStatus',
       'onBoardView',
+      'onCardDataStatus',
       'onHandView',
       'restartPlayTest',
+      'updateCardData',
       'searchCards',
       'startPlayTest',
     ].sort()
@@ -207,7 +214,7 @@ test('play test opens, reuses, closes as a pair, and reopens', async () => {
   expect(await windowUrls()).toHaveLength(3);
   await keepDrawAndPlay();
 
-  // The renderer path: with no deck database the deck is empty.
+  // The renderer path: a deck id that doesn't exist yields no cards.
   const appWindow = await windowByPage('app.html');
   await appWindow.evaluate(() => window.api.startPlayTest(1));
   const board2 = await windowByPage('board.html');

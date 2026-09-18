@@ -1,15 +1,18 @@
 import { describe, expect, it } from 'vitest';
 
-import { scryfallImageUrl } from './cardImages';
+import { cardImageSrc } from './cardImages';
 
-describe('scryfallImageUrl', () => {
-  it('builds the sharded Scryfall CDN path from the id', () => {
-    expect(scryfallImageUrl('3279314f-d639-4489-b2ab-3621bb3ca64b')).toBe(
-      'https://cards.scryfall.io/normal/front/3/2/3279314f-d639-4489-b2ab-3621bb3ca64b.jpg'
+describe('cardImageSrc', () => {
+  it('points at the cached card:// image for the face and size', () => {
+    expect(cardImageSrc('3279314f-d639-4489-b2ab-3621bb3ca64b')).toBe(
+      'card://3279314f-d639-4489-b2ab-3621bb3ca64b/0/normal'
     );
+    expect(
+      cardImageSrc('3279314f-d639-4489-b2ab-3621bb3ca64b', 1, 'large')
+    ).toBe('card://3279314f-d639-4489-b2ab-3621bb3ca64b/1/large');
   });
 
   it('falls back to the bundled card back', () => {
-    expect(scryfallImageUrl()).toMatch(/back\.jpg$/);
+    expect(cardImageSrc()).toMatch(/back\.jpg$/);
   });
 });

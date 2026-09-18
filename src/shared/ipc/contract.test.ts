@@ -8,6 +8,7 @@ describe('ipc contract', () => {
     expect(eventChannels.map(eventListenerName)).toEqual([
       'onBoardView',
       'onHandView',
+      'onCardDataStatus',
     ]);
   });
 

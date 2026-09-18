@@ -17,7 +17,8 @@ const contentSecurityPolicy = (dev: boolean) =>
     `script-src 'self'${dev ? " 'unsafe-inline'" : ''}`,
     `style-src 'self'${dev ? " 'unsafe-inline'" : ''}`,
     "font-src 'self'",
-    `img-src 'self' data: ${cardImageHosts}`,
+    // card: images are served by main from its on-disk cache.
+    `img-src 'self' data: card: ${cardImageHosts}`,
     `connect-src 'self'${dev ? ' ws://localhost:* http://localhost:*' : ''}`,
     "object-src 'none'",
     "base-uri 'none'",

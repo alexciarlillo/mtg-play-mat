@@ -32,12 +32,12 @@ const renderCard = (props: Partial<Parameters<typeof Card>[0]> = {}) =>
   );
 
 describe('Card', () => {
-  it('renders the Scryfall image for the card', () => {
+  it('renders the cached image for the card', () => {
     renderCard();
 
     expect(screen.getByAltText('Grizzly Bears')).toHaveAttribute(
       'src',
-      expect.stringContaining('cards.scryfall.io')
+      'card://409f9b88-f03e-40b6-9883-68c14c37c0de/0/normal'
     );
     expect(screen.getByTestId('card')).toHaveAttribute(
       'data-instance-id',

@@ -1,6 +1,12 @@
+import { mkdirSync } from 'node:fs';
+import path from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
+
 import { DeckRow } from '@shared/types/cards';
 
-import DB from './DB';
+import { getErrorMessage } from '../../util';
+import { deckMigrations } from './deckSchema';
+import { migrate, transaction } from './migrate';
 
 interface AddDeckOptions {
   name: string;
@@ -8,28 +14,38 @@ interface AddDeckOptions {
   cardIds: string[];
 }
 
-export default class DeckDB extends DB {
-  constructor() {
-    super({ name: 'Decks', readonly: false });
+export default class DeckDB {
+  // Null when the file can't be opened; callers treat that as no decks.
+  private db: DatabaseSync | null = null;
+
+  constructor(readonly filePath: string) {
+    try {
+      mkdirSync(path.dirname(filePath), { recursive: true });
+      const db = new DatabaseSync(filePath);
+      migrate(db, deckMigrations);
+      this.db = db;
+    } catch (err) {
+      console.warn('[DeckDB] failed to open', {
+        message: getErrorMessage(err),
+        filePath,
+      });
+    }
   }
 
   getDecks = (): DeckRow[] => {
     if (!this.db) return [];
 
-    const query = 'SELECT name, id, display_card_id FROM decks';
-
-    const stmt = this.db.prepare<[], DeckRow>(query);
-    return stmt.all();
+    return this.db
+      .prepare('SELECT name, id, display_card_id FROM decks')
+      .all() as unknown as DeckRow[];
   };
 
   getDeckCards = ({ deckId }: { deckId: number | string }) => {
     if (!this.db) return [];
 
-    const stmt = this.db.prepare<[number | string], { card_id: string }>(
-      'SELECT card_id FROM deck_cards WHERE deck_id = ?'
-    );
-
-    return stmt.all(deckId);
+    return this.db
+      .prepare('SELECT card_id FROM deck_cards WHERE deck_id = ?')
+      .all(deckId) as { card_id: string }[];
   };
 
   addDeck = ({ name, displayCardId, cardIds }: AddDeckOptions) => {
@@ -39,40 +55,26 @@ export default class DeckDB extends DB {
       return;
     }
 
-    const insertDeck = db.prepare(
-      'INSERT INTO decks (name, display_card_id) VALUES (?, ?)'
-    );
-
-    const info = insertDeck.run(name, displayCardId);
-
-    const getDeck = db.prepare<[number | bigint], { id: number }>(
-      'SELECT id from decks WHERE rowid = ?'
-    );
-    const deck = getDeck.get(info.lastInsertRowid);
-    if (!deck) return;
-
-    const cardStmt = db.prepare(
-      'INSERT INTO deck_cards (deck_id, card_id) VALUES (?, ?)'
-    );
-
-    const insertMany = db.transaction((_cardIds: string[]) => {
-      _cardIds.forEach((cardId) => {
-        cardStmt.run(deck.id, cardId);
+    transaction(db, () => {
+      const info = db
+        .prepare('INSERT INTO decks (name, display_card_id) VALUES (?, ?)')
+        .run(name, displayCardId);
+      const insertCard = db.prepare(
+        'INSERT INTO deck_cards (deck_id, card_id) VALUES (?, ?)'
+      );
+      cardIds.forEach((cardId) => {
+        insertCard.run(info.lastInsertRowid, cardId);
       });
     });
-
-    insertMany(cardIds);
   };
 
   deleteDeck = ({ id }: { id: number }) => {
-    if (!this.db) return;
+    const { db } = this;
+    if (!db) return;
 
-    const cardStmt = this.db.prepare(
-      'DELETE FROM deck_cards WHERE deck_id = ?'
-    );
-    const deckStmt = this.db.prepare('DELETE FROM decks where id = ?');
-
-    cardStmt.run(id);
-    deckStmt.run(id);
+    transaction(db, () => {
+      db.prepare('DELETE FROM deck_cards WHERE deck_id = ?').run(id);
+      db.prepare('DELETE FROM decks WHERE id = ?').run(id);
+    });
   };
 }

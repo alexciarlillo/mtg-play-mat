@@ -79,7 +79,11 @@ export const CardPreviewProvider = ({
           className="fixed top-2 z-30 aspect-card h-[min(600px,calc(100vh-1rem))] pointer-events-none drop-shadow-2xl"
           style={side}
         >
-          <CardImg scryfallId={card.ref.id} name={card.ref.name} />
+          <CardImg
+            scryfallId={card.ref.id}
+            face={card.faceIndex}
+            name={card.ref.name}
+          />
         </div>
       )}
     </PreviewContext.Provider>
