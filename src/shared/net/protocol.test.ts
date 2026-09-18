@@ -11,6 +11,9 @@ import {
   type NetMessage,
   parseNetMessage,
   parsePublicView,
+  type RosterEntry,
+  VersionError,
+  MAX_DIE_SIDES,
 } from './protocol';
 
 const uuid = (n: number) =>
@@ -48,13 +51,13 @@ const view = (): PublicView => {
 };
 
 const message = (payload: Record<string, unknown>) =>
-  JSON.stringify({ v: 1, seq: 1, from: 'alice', ...payload });
+  JSON.stringify({ v: 2, seq: 1, from: 'alice', ...payload });
 
 describe('net messages', () => {
   it('round-trips hello, public, and bye', () => {
     const messages: NetMessage[] = [
       {
-        v: 1,
+        v: 2,
         seq: 1,
         from: 'alice',
         kind: 'hello',
@@ -62,9 +65,9 @@ describe('net messages', () => {
         name: 'Alice',
         appVersion: '0.1.0',
       },
-      { v: 1, seq: 2, from: 'alice', kind: 'public', view: view() },
-      { v: 1, seq: 3, from: 'alice', kind: 'public', view: null },
-      { v: 1, seq: 4, from: 'alice', kind: 'bye' },
+      { v: 2, seq: 2, from: 'alice', kind: 'public', view: view() },
+      { v: 2, seq: 3, from: 'alice', kind: 'public', view: null },
+      { v: 2, seq: 4, from: 'alice', kind: 'bye' },
     ];
     for (const m of messages) {
       expect(parseNetMessage(encodeNetMessage(m))).toEqual(m);
@@ -77,11 +80,11 @@ describe('net messages', () => {
     ['an array', '[]'],
     [
       'a wrong version',
-      JSON.stringify({ v: 2, seq: 1, from: 'a', kind: 'bye' }),
+      JSON.stringify({ v: 1, seq: 1, from: 'a', kind: 'bye' }),
     ],
-    ['a zero seq', JSON.stringify({ v: 1, seq: 0, from: 'a', kind: 'bye' })],
-    ['a missing sender', JSON.stringify({ v: 1, seq: 1, kind: 'bye' })],
-    ['an unknown kind', message({ kind: 'event' })],
+    ['a zero seq', JSON.stringify({ v: 2, seq: 0, from: 'a', kind: 'bye' })],
+    ['a missing sender', JSON.stringify({ v: 2, seq: 1, kind: 'bye' })],
+    ['an unknown kind', message({ kind: 'shout' })],
     [
       'a hello for someone else',
       message({ kind: 'hello', playerId: 'bob', name: 'B', appVersion: '1' }),
@@ -105,6 +108,171 @@ describe('net messages', () => {
     });
     expect(wide.length).toBeLessThan(MAX_MESSAGE_BYTES);
     expect(() => parseNetMessage(wide)).toThrow(/larger than/);
+  });
+
+  it('tells a peer on another protocol version apart', () => {
+    const old = JSON.stringify({ v: 1, seq: 1, from: 'a', kind: 'bye' });
+    expect(() => parseNetMessage(old)).toThrow(VersionError);
+    try {
+      parseNetMessage(old);
+    } catch (err) {
+      expect((err as VersionError).version).toBe(1);
+    }
+    // Anything else malformed is not a version problem.
+    expect(() => parseNetMessage('nope')).not.toThrow(VersionError);
+  });
+});
+
+describe('pod messages', () => {
+  const players: RosterEntry[] = [
+    { playerId: 'alice', name: 'Alice', seat: 1 },
+    { playerId: 'bob', name: 'Bob', seat: 2 },
+    { playerId: 'carol', name: 'Carol', seat: 4 },
+  ];
+
+  it('round-trips roster, roll requests, and events', () => {
+    const messages: NetMessage[] = [
+      { v: 2, seq: 1, from: 'alice', kind: 'roster', players },
+      {
+        v: 2,
+        seq: 2,
+        from: 'alice',
+        kind: 'roll',
+        request: { type: 'die', sides: 20 },
+      },
+      { v: 2, seq: 3, from: 'alice', kind: 'roll', request: { type: 'coin' } },
+      {
+        v: 2,
+        seq: 4,
+        from: 'alice',
+        kind: 'event',
+        id: 7,
+        by: 'bob',
+        byName: 'Bob',
+        roll: { type: 'die', sides: 6, result: 6 },
+      },
+      {
+        v: 2,
+        seq: 5,
+        from: 'alice',
+        kind: 'event',
+        id: 8,
+        by: 'alice',
+        byName: 'Alice',
+        roll: { type: 'coin', result: 'tails' },
+      },
+    ];
+    for (const m of messages) {
+      expect(parseNetMessage(encodeNetMessage(m))).toEqual(m);
+    }
+  });
+
+  const event = (roll: Record<string, unknown>) =>
+    message({ kind: 'event', id: 1, by: 'bob', byName: 'Bob', roll });
+
+  it.each([
+    [
+      'a roster over four seats',
+      message({
+        kind: 'roster',
+        players: [
+          ...players,
+          { playerId: 'd', name: 'D', seat: 3 },
+          {
+            playerId: 'e',
+            name: 'E',
+            seat: 3,
+          },
+        ],
+      }),
+    ],
+    [
+      'a seat out of range',
+      message({
+        kind: 'roster',
+        players: [{ playerId: 'a', name: 'A', seat: 5 }],
+      }),
+    ],
+    [
+      'a shared seat',
+      message({
+        kind: 'roster',
+        players: [
+          { playerId: 'a', name: 'A', seat: 2 },
+          { playerId: 'b', name: 'B', seat: 2 },
+        ],
+      }),
+    ],
+    [
+      'a player listed twice',
+      message({
+        kind: 'roster',
+        players: [
+          { playerId: 'a', name: 'A', seat: 2 },
+          { playerId: 'a', name: 'A', seat: 3 },
+        ],
+      }),
+    ],
+    [
+      'a one-sided die',
+      message({
+        kind: 'roll',
+        request: { type: 'die', sides: 1 },
+      }),
+    ],
+    [
+      'a huge die',
+      message({
+        kind: 'roll',
+        request: { type: 'die', sides: MAX_DIE_SIDES + 1 },
+      }),
+    ],
+    [
+      'a fractional die',
+      message({
+        kind: 'roll',
+        request: { type: 'die', sides: 6.5 },
+      }),
+    ],
+    ['an unknown roll', message({ kind: 'roll', request: { type: 'card' } })],
+    [
+      'a roll result above the sides',
+      event({
+        type: 'die',
+        sides: 6,
+        result: 7,
+      }),
+    ],
+    ['a zero roll result', event({ type: 'die', sides: 6, result: 0 })],
+    ['a coin on its edge', event({ type: 'coin', result: 'edge' })],
+    [
+      'an event without a roller',
+      message({
+        kind: 'event',
+        id: 1,
+        byName: 'Bob',
+        roll: { type: 'coin', result: 'heads' },
+      }),
+    ],
+  ])('rejects %s', (_label, raw) => {
+    expect(() => parseNetMessage(raw)).toThrow(/bad message/);
+  });
+
+  it('keeps only known roll fields', () => {
+    const parsed = parseNetMessage(
+      message({
+        kind: 'roll',
+        request: { type: 'coin', sides: 3, loaded: true },
+        extra: 1,
+      })
+    );
+    expect(parsed).toEqual({
+      v: 2,
+      seq: 1,
+      from: 'alice',
+      kind: 'roll',
+      request: { type: 'coin' },
+    });
   });
 });
 
@@ -381,7 +549,7 @@ describe('public view validation', () => {
       commanderCasts: 1,
     });
     const parsed = parseNetMessage(
-      encodeNetMessage({ v: 1, seq: 1, from: 'alice', kind: 'public', view: v })
+      encodeNetMessage({ v: 2, seq: 1, from: 'alice', kind: 'public', view: v })
     );
     expect(parsed).toMatchObject({ view: v });
     if (parsed.kind === 'public') expect(parsed.view).toEqual(v);

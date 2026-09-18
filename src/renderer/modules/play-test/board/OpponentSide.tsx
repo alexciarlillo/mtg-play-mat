@@ -9,7 +9,12 @@ import CardImg from '../../../ui/CardImg';
 import { hasCommanders } from './commanders';
 import { CommanderDamageTaken } from './CommanderTracker';
 import CommandZone from './CommandZone';
-import { SIDE_PANEL_WIDTH, stackOrder } from './layout';
+import {
+  fieldWidth,
+  POD_PANEL_WIDTH,
+  SIDE_PANEL_WIDTH,
+  stackOrder,
+} from './layout';
 import PlayerCounters from './PlayerCounters';
 import ScaledField from './ScaledField';
 import ZoneBrowser from './ZoneBrowser';
@@ -71,25 +76,40 @@ const Count = ({
   </div>
 );
 
-// The other player's half of the table. Everything here comes from their
+// Another player's part of the table. Everything here comes from their
 // public view, so it is read-only: no menus, drags, or drop targets.
+// Compact is for a pod, where several of these share the top row.
 const OpponentSide = ({
   peer,
   view,
+  seat = null,
+  compact = false,
 }: {
   peer: PeerInfo;
   view: PublicView | null;
+  seat?: number | null;
+  compact?: boolean;
 }) => {
   const [open, setOpen] = useState<Pile | null>(null);
 
   return (
     <div
       data-testid="opponent-side"
-      className="flex h-full min-h-0 border-b-4 border-slate-900 bg-stone-500"
+      data-player-name={peer.name}
+      data-seat={seat ?? undefined}
+      className="flex h-full min-w-0 min-h-0 border-b-4 border-slate-900 bg-stone-500"
     >
-      <div className="flex-1 h-full px-8 py-3">
+      <div
+        className={classNames(
+          'flex-1 min-w-0 h-full',
+          compact ? 'px-2 py-2' : 'px-8 py-3'
+        )}
+      >
         {view ? (
-          <ScaledField testId="opponent-battlefield">
+          <ScaledField
+            testId="opponent-battlefield"
+            fitWidth={fieldWidth(view.zones.battlefield)}
+          >
             {() =>
               stackOrder(view.zones.battlefield).map((card) => (
                 <OpponentCard key={card.instanceId} card={card} />
@@ -104,8 +124,11 @@ const OpponentSide = ({
       </div>
 
       <aside
-        style={{ width: SIDE_PANEL_WIDTH }}
-        className="h-full shrink-0 overflow-y-auto bg-slate-700 p-3 text-slate-100 flex flex-col gap-2"
+        style={{ width: compact ? POD_PANEL_WIDTH : SIDE_PANEL_WIDTH }}
+        className={classNames(
+          'h-full shrink-0 overflow-y-auto bg-slate-700 text-slate-100 flex flex-col gap-2',
+          compact ? 'p-2' : 'p-3'
+        )}
       >
         <div className="flex items-center justify-between gap-2">
           <div
@@ -121,7 +144,10 @@ const OpponentSide = ({
               </span>
               <span
                 data-testid="opponent-life"
-                className="text-4xl font-black tabular-nums"
+                className={classNames(
+                  'font-black tabular-nums',
+                  compact ? 'text-3xl' : 'text-4xl'
+                )}
               >
                 {view.life}
               </span>

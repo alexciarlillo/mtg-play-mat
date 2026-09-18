@@ -1,5 +1,6 @@
 import { packDescription, unpackDescription } from '@shared/net/codec';
 import type { NetCommand, NetConfig, NetReport } from '@shared/net/lobby';
+import { HOST_SEAT } from '@shared/net/protocol';
 
 interface Deps {
   report(report: NetReport): void;
@@ -33,47 +34,54 @@ export const gatherComplete = (pc: RTCPeerConnection, ms = 3000) =>
 const message = (err: unknown) =>
   err instanceof Error ? err.message : String(err);
 
-// Owns one peer connection and its datachannel. It moves opaque strings;
-// main builds, checks, and interprets every message.
+interface Link {
+  pc: RTCPeerConnection;
+  channel: RTCDataChannel | null;
+}
+
+// Owns one peer connection and datachannel per seat: a host has one per
+// guest, a guest one to the host. It moves opaque strings; main builds,
+// checks, and interprets every message.
 export const createNetTransport = ({
   report,
   createPeerConnection,
   gatherTimeoutMs = 3000,
 }: Deps) => {
-  let pc: RTCPeerConnection | null = null;
-  let channel: RTCDataChannel | null = null;
+  const links = new Map<number, Link>();
   let recordWire = false;
   const wire: string[] = [];
 
-  const wirePeer = (conn: RTCPeerConnection) => {
-    conn.addEventListener('connectionstatechange', () => {
-      if (conn === pc) {
-        report({ type: 'connection', state: conn.connectionState });
-      }
-    });
-  };
+  const current = (seat: number, pc: RTCPeerConnection) =>
+    links.get(seat)?.pc === pc;
 
-  const wireChannel = (chan: RTCDataChannel) => {
-    channel = chan;
+  const wireChannel = (seat: number, link: Link, chan: RTCDataChannel) => {
+    link.channel = chan;
+    const live = () => links.get(seat) === link && link.channel === chan;
     chan.addEventListener('open', () => {
-      if (chan === channel) report({ type: 'open' });
+      if (live()) report({ type: 'open', seat });
     });
     chan.addEventListener('close', () => {
-      if (chan === channel) report({ type: 'closed' });
+      if (live()) report({ type: 'closed', seat });
     });
     chan.addEventListener('message', (event: MessageEvent) => {
-      if (chan === channel && typeof event.data === 'string') {
-        report({ type: 'message', data: event.data });
+      if (live() && typeof event.data === 'string') {
+        report({ type: 'message', seat, data: event.data });
       }
     });
   };
 
-  const start = (config: NetConfig) => {
+  const start = (seat: number, config: NetConfig): Link => {
+    close(seat);
     recordWire = config.recordWire;
-    const conn = createPeerConnection({ iceServers: config.iceServers });
-    pc = conn;
-    wirePeer(conn);
-    return conn;
+    const pc = createPeerConnection({ iceServers: config.iceServers });
+    const link: Link = { pc, channel: null };
+    links.set(seat, link);
+    pc.addEventListener('connectionstatechange', () => {
+      if (current(seat, pc)) {
+        report({ type: 'connection', seat, state: pc.connectionState });
+      }
+    });
+    return link;
   };
 
   const localCode = async (conn: RTCPeerConnection) => {
@@ -85,88 +93,112 @@ export const createNetTransport = ({
     return packDescription({ type: desc.type, sdp: desc.sdp });
   };
 
-  const host = async (config: NetConfig) => {
+  const host = async (seat: number, config: NetConfig) => {
     try {
-      const conn = start(config);
+      const link = start(seat, config);
       // The channel must exist before the offer so the offer includes it.
-      wireChannel(conn.createDataChannel(CHANNEL_LABEL, { ordered: true }));
-      await conn.setLocalDescription(await conn.createOffer());
-      report({ type: 'invite', code: await localCode(conn) });
+      wireChannel(
+        seat,
+        link,
+        link.pc.createDataChannel(CHANNEL_LABEL, { ordered: true })
+      );
+      await link.pc.setLocalDescription(await link.pc.createOffer());
+      const code = await localCode(link.pc);
+      if (links.get(seat) === link) report({ type: 'invite', seat, code });
     } catch (err) {
       report({
         type: 'error',
+        seat,
         message: `Could not open a path: ${message(err)}`,
       });
     }
   };
 
-  const acceptReply = async (code: string) => {
+  const acceptReply = async (seat: number, code: string) => {
     try {
-      if (!pc) throw new Error('not hosting');
-      await pc.setRemoteDescription(await unpackDescription(code));
+      const link = links.get(seat);
+      if (!link) throw new Error('no invite for that seat');
+      await link.pc.setRemoteDescription(await unpackDescription(code));
     } catch (err) {
       report({
         type: 'error',
+        seat,
         message: `Could not use that reply: ${message(err)}`,
       });
     }
   };
 
   const join = async (code: string, config: NetConfig) => {
+    const seat = HOST_SEAT;
     try {
       const desc = await unpackDescription(code);
-      const conn = start(config);
-      conn.addEventListener('datachannel', (event) => {
-        if (conn === pc) wireChannel(event.channel);
+      const link = start(seat, config);
+      link.pc.addEventListener('datachannel', (event) => {
+        if (links.get(seat) === link) wireChannel(seat, link, event.channel);
       });
-      await conn.setRemoteDescription(desc);
-      await conn.setLocalDescription(await conn.createAnswer());
-      report({ type: 'reply', code: await localCode(conn) });
+      await link.pc.setRemoteDescription(desc);
+      await link.pc.setLocalDescription(await link.pc.createAnswer());
+      const reply = await localCode(link.pc);
+      if (links.get(seat) === link) {
+        report({ type: 'reply', seat, code: reply });
+      }
     } catch (err) {
       report({
         type: 'error',
+        seat,
         message: `Could not answer that invite: ${message(err)}`,
       });
     }
   };
 
-  const send = (data: string) => {
-    if (channel?.readyState !== 'open') return;
-    try {
-      channel.send(data);
-      if (recordWire) wire.push(data);
-    } catch (err) {
-      report({
-        type: 'error',
-        message: `Could not send. Try Resend state. (${message(err)})`,
-      });
+  const send = (seats: number[], data: string) => {
+    for (const seat of seats) {
+      const channel = links.get(seat)?.channel;
+      if (channel?.readyState !== 'open') continue;
+      try {
+        channel.send(data);
+        if (recordWire) wire.push(data);
+      } catch (err) {
+        report({
+          type: 'error',
+          seat,
+          message: `Could not send. Try Resend state. (${message(err)})`,
+        });
+      }
     }
   };
 
+  // A short delay lets a just-sent goodbye leave before the connection is
+  // torn down; closing the channel alone would still flush it.
+  function close(seat: number) {
+    const link = links.get(seat);
+    if (!link) return;
+    links.delete(seat);
+    link.channel?.close();
+    if (link.channel) setTimeout(() => link.pc.close(), 250);
+    else link.pc.close();
+  }
+
   const leave = () => {
-    const [conn, chan] = [pc, channel];
-    pc = null;
-    channel = null;
-    // A short delay lets a just-sent goodbye leave before the connection
-    // is torn down; closing the channel alone would still flush it.
-    chan?.close();
-    if (chan) setTimeout(() => conn?.close(), 250);
-    else conn?.close();
+    [...links.keys()].forEach(close);
   };
 
   const handle = (command: NetCommand) => {
     switch (command.op) {
       case 'host':
-        void host(command.config);
+        void host(command.seat, command.config);
         return;
       case 'acceptReply':
-        void acceptReply(command.code);
+        void acceptReply(command.seat, command.code);
         return;
       case 'join':
         void join(command.code, command.config);
         return;
       case 'send':
-        send(command.data);
+        send(command.seats, command.data);
+        return;
+      case 'close':
+        close(command.seat);
         return;
       case 'leave':
         leave();

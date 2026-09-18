@@ -1,5 +1,5 @@
 import { joinLink } from '@shared/net/codec';
-import type { NetState } from '@shared/net/lobby';
+import type { NetState, SeatState } from '@shared/net/lobby';
 import classNames from 'classnames';
 import { type FormEvent, type ReactNode, useEffect, useState } from 'react';
 
@@ -158,44 +158,137 @@ const busyPhases: NetState['phase'][] = [
   'connecting',
 ];
 
+const seatBox = 'space-y-3 rounded-lg p-3 ring-1 ring-gray-200';
+
+// One guest seat on the host: its own invite out and reply back.
+const Seat = ({ seat }: { seat: SeatState }) => {
+  const n = seat.seat;
+  const remove = (
+    <button
+      type="button"
+      className={secondary}
+      onClick={() => call(window.api.netCloseSeat(n))}
+    >
+      {seat.phase === 'connected' ? `Remove seat ${n}` : `Cancel seat ${n}`}
+    </button>
+  );
+
+  let body: ReactNode;
+  switch (seat.phase) {
+    case 'empty':
+      body = (
+        <button
+          type="button"
+          className={secondary}
+          onClick={() => call(window.api.netInvite(n))}
+        >
+          Invite seat {n}
+        </button>
+      );
+      break;
+    case 'creatingInvite':
+      body = <p className="text-sm text-gray-500">Creating the invite…</p>;
+      break;
+    case 'connected':
+      body = (
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-sm font-medium text-green-800">
+            {seat.player ? seat.player.name : 'Connected, saying hello…'}
+          </span>
+          {remove}
+        </div>
+      );
+      break;
+    default:
+      body = (
+        <div className="grid gap-4 md:grid-cols-2">
+          <Step title="1. Send this invite">
+            {seat.invite && (
+              <CodeOutput
+                label={`Invite code for seat ${n}`}
+                code={seat.invite}
+                link
+              />
+            )}
+          </Step>
+          <Step title="2. Paste the reply they send back">
+            <CodeInput
+              label={`Reply code for seat ${n}`}
+              submitLabel="Connect"
+              disabled={seat.phase === 'connecting'}
+              onSubmit={(code) => call(window.api.netAcceptReply(n, code))}
+            />
+            {remove}
+          </Step>
+        </div>
+      );
+  }
+
+  return (
+    <section
+      data-testid={`seat-${n}`}
+      data-phase={seat.phase}
+      className={seatBox}
+    >
+      <h3 className="text-sm font-semibold text-gray-900">Seat {n}</h3>
+      {body}
+      {seat.error && (
+        <div
+          role="alert"
+          className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-800"
+        >
+          {seat.error}
+        </div>
+      )}
+    </section>
+  );
+};
+
+const Players = ({ state }: { state: NetState }) =>
+  state.players.length > 1 ? (
+    <ol data-testid="pod-players" className="text-sm text-gray-700">
+      {state.players.map((p) => (
+        <li key={p.playerId}>
+          Seat {p.seat}: {p.name}
+          {p.seat === 1 ? ' (host)' : ''}
+        </li>
+      ))}
+    </ol>
+  ) : null;
+
+const ResendButton = () => (
+  <button
+    type="button"
+    className={secondary}
+    onClick={() => call(window.api.netResend())}
+  >
+    Resend state
+  </button>
+);
+
 const Lobby = ({ state }: { state: NetState }) => {
   const [joining, setJoining] = useState(false);
   const { role, phase } = state;
   const idle = role === null || phase === 'ended';
   const showJoin = idle && (joining || state.pendingInvite !== null);
 
-  if (phase === 'connected') {
+  if (role === 'host') {
     return (
-      <div className="flex gap-2">
-        <button
-          type="button"
-          className={secondary}
-          onClick={() => call(window.api.netResend())}
-        >
-          Resend state
-        </button>
+      <div className="space-y-4">
+        {phase === 'connected' && <ResendButton />}
+        <Players state={state} />
+        {state.seats.map((seat) => (
+          <Seat key={seat.seat} seat={seat} />
+        ))}
       </div>
     );
   }
 
-  if (role === 'host' && phase !== 'ended') {
+  if (phase === 'connected') {
     return (
-      <div className="grid gap-6 md:grid-cols-2">
-        <Step title="1. Send this invite to your opponent">
-          {state.invite ? (
-            <CodeOutput label="Invite code" code={state.invite} link />
-          ) : (
-            <p className="text-sm text-gray-500">Creating the invite…</p>
-          )}
-        </Step>
-        <Step title="2. Paste the reply they send back">
-          <CodeInput
-            label="Reply code"
-            submitLabel="Connect"
-            disabled={!state.invite || phase === 'connecting'}
-            onSubmit={(code) => call(window.api.netAcceptReply(code))}
-          />
-        </Step>
+      <div className="space-y-4">
+        <ResendButton />
+        <Players state={state} />
       </div>
     );
   }
@@ -260,9 +353,11 @@ const PlayOnline = () => {
         <div>
           <h2 className="text-lg font-semibold text-gray-900">Play online</h2>
           <p className="text-sm text-gray-600">
-            Connect directly to one opponent by swapping two codes. Only your
-            battlefield, graveyard, exile, command zone, life, and card counts
-            are shared; your hand and library never leave this computer.
+            Play with up to three others. The host invites each player with
+            their own code and pastes back their reply; everyone connects to the
+            host. Only your battlefield, graveyard, exile, command zone, life,
+            and card counts are shared; your hand and library never leave this
+            computer.
           </p>
         </div>
         {state.role !== null && (

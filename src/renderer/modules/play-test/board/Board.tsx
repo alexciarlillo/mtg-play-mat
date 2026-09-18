@@ -1,4 +1,5 @@
 import { type CardView, MAX_DUMMIES, type PublicView } from '@shared/game';
+import { MAX_DIE_SIDES } from '@shared/net/protocol';
 import type { OpponentState } from '@shared/net/remoteViews';
 import classNames from 'classnames';
 import { type MouseEvent, type ReactNode, useCallback, useState } from 'react';
@@ -25,8 +26,10 @@ import Library from './Library';
 import { SIDE_PANEL_WIDTH, stackOrder } from './layout';
 import LifeCounter from './LifeCounter';
 import OpponentSide from './OpponentSide';
+import { opponentCommanders, requestRoll, seatOrder } from './pod';
 import PlayerCounters from './PlayerCounters';
 import ScaledField from './ScaledField';
+import TableLog from './TableLog';
 import TokenDialog from './TokenDialog';
 import ZoneBrowser from './ZoneBrowser';
 import ZonePile from './ZonePile';
@@ -37,7 +40,14 @@ const noOpponent: ViewStore<OpponentState> = {
 };
 
 type Dialog =
-  'help' | 'drawMany' | 'setLife' | 'restart' | 'graveyard' | 'exile' | 'token';
+  | 'help'
+  | 'drawMany'
+  | 'setLife'
+  | 'restart'
+  | 'graveyard'
+  | 'exile'
+  | 'token'
+  | 'rollDie';
 
 // Dialogs about one permanent, opened from its menu.
 type CardDialog = { kind: 'counter' | 'attach'; card: CardView };
@@ -76,9 +86,6 @@ interface Props {
 const Board = ({ store, opponent }: Props) => {
   const view = useView(store);
   const remote = useView(opponent ?? noOpponent);
-  const peer = remote?.peer ?? null;
-  // With an opponent the board splits in two and the own panel compacts.
-  const duel = peer !== null;
   const menu = useContextMenu();
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const [cardDialog, setCardDialog] = useState<CardDialog | null>(null);
@@ -146,23 +153,52 @@ const Board = ({ store, opponent }: Props) => {
     });
   };
 
+  const peers = remote ? seatOrder(remote.peers, remote.selfSeat) : [];
+  const log = remote?.log ?? [];
+  // With an opponent the board splits in two and the own panel compacts.
+  // Three or four players put every opponent in one row across the top.
+  const duel = peers.length > 0;
+  const pod = peers.length > 1;
   const commanderGame = view !== null && hasCommanders(view);
   // The command zone needs room too, so piles shrink to one row for it.
   const compactPiles = duel || commanderGame;
   const pileSize = compactPiles ? 'xs' : 'sm';
-  const opponentView = remote?.view ?? null;
 
   return (
     <div className="h-screen w-screen overflow-hidden bg-neutral-400 flex flex-col">
-      {peer && (
-        <div className="h-1/2 min-h-0">
-          <OpponentSide peer={peer} view={remote?.view ?? null} />
+      {duel && (
+        <div
+          data-testid="opponents"
+          className="grid h-1/2 min-h-0 gap-x-1 bg-slate-900"
+          style={{
+            gridTemplateColumns: `repeat(${peers.length}, minmax(0, 1fr))`,
+          }}
+        >
+          {peers.map((peer) => (
+            <OpponentSide
+              key={peer.info.playerId}
+              peer={peer.info}
+              view={peer.view}
+              seat={peer.seat}
+              compact={pod}
+            />
+          ))}
         </div>
       )}
       <div className="flex flex-1 min-h-0" onContextMenu={handleContextMenu}>
         <div
-          className={classNames('flex-1 h-full px-8', duel ? 'py-3' : 'py-6')}
+          className={classNames(
+            'relative flex-1 h-full px-8',
+            duel ? 'py-3' : 'py-6'
+          )}
         >
+          {(duel || log.length > 0) && (
+            // A corner of the field, not the side panel, which is full in
+            // a commander pod; it stays in view for screensharing.
+            <div className="absolute bottom-3 right-3 z-10 w-72 rounded-lg bg-slate-900/85 p-2 text-slate-100 shadow-lg">
+              <TableLog log={log} onCustomDie={() => setDialog('rollDie')} />
+            </div>
+          )}
           {/* Positions are relative to this box, in logical field units. */}
           <ScaledField testId="battlefield">
             {(scale) =>
@@ -231,7 +267,7 @@ const Board = ({ store, opponent }: Props) => {
                 <ToolButton onClick={() => setDialog('restart')}>
                   Restart
                 </ToolButton>
-                {commanderGame && canAddDummy && (
+                {commanderGame && canAddDummy && !duel && (
                   <ToolButton
                     label="Add placeholder opponent"
                     onClick={addDummy}
@@ -295,11 +331,7 @@ const Board = ({ store, opponent }: Props) => {
               </div>
               <CommanderDamageTaken
                 playerId={view.playerId}
-                sources={
-                  opponentView
-                    ? commanderSources(visibleCommanders(opponentView))
-                    : []
-                }
+                sources={opponentCommanders(peers)}
                 taken={view.commanderDamage}
               />
               <DummyOpponents
@@ -362,6 +394,17 @@ const Board = ({ store, opponent }: Props) => {
         />
       )}
       {dialog === 'help' && <ShortcutHelp onClose={close} />}
+      {dialog === 'rollDie' && (
+        <NumberPrompt
+          title="Roll a die"
+          label="Sides"
+          initial={100}
+          min={2}
+          max={MAX_DIE_SIDES}
+          onSubmit={(sides) => requestRoll({ type: 'die', sides })}
+          onClose={close}
+        />
+      )}
       {prompts[0] && (
         <CommanderPrompt key={prompts[0].instanceId} prompt={prompts[0]} />
       )}

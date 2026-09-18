@@ -1,12 +1,28 @@
-import type { PublicView } from '../game';
-import { namespaceView, type NetMessage, type PeerInfo } from './protocol';
+import type { PlayerId, PublicView } from '../game';
+import {
+  namespaceView,
+  type NetMessage,
+  type PeerInfo,
+  type RosterEntry,
+  type TableEvent,
+} from './protocol';
 
-// What the board shows of the other side. seq increases with every change
-// so a window can order a fetched snapshot against pushed ones.
+export interface RemotePeer {
+  info: PeerInfo;
+  // From the roster; null until the host has placed them.
+  seat: number | null;
+  view: PublicView | null;
+}
+
+// What the board shows of the other players. seq increases with every
+// change so a window can order a fetched snapshot against pushed ones.
 export interface OpponentState {
   seq: number;
-  peer: PeerInfo | null;
-  view: PublicView | null;
+  selfSeat: number | null;
+  // In seat order.
+  peers: RemotePeer[];
+  // Newest last.
+  log: TableEvent[];
 }
 
 interface Peer {
@@ -15,55 +31,101 @@ interface Peer {
   view: PublicView | null;
 }
 
-// The latest public view of the connected peer. It is only ever shown
-// next to the local game, never merged into it.
+export const MAX_LOG = 20;
+
+const bySeat = (a: RemotePeer, b: RemotePeer) =>
+  (a.seat ?? Infinity) - (b.seat ?? Infinity) ||
+  a.info.name.localeCompare(b.info.name);
+
+// The latest public view of every other player, keyed by player id. They
+// are only ever shown next to the local game, never merged into it.
 export class RemoteViews {
-  private peer: Peer | null = null;
+  private peers = new Map<PlayerId, Peer>();
+
+  private seats = new Map<PlayerId, number>();
+
+  private log: TableEvent[] = [];
 
   private rev = 0;
 
-  // Returns whether the opponent state changed.
+  constructor(private readonly selfId: () => PlayerId) {}
+
+  // Returns whether the opponent state changed. Each sender is checked on
+  // its own: a relayed message is judged exactly like a direct one.
   receive = (message: NetMessage): boolean => {
+    if (message.from === this.selfId()) return false;
     if (message.kind === 'hello') {
       const { playerId, name, appVersion } = message;
       // A repeated hello (a resend) keeps what is already on the board.
-      const same = this.peer?.info.playerId === playerId;
-      this.peer = {
+      const known = this.peers.get(playerId);
+      this.peers.set(playerId, {
         info: { playerId, name, appVersion },
         lastSeq: message.seq,
-        view: same ? (this.peer?.view ?? null) : null,
-      };
+        view: known?.view ?? null,
+      });
       return this.changed();
     }
+    if (message.kind !== 'public' && message.kind !== 'bye') return false;
 
-    const peer = this.peer;
-    if (!peer || message.from !== peer.info.playerId) return false;
-    if (message.seq <= peer.lastSeq) return false;
+    const peer = this.peers.get(message.from);
+    if (!peer || message.seq <= peer.lastSeq) return false;
     peer.lastSeq = message.seq;
 
     if (message.kind === 'bye') {
-      this.peer = null;
+      this.peers.delete(message.from);
       return this.changed();
     }
-
     peer.view = message.view && namespaceView(message.view, message.from);
     return this.changed();
   };
 
+  // Seats come from the host's roster; anyone missing from it has left.
+  // Returns the players that were dropped.
+  setRoster = (roster: RosterEntry[]): PeerInfo[] => {
+    const listed = new Set(roster.map((entry) => entry.playerId));
+    const dropped = [...this.peers.values()]
+      .filter((peer) => !listed.has(peer.info.playerId))
+      .map((peer) => peer.info);
+    dropped.forEach((info) => this.peers.delete(info.playerId));
+    this.seats = new Map(roster.map((entry) => [entry.playerId, entry.seat]));
+    this.changed();
+    return dropped;
+  };
+
+  remove = (playerId: PlayerId): boolean =>
+    this.peers.delete(playerId) && this.changed();
+
+  addEvent = (event: TableEvent) => {
+    this.log = [...this.log, event].slice(-MAX_LOG);
+    this.changed();
+  };
+
   clear = (): boolean => {
-    if (!this.peer) return false;
-    this.peer = null;
+    if (this.peers.size === 0 && this.log.length === 0) return false;
+    this.peers.clear();
+    this.seats.clear();
+    this.log = [];
     return this.changed();
   };
 
-  get connectedPeer(): PeerInfo | null {
-    return this.peer?.info ?? null;
+  peer = (playerId: PlayerId): PeerInfo | null =>
+    this.peers.get(playerId)?.info ?? null;
+
+  get connectedPeers(): PeerInfo[] {
+    return this.snapshot().peers.map((peer) => peer.info);
   }
 
   snapshot = (): OpponentState => ({
     seq: this.rev,
-    peer: this.peer?.info ?? null,
-    view: this.peer?.view ?? null,
+    selfSeat: this.seats.get(this.selfId()) ?? null,
+    peers: [...this.peers.values()]
+      .map((peer) => ({
+        info: peer.info,
+        seat: this.seats.get(peer.info.playerId) ?? null,
+        view: peer.view,
+      }))
+      .sort(bySeat),
+    log: this.log,
   });
 
   private changed = () => {

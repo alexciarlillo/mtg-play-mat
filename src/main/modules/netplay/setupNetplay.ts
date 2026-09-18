@@ -28,23 +28,38 @@ const iceServers = (testHooks: boolean): IceServer[] => {
   }
 };
 
-// A board shared with an opponent needs about twice the height. Grow it
-// once per window, within the screen, and leave later resizes alone.
+// A board shared with opponents needs about twice the height, and a pod
+// of three or four a little more width for the row of opponents. Grow
+// each window at most once per step, within the screen, and leave the
+// user's own resizes alone.
 const DUEL_BOARD_HEIGHT = 1040;
-const grownBoards = new WeakSet<BrowserWindow>();
+const POD_BOARD_WIDTH = 1800;
+const grownBoards = new WeakMap<BrowserWindow, number>();
 
-const growForDuel = (board: BrowserWindow | null) => {
-  if (!board || board.isDestroyed() || grownBoards.has(board)) return;
-  grownBoards.add(board);
-  const [width, height] = board.getSize();
-  const area = screen.getDisplayMatching(board.getBounds()).workArea;
-  const target = Math.min(DUEL_BOARD_HEIGHT, area.height);
-  if (height >= target) return;
-  const y = Math.max(
-    area.y,
-    Math.min(board.getBounds().y, area.y + area.height - target)
+const growForTable = (board: BrowserWindow | null, opponents: number) => {
+  if (!board || board.isDestroyed() || opponents === 0) return;
+  const step = opponents > 1 ? 2 : 1;
+  if ((grownBoards.get(board) ?? 0) >= step) return;
+  grownBoards.set(board, step);
+  const bounds = board.getBounds();
+  const area = screen.getDisplayMatching(bounds).workArea;
+  const height = Math.max(
+    bounds.height,
+    Math.min(DUEL_BOARD_HEIGHT, area.height)
   );
-  board.setBounds({ ...board.getBounds(), y, width, height: target });
+  const width =
+    step === 2
+      ? Math.max(bounds.width, Math.min(POD_BOARD_WIDTH, area.width))
+      : bounds.width;
+  if (height === bounds.height && width === bounds.width) return;
+  const fit = (pos: number, start: number, room: number, size: number) =>
+    Math.max(start, Math.min(pos, start + room - size));
+  board.setBounds({
+    x: fit(bounds.x, area.x, area.width, width),
+    y: fit(bounds.y, area.y, area.height, height),
+    width,
+    height,
+  });
 };
 
 type NetplaySetupHandlers = Pick<
@@ -53,7 +68,10 @@ type NetplaySetupHandlers = Pick<
   | 'setDisplayName'
   | 'getNetState'
   | 'netHost'
+  | 'netInvite'
   | 'netAcceptReply'
+  | 'netCloseSeat'
+  | 'netRoll'
   | 'netJoin'
   | 'netLeave'
   | 'netResend'
@@ -81,7 +99,7 @@ export const setupNetplay = ({
   };
 
   const netWindow = new NetWindow(() => {
-    netplay.handleReport({ type: 'closed' });
+    netplay.transportLost();
   });
 
   const netplay: Netplay = new Netplay({
@@ -92,14 +110,14 @@ export const setupNetplay = ({
     localView: playTest.currentPublicView,
     pushState: (state) => sendEvent(getAppWindow(), 'netState', state),
     pushOpponent: (state) => {
-      if (state.peer) growForDuel(playTest.boardWindow);
+      growForTable(playTest.boardWindow, state.peers.length);
       sendEvent(playTest.boardWindow, 'opponentView', state);
     },
   });
 
   playTest.onPublicChange((view) => {
     netplay.localViewChanged(view);
-    if (netplay.netState.peer) growForDuel(playTest.boardWindow);
+    growForTable(playTest.boardWindow, netplay.opponentCount);
   });
 
   const handlers: NetplaySetupHandlers = {

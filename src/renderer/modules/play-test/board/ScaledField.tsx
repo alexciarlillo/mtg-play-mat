@@ -8,12 +8,15 @@ interface Box {
 }
 
 // Fills its parent and lays children out in logical battlefield units,
-// scaled down to fit when the space is shorter than a full field.
+// scaled down to fit when the space is shorter than a full field, or
+// narrower than fitWidth logical units.
 const ScaledField = ({
   testId,
+  fitWidth,
   children,
 }: {
   testId: string;
+  fitWidth?: number;
   children(scale: number): ReactNode;
 }) => {
   const outer = useRef<HTMLDivElement>(null);
@@ -30,7 +33,12 @@ const ScaledField = ({
     return () => observer.disconnect();
   }, []);
 
-  const scale = box ? fieldScale(box.height) : 1;
+  const scale = box
+    ? Math.min(
+        fieldScale(box.height),
+        fitWidth && box.width > 0 ? box.width / fitWidth : 1
+      )
+    : 1;
 
   return (
     <div ref={outer} className="relative h-full w-full">

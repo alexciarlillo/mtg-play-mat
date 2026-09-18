@@ -168,29 +168,44 @@ are all public, so they show on the opponent's board read-only.
 
 ## Playing online
 
-**Play online** in the app window connects you directly to one opponent (WebRTC, no
-server). Set your name, then:
+**Play online** in the app window connects you directly to up to three other players
+(WebRTC, no server). Set your name, then:
 
-1. The host clicks **Host a game** and sends the invite code (or the
-   `mtgplaymat://join?c=…` link) to the opponent.
-2. The opponent clicks **Join a game**, pastes the invite (a link fills it in), and
+1. The host clicks **Host a game**. Seat 2 gets an invite code (or a
+   `mtgplaymat://join?c=…` link) to send to one player; **Invite seat 3** and
+   **Invite seat 4** make one for each further player. Every seat has its own codes.
+2. Each player clicks **Join a game**, pastes their invite (a link fills it in), and
    sends back the reply code.
-3. The host pastes the reply and clicks **Connect**.
+3. The host pastes each reply into that seat and clicks **Connect**.
 
-Hosting is independent of the play test. Once both players are connected and have a
-game open, each board splits in two and shows the other player's battlefield,
-graveyard, exile, command zone, life, mulligans, and hand and library counts,
-read-only. Each player sends only their own public view, so hand contents and library
-order never leave the machine. **Resend state** re-sends yours; **Leave** disconnects
-and clears the opponent's half.
+A pod is a star: every guest connects only to the host, and the host passes each
+guest's messages on to the others unchanged. Receivers still check every message
+against its original sender, and the host binds each link to the player who said
+hello on it, so nobody can speak for someone else. The host sends everyone the seat
+list.
+
+Hosting is independent of the play test. Once players are connected and have a game
+open, each board shows the other players' battlefields, graveyards, exile, command
+zones, life, mulligans, and hand and library counts, read-only. With one opponent the
+board splits in two. With two or three opponents they sit in a row across the top, in
+turn order, each scaled to fit. Each player sends only their own public view, so
+hand contents and library order never leave the machine. In a Commander game you can
+record commander damage from every opponent's commander.
+
+**Dice & coins** on the board (d6, d20, coin, any dN) asks the host to roll; the
+result and who asked for it appear in the log on every board. **Resend state** re-sends
+yours. **Leave** disconnects: when a guest leaves, only their seat is removed and the
+host can invite that seat again. When the host leaves, the pod ends for everyone.
+Players on a different protocol version get a "version mismatch" message.
 
 Connections use public STUN servers (Google, Twilio) and no TURN relay, so some
 strict networks (symmetric NAT, corporate firewalls) can't connect; the lobby says so.
 
 The WebRTC connection lives in a hidden "net" window (`src/renderer/net.html`),
 because Electron's main process has no `RTCPeerConnection`. Main is the hub: it builds
-and validates every message (`src/shared/net/protocol.ts`) and forwards the
-opponent's view to the board.
+and validates every message (`src/shared/net/protocol.ts`, protocol version 2) and
+forwards the other players' views to the board. The host's net window holds one peer
+connection per guest seat.
 
 Invite links: packaged builds register the `mtgplaymat://` scheme. In development
 nothing is registered unless you set `MTG_PLAY_MAT_REGISTER_PROTOCOL=1`, which

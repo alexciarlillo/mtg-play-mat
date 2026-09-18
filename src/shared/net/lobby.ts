@@ -1,4 +1,9 @@
-import type { PeerInfo } from './protocol';
+import {
+  HOST_SEAT,
+  MAX_SEATS,
+  type PeerInfo,
+  type RosterEntry,
+} from './protocol';
 
 export type NetRole = 'host' | 'guest';
 
@@ -12,16 +17,37 @@ export type NetPhase =
   | 'awaitingHost'
   | 'connecting'
   | 'connected'
-  // The connection dropped or the opponent left; Leave resets.
+  // The connection dropped or the host left; Leave resets.
   | 'ended';
+
+// One guest seat as the host sees it. Each has its own invite and reply.
+export type SeatPhase =
+  | 'empty'
+  | 'creatingInvite'
+  | 'awaitingReply'
+  | 'connecting'
+  // Connected; player stays null until their hello arrives.
+  | 'connected';
+
+export interface SeatState {
+  seat: number;
+  phase: SeatPhase;
+  invite: string | null;
+  player: PeerInfo | null;
+  error: string | null;
+}
 
 // The lobby as main sees it; the app window only renders it.
 export interface NetState {
   role: NetRole | null;
+  // For a host, derived from its seats: connected once anyone is.
   phase: NetPhase;
-  invite: string | null;
+  // Host only: seats 2 and up.
+  seats: SeatState[];
+  // Guest only: the reply to send back.
   reply: string | null;
-  peer: PeerInfo | null;
+  // Everyone in the pod, this player included, once connected.
+  players: RosterEntry[];
   status: string;
   error: string | null;
   // An invite that arrived through a mtgplaymat:// link, not yet used.
@@ -31,13 +57,18 @@ export interface NetState {
 export const idleNetState: NetState = {
   role: null,
   phase: 'idle',
-  invite: null,
+  seats: [],
   reply: null,
-  peer: null,
+  players: [],
   status: 'Not connected.',
   error: null,
   pendingInvite: null,
 };
+
+export const guestSeats = Array.from(
+  { length: MAX_SEATS - HOST_SEAT },
+  (_, i) => HOST_SEAT + 1 + i
+);
 
 export interface Profile {
   // Unique per app session; also the local player's id in the game.
@@ -57,24 +88,27 @@ export interface NetConfig {
   recordWire: boolean;
 }
 
-// Main -> net window. The net window owns the peer connection and only
-// moves opaque strings; main builds and checks every message.
+// Main -> net window. The net window owns the peer connections and only
+// moves opaque strings; main builds and checks every message. A seat
+// names the far end of a link: a guest seat on the host, the host's on a
+// guest.
 export type NetCommand =
-  | { op: 'host'; config: NetConfig }
-  | { op: 'acceptReply'; code: string }
+  | { op: 'host'; seat: number; config: NetConfig }
+  | { op: 'acceptReply'; seat: number; code: string }
   | { op: 'join'; code: string; config: NetConfig }
-  | { op: 'send'; data: string }
+  | { op: 'send'; seats: number[]; data: string }
+  | { op: 'close'; seat: number }
   | { op: 'leave' };
 
 // Net window -> main.
 export type NetReport =
-  | { type: 'invite'; code: string }
-  | { type: 'reply'; code: string }
-  | { type: 'open' }
-  | { type: 'message'; data: string }
-  | { type: 'connection'; state: string }
-  | { type: 'closed' }
-  | { type: 'error'; message: string };
+  | { type: 'invite'; seat: number; code: string }
+  | { type: 'reply'; seat: number; code: string }
+  | { type: 'open'; seat: number }
+  | { type: 'message'; seat: number; data: string }
+  | { type: 'connection'; seat: number; state: string }
+  | { type: 'closed'; seat: number }
+  | { type: 'error'; seat: number; message: string };
 
 const MAX_REPORT_TEXT = 512 * 1024;
 
@@ -86,27 +120,36 @@ const isText = (value: unknown): value is string =>
 export const parseNetReport = (input: unknown): NetReport | null => {
   if (typeof input !== 'object' || input === null) return null;
   const fields = input as Record<string, unknown>;
+  const { seat } = fields;
+  if (
+    typeof seat !== 'number' ||
+    !Number.isInteger(seat) ||
+    seat < HOST_SEAT ||
+    seat > MAX_SEATS
+  ) {
+    return null;
+  }
   switch (fields.type) {
     case 'invite':
     case 'reply':
       return isText(fields.code)
-        ? { type: fields.type, code: fields.code }
+        ? { type: fields.type, seat, code: fields.code }
         : null;
     case 'message':
       return isText(fields.data)
-        ? { type: 'message', data: fields.data }
+        ? { type: 'message', seat, data: fields.data }
         : null;
     case 'connection':
       return isText(fields.state)
-        ? { type: 'connection', state: fields.state.slice(0, 32) }
+        ? { type: 'connection', seat, state: fields.state.slice(0, 32) }
         : null;
     case 'error':
       return isText(fields.message)
-        ? { type: 'error', message: fields.message.slice(0, 500) }
+        ? { type: 'error', seat, message: fields.message.slice(0, 500) }
         : null;
     case 'open':
     case 'closed':
-      return { type: fields.type };
+      return { type: fields.type, seat };
     default:
       return null;
   }

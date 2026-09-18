@@ -121,7 +121,7 @@ const codeValue = async (box: Locator) => {
 
 const connect = async (hostApp: Page, guestApp: Page, invite: string) => {
   const reply = await codeValue(guestApp.getByLabel('Your reply code'));
-  await hostApp.getByLabel('Reply code').fill(reply);
+  await hostApp.getByLabel('Reply code for seat 2').fill(reply);
   await hostApp.getByRole('button', { name: 'Connect' }).click();
   await expect(status(hostApp)).toHaveAttribute('data-phase', 'connected', {
     timeout: 20_000,
@@ -155,7 +155,7 @@ test('host and guest connect by swapping codes', async () => {
   const guestApp = await lobby(guest, 'Bob');
 
   await hostApp.getByRole('button', { name: 'Host a game' }).click();
-  const invite = await codeValue(hostApp.getByLabel('Invite code'));
+  const invite = await codeValue(hostApp.getByLabel('Invite code for seat 2'));
 
   // A reply pasted where the invite belongs is explained, not attempted.
   await guestApp.getByRole('button', { name: 'Join a game' }).click();
@@ -341,7 +341,7 @@ test('leaving clears the opponent side on both boards', async () => {
   await expect(hostBoard.getByTestId('opponent-side')).toHaveCount(0);
   await expect(guestBoard.getByTestId('opponent-side')).toHaveCount(0);
   await expect(status(hostApp)).toHaveAttribute('data-phase', 'idle');
-  await expect(status(guestApp)).toHaveText(/Alice left the game/);
+  await expect(status(guestApp)).toHaveText(/The host \(Alice\) left the game/);
 
   // The local game is untouched.
   await expect(ownField(hostBoard)).toHaveCount(1);
@@ -356,7 +356,7 @@ test('an invite link reaches the running app and reconnects', async () => {
   await guestApp.getByRole('link', { name: 'Deck Builder' }).first().click();
 
   await hostApp.getByRole('button', { name: 'Host a game' }).click();
-  const invite = await codeValue(hostApp.getByLabel('Invite code'));
+  const invite = await codeValue(hostApp.getByLabel('Invite code for seat 2'));
 
   // A second launch with the link hands it to the running guest and exits.
   const second = spawn(

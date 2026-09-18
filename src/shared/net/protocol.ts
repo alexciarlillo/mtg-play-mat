@@ -9,7 +9,14 @@ import {
   type PublicZoneId,
 } from '../game';
 
-export const PROTOCOL_VERSION = 1;
+// 2 added pods (roster, relayed messages) and host-rolled dice.
+export const PROTOCOL_VERSION = 2;
+
+// The host plus up to three guests.
+export const MAX_SEATS = 4;
+export const HOST_SEAT = 1;
+
+export const MAX_DIE_SIDES = 1000;
 
 // A 60-card battlefield is about 20 KB; this leaves room for big boards
 // and stays under the datachannel's own message limit.
@@ -19,6 +26,26 @@ export interface PeerInfo {
   playerId: PlayerId;
   name: string;
   appVersion: string;
+}
+
+export interface RosterEntry {
+  playerId: PlayerId;
+  name: string;
+  seat: number;
+}
+
+export type RollRequest = { type: 'die'; sides: number } | { type: 'coin' };
+
+export type RollResult =
+  | { type: 'die'; sides: number; result: number }
+  | { type: 'coin'; result: 'heads' | 'tails' };
+
+// Shared randomness: only the host rolls, for whoever asked.
+export interface TableEvent {
+  id: number;
+  by: PlayerId;
+  byName: string;
+  roll: RollResult;
 }
 
 interface Envelope {
@@ -32,7 +59,13 @@ export type NetPayload =
   | ({ kind: 'hello' } & PeerInfo)
   // The sender's whole public view; null when they have no game open.
   | { kind: 'public'; view: PublicView | null }
-  | { kind: 'bye' };
+  | { kind: 'bye' }
+  // Host only: everyone in the pod, including the receiver.
+  | { kind: 'roster'; players: RosterEntry[] }
+  // To the host only; never relayed.
+  | { kind: 'roll'; request: RollRequest }
+  // Host only: the outcome of a roll, for everyone.
+  | ({ kind: 'event' } & TableEvent);
 
 export type NetMessage = Envelope & NetPayload;
 
@@ -44,6 +77,14 @@ export class ProtocolError extends Error {
 }
 
 type Fields = Record<string, unknown>;
+
+// A peer on another protocol version; worth telling the user about.
+export class VersionError extends ProtocolError {
+  constructor(readonly version: unknown) {
+    super(`unsupported version ${JSON.stringify(version)}`);
+    this.name = 'VersionError';
+  }
+}
 
 const fail = (message: string): never => {
   throw new ProtocolError(message);
@@ -217,6 +258,52 @@ export const parsePublicView = (value: unknown): PublicView => {
   };
 };
 
+const roster = (value: unknown): RosterEntry[] => {
+  const players = list(value, 'players', MAX_SEATS).map((item) => {
+    const fields = object(item, 'player');
+    return {
+      playerId: text(fields, 'playerId'),
+      name: text(fields, 'name', { max: 64 }),
+      seat: int(fields, 'seat', HOST_SEAT, MAX_SEATS),
+    };
+  });
+  const unique = (key: 'playerId' | 'seat') =>
+    new Set(players.map((p) => p[key])).size === players.length;
+  if (!unique('playerId') || !unique('seat')) fail('roster has duplicates');
+  return players;
+};
+
+const dieSides = (fields: Fields) => int(fields, 'sides', 2, MAX_DIE_SIDES);
+
+export const parseRollRequest = (value: unknown): RollRequest => {
+  const fields = object(value, 'request');
+  switch (fields.type) {
+    case 'die':
+      return { type: 'die', sides: dieSides(fields) };
+    case 'coin':
+      return { type: 'coin' };
+    default:
+      return fail('unknown roll');
+  }
+};
+
+const rollResult = (value: unknown): RollResult => {
+  const fields = object(value, 'roll');
+  switch (fields.type) {
+    case 'die': {
+      const sides = dieSides(fields);
+      return { type: 'die', sides, result: int(fields, 'result', 1, sides) };
+    }
+    case 'coin':
+      if (fields.result !== 'heads' && fields.result !== 'tails') {
+        return fail('a coin lands heads or tails');
+      }
+      return { type: 'coin', result: fields.result };
+    default:
+      return fail('unknown roll');
+  }
+};
+
 const byteLength = (raw: string) => new TextEncoder().encode(raw).length;
 
 export const parseNetMessage = (raw: unknown): NetMessage => {
@@ -232,9 +319,7 @@ export const parseNetMessage = (raw: unknown): NetMessage => {
     return fail('not JSON');
   }
   const fields = object(parsed, 'message');
-  if (fields.v !== PROTOCOL_VERSION) {
-    return fail(`unsupported version ${JSON.stringify(fields.v)}`);
-  }
+  if (fields.v !== PROTOCOL_VERSION) throw new VersionError(fields.v);
   const envelope: Envelope = {
     v: PROTOCOL_VERSION,
     seq: int(fields, 'seq', 1, Number.MAX_SAFE_INTEGER),
@@ -262,6 +347,23 @@ export const parseNetMessage = (raw: unknown): NetMessage => {
     }
     case 'bye':
       return { ...envelope, kind: 'bye' };
+    case 'roster':
+      return { ...envelope, kind: 'roster', players: roster(fields.players) };
+    case 'roll':
+      return {
+        ...envelope,
+        kind: 'roll',
+        request: parseRollRequest(fields.request),
+      };
+    case 'event':
+      return {
+        ...envelope,
+        kind: 'event',
+        id: int(fields, 'id', 1, Number.MAX_SAFE_INTEGER),
+        by: text(fields, 'by'),
+        byName: text(fields, 'byName', { max: 64 }),
+        roll: rollResult(fields.roll),
+      };
     default:
       return fail(`unknown kind ${JSON.stringify(fields.kind)}`);
   }

@@ -5,6 +5,7 @@ import type {
   PublicView,
 } from '../game';
 import type { NetCommand, NetReport, NetState, Profile } from '../net/lobby';
+import type { RollRequest } from '../net/protocol';
 import type { OpponentState } from '../net/remoteViews';
 import type { CardDataStatus } from '../types/cardData';
 import type {
@@ -75,10 +76,16 @@ export const requests = {
   // Lobby actions; results and errors arrive as netState.
   getNetState: request<[], NetState>(),
   netHost: request<[]>(),
-  netAcceptReply: request<[code: string]>(),
+  // Host: a new invite for an empty guest seat.
+  netInvite: request<[seat: number]>(),
+  netAcceptReply: request<[seat: number, code: string]>(),
+  // Host: removes the player (or pending invite) from a seat.
+  netCloseSeat: request<[seat: number]>(),
   netJoin: request<[code: string]>(),
   netLeave: request<[]>(),
   netResend: request<[]>(),
+  // The host rolls; the result shows up in the table log.
+  netRoll: request<[request: RollRequest]>(),
   // Only the hidden net window may call this.
   netReport: request<[report: NetReport]>(),
   getOpponentView: request<[], OpponentState>(),
