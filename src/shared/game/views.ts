@@ -6,8 +6,10 @@ import type {
   CardRef,
   GameState,
   InstanceId,
+  Phase,
   PlayerId,
   PlayerState,
+  RevealSource,
   ZoneId,
 } from './types';
 
@@ -16,6 +18,12 @@ import type {
 export type CardView = Omit<CardInstance, 'ref'> & { ref: CardRef | null };
 
 export type PublicZoneId = Exclude<ZoneId, 'library' | 'hand'>;
+
+// Exactly the hidden cards a player is showing everyone, by identity only.
+export interface RevealView {
+  source: RevealSource;
+  cards: CardRef[];
+}
 
 // What every player (and a screenshare) may see of one player. It holds
 // no identity of hand or library cards, not even instance ids.
@@ -34,6 +42,10 @@ export interface PublicView {
   // Commander damage taken, and any stand-in opponents; both public.
   commanderDamage: CommanderDamage[];
   dummies: DummyOpponent[];
+  // Optional so views from builds without turns or reveals still fit.
+  turn?: number;
+  phase?: Phase;
+  revealed?: RevealView | null;
 }
 
 // What the player themselves may see: the public view plus their hand.
@@ -92,6 +104,20 @@ const zoneViews = (
     ])
   ) as Record<PublicZoneId, CardView[]>;
 
+// Only cards still where they were revealed from are shown.
+const revealView = (
+  state: GameState,
+  player: PlayerState
+): RevealView | null => {
+  const reveal = player.revealed;
+  if (!reveal) return null;
+  const from: ZoneId = reveal.source === 'libraryTop' ? 'library' : 'hand';
+  const cards = reveal.instanceIds
+    .filter((id) => player.zones[from].includes(id))
+    .map((id) => state.cards[id].ref);
+  return cards.length > 0 ? { source: reveal.source, cards } : null;
+};
+
 export const publicView = (
   state: GameState,
   playerId: PlayerId
@@ -115,6 +141,9 @@ export const publicView = (
       ...dummy,
       commanderDamage: copyDamage(dummy.commanderDamage),
     })),
+    turn: player.turn,
+    phase: player.phase,
+    revealed: revealView(state, player),
   };
 };
 
@@ -132,4 +161,14 @@ export const privateView = (
     zones: zoneViews(state, player, false),
     hand: viewCards(state, player.zones.hand, false),
   };
+};
+
+// The library, top first, for its owner's private tools (looking at the
+// top cards, searching). Never part of any pushed view.
+export const libraryView = (
+  state: GameState,
+  playerId: PlayerId
+): CardView[] | null => {
+  const player = getPlayer(state, playerId);
+  return player ? viewCards(state, player.zones.library, false) : null;
 };

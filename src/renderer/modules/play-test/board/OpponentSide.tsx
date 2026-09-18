@@ -15,7 +15,9 @@ import {
   SIDE_PANEL_WIDTH,
   stackOrder,
 } from './layout';
+import { phaseLabels } from './phases';
 import PlayerCounters from './PlayerCounters';
+import RevealPanel from './RevealPanel';
 import ScaledField from './ScaledField';
 import ZoneBrowser from './ZoneBrowser';
 import ZonePile from './ZonePile';
@@ -101,10 +103,15 @@ const OpponentSide = ({
     >
       <div
         className={classNames(
-          'flex-1 min-w-0 h-full',
+          'relative flex-1 min-w-0 h-full',
           compact ? 'px-2 py-2' : 'px-8 py-3'
         )}
       >
+        <RevealPanel
+          reveal={view?.revealed}
+          size={compact ? 'xs' : 'sm'}
+          testId="opponent-reveal-panel"
+        />
         {view ? (
           <ScaledField
             testId="opponent-battlefield"
@@ -159,6 +166,12 @@ const OpponentSide = ({
             counters={view.counters}
             testId="opponent-player-counters"
           />
+        )}
+        {view?.turn !== undefined && (
+          <div data-testid="opponent-turn" className="text-xs text-slate-300">
+            Turn <span className="font-bold tabular-nums">{view.turn}</span>
+            {view.phase && ` · ${phaseLabels[view.phase]}`}
+          </div>
         )}
         {view && !view.keptHand && (
           <div

@@ -225,7 +225,7 @@ const reduceCard = (state: GameState, action: MtgCardAction): GameState => {
   }
 };
 
-const untapAll = (state: GameState, player: PlayerState): GameState => {
+export const untapAll = (state: GameState, player: PlayerState): GameState => {
   const tapped = player.zones.battlefield
     .map((id) => state.cards[id])
     .filter((card) => card?.tapped);

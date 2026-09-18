@@ -78,8 +78,11 @@ describe('publicView', () => {
         'life',
         'mulligans',
         'name',
+        'phase',
         'playerId',
+        'revealed',
         'seq',
+        'turn',
         'zones',
       ].sort()
     );
@@ -265,5 +268,97 @@ describe('privateView', () => {
       expect(json).not.toContain(state.cards[id].ref.name);
       expect(json).not.toContain(`"${id}"`);
     });
+  });
+});
+
+describe('revealed cards', () => {
+  const leaks = (json: string, state: GameState, id: string) =>
+    json.includes(state.cards[id].ref.name) ||
+    json.includes(state.cards[id].ref.id) ||
+    json.includes(`"${id}"`);
+
+  it('shows exactly the revealed hand card and nothing else hidden', () => {
+    const state = midGame();
+    const [shown, kept] = zone(state, P1, 'hand');
+    const revealed = reduce(state, {
+      type: 'reveal',
+      playerId: P1,
+      source: 'card',
+      instanceId: shown,
+    });
+
+    const view = publicView(revealed, P1);
+    expect(view?.revealed).toEqual({
+      source: 'card',
+      cards: [state.cards[shown].ref],
+    });
+    const json = JSON.stringify(view);
+    expect(json).toContain(state.cards[shown].ref.name);
+    // Only the identity is shown, never the instance id.
+    expect(json).not.toContain(`"${shown}"`);
+    expect(leaks(json, revealed, kept)).toBe(false);
+    zone(state, P1, 'library').forEach((id) =>
+      expect(leaks(json, revealed, id)).toBe(false)
+    );
+  });
+
+  it('shows the top of the library but not the rest', () => {
+    const state = midGame();
+    const [top, ...rest] = zone(state, P1, 'library');
+    const revealed = reduce(state, {
+      type: 'reveal',
+      playerId: P1,
+      source: 'libraryTop',
+      count: 1,
+    });
+    const json = JSON.stringify(publicView(revealed, P1));
+    expect(json).toContain(state.cards[top].ref.name);
+    rest.forEach((id) => expect(leaks(json, revealed, id)).toBe(false));
+    zone(state, P1, 'hand').forEach((id) =>
+      expect(leaks(json, revealed, id)).toBe(false)
+    );
+  });
+
+  it('shows the whole hand, and hides it again once over', () => {
+    const state = reduce(midGame(), {
+      type: 'reveal',
+      playerId: P1,
+      source: 'hand',
+    });
+    const hand = zone(state, P1, 'hand');
+    expect(publicView(state, P1)?.revealed?.cards).toHaveLength(hand.length);
+    expect(privateView(state, P1)?.revealed?.source).toBe('hand');
+
+    const over = [
+      reduce(state, { type: 'hideReveal', playerId: P1 }),
+      reduce(state, { type: 'adjustLife', playerId: P1, delta: -1 }),
+    ];
+    over.forEach((after) => {
+      const json = JSON.stringify(publicView(after, P1));
+      expect(publicView(after, P1)?.revealed).toBeNull();
+      hiddenCards(after).forEach((card) =>
+        expect(leaks(json, after, card.instanceId)).toBe(false)
+      );
+    });
+  });
+
+  it('drops a revealed card that is no longer where it was', () => {
+    const state = reduce(midGame(), {
+      type: 'reveal',
+      playerId: P1,
+      source: 'libraryTop',
+      count: 1,
+    });
+    const [top] = zone(state, P1, 'library');
+    // Only reachable through a hand-built state; actions end the reveal.
+    const moved: GameState = {
+      ...state,
+      players: state.players.map((p) => ({
+        ...p,
+        zones: { ...p.zones, library: p.zones.library.slice(1) },
+      })),
+      cards: { ...state.cards, [top]: { ...state.cards[top], zone: 'exile' } },
+    };
+    expect(publicView(moved, P1)?.revealed).toBeNull();
   });
 });

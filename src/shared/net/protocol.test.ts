@@ -11,6 +11,7 @@ import {
   type NetMessage,
   parseNetMessage,
   parsePublicView,
+  PROTOCOL_VERSION,
   type RosterEntry,
   VersionError,
   MAX_DIE_SIDES,
@@ -584,5 +585,77 @@ describe('public view validation', () => {
     expect(ids.length).toBeGreaterThan(0);
     ids.forEach((id) => expect(id.startsWith('peer-1/')).toBe(true));
     expect(v.zones.battlefield[0].instanceId.startsWith('peer-1/')).toBe(false);
+  });
+});
+
+describe('turns and reveals over the wire', () => {
+  const revealing = () => {
+    const state = applyAll(game(), [
+      { type: 'setPhase', playerId: 'alice', phase: 'combat' },
+      { type: 'reveal', playerId: 'alice', source: 'hand' },
+    ]);
+    const v = publicView(state, 'alice');
+    if (!v) throw new Error('no view');
+    return v;
+  };
+
+  it('round-trips the turn, phase, and revealed cards', () => {
+    const v = revealing();
+    expect(v.revealed?.cards).toHaveLength(2);
+    const parsed = parseNetMessage(
+      encodeNetMessage({
+        v: PROTOCOL_VERSION,
+        seq: 1,
+        from: 'alice',
+        kind: 'public',
+        view: v,
+      })
+    );
+    if (parsed.kind !== 'public') throw new Error('not public');
+    expect(parsed.view).toEqual(v);
+    expect(parsed.view).toMatchObject({ turn: 1, phase: 'combat' });
+  });
+
+  it('accepts views without them, from older builds', () => {
+    const v: Partial<PublicView> = structuredClone(revealing());
+    delete v.turn;
+    delete v.phase;
+    delete v.revealed;
+    const parsed = parsePublicView(v);
+    expect('turn' in parsed).toBe(false);
+    expect('phase' in parsed).toBe(false);
+    expect('revealed' in parsed).toBe(false);
+    expect(parsePublicView({ ...v, revealed: null }).revealed).toBeNull();
+  });
+
+  it('rejects malformed turns and reveals', () => {
+    const v = revealing();
+    const bad: Record<string, unknown>[] = [
+      { turn: -1 },
+      { turn: 'two' },
+      { phase: 'lunch' },
+      { revealed: { source: 'graveyard', cards: [] } },
+      { revealed: { source: 'hand', cards: 'x' } },
+      { revealed: { source: 'hand', cards: [{ name: 1 }] } },
+      {
+        revealed: {
+          source: 'hand',
+          cards: Array.from({ length: 101 }, () => v.revealed?.cards[0]),
+        },
+      },
+    ];
+    bad.forEach((patch) =>
+      expect(() => parsePublicView({ ...v, ...patch })).toThrow()
+    );
+  });
+
+  it('keeps only known fields of a revealed card', () => {
+    const v = revealing();
+    const [card] = v.revealed?.cards ?? [];
+    const parsed = parsePublicView({
+      ...v,
+      revealed: { source: 'hand', cards: [{ ...card, secret: 'x' }], y: 1 },
+    });
+    expect(parsed.revealed).toEqual({ source: 'hand', cards: [card] });
   });
 });

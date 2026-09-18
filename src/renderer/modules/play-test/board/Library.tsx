@@ -11,9 +11,16 @@ interface Props {
   count: number;
   size?: CardSize;
   onDrawMany(): void;
+  onMill(): void;
 }
 
-const Library = ({ playerId, count, size = 'sm', onDrawMany }: Props) => {
+const Library = ({
+  playerId,
+  count,
+  size = 'sm',
+  onDrawMany,
+  onMill,
+}: Props) => {
   const menu = useContextMenu();
   const canDraw = playerId !== undefined && count > 0;
 
@@ -32,6 +39,20 @@ const Library = ({ playerId, count, size = 'sm', onDrawMany }: Props) => {
         {
           title: 'Shuffle library',
           action: () => dispatch({ type: 'shuffle', playerId }),
+        },
+        { title: 'Mill N…', action: count > 0 ? onMill : null },
+        {
+          title: 'Reveal the top card',
+          action:
+            count > 0
+              ? () =>
+                  dispatch({
+                    type: 'reveal',
+                    playerId,
+                    source: 'libraryTop',
+                    count: 1,
+                  })
+              : null,
         },
       ],
       x: e.pageX,

@@ -1,5 +1,5 @@
 import type { CardView, PrivateView } from '@shared/game';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ContextMenuProvider } from '../../../ui/ContextMenuProvider';
@@ -50,12 +50,34 @@ const storeOf = (view: PrivateView): ViewStore<PrivateView> => ({
 
 const dispatch = vi.fn(() => Promise.resolve());
 
+const libraryCard = (n: number, name: string, typeLine: string) => ({
+  ...handCard(n),
+  ref: { id: `id-${n}`, name, typeLine, faces: [{ name, typeLine }] },
+  zone: 'library' as const,
+});
+
+const library: CardView[] = [
+  libraryCard(20, 'Grizzly Bears', 'Creature — Bear'),
+  libraryCard(21, 'Forest', 'Basic Land — Forest'),
+  libraryCard(22, 'Giant Growth', 'Instant'),
+  libraryCard(23, 'Island', 'Basic Land — Island'),
+];
+const getLibrary = vi.fn(() => Promise.resolve(library));
+
 beforeEach(() => {
-  Object.assign(window, { api: { dispatch } });
+  Object.assign(window, {
+    api: {
+      dispatch,
+      getLibrary,
+      onUndoState: () => () => {},
+      getUndoState: () => new Promise(() => {}),
+    },
+  });
 });
 
 afterEach(() => {
   dispatch.mockClear();
+  getLibrary.mockClear();
 });
 
 const renderHand = (view: PrivateView) =>
@@ -194,5 +216,106 @@ describe('Hand', () => {
       'Card 9'
     );
     expect(screen.getByAltText('Card 9')).toBeInTheDocument();
+  });
+
+  it('reveals one card or the whole hand, and hides it again', () => {
+    const { rerender } = renderHand(viewOf({ keptHand: true }));
+    fireEvent.contextMenu(cards()[2]);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Reveal' }));
+    expect(dispatch).toHaveBeenLastCalledWith({
+      type: 'reveal',
+      playerId: 'p1',
+      source: 'card',
+      instanceId: 'p1:2',
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Reveal hand' }));
+    expect(dispatch).toHaveBeenLastCalledWith({
+      type: 'reveal',
+      playerId: 'p1',
+      source: 'hand',
+    });
+
+    const shown = viewOf({
+      keptHand: true,
+      revealed: { source: 'hand', cards: viewOf().hand.map((c) => c.ref!) },
+    });
+    rerender(
+      <ContextMenuProvider>
+        <Hand store={storeOf(shown)} />
+      </ContextMenuProvider>
+    );
+    expect(screen.getByTestId('hand-reveal-banner')).toHaveTextContent(
+      'Everyone can see your hand (7)'
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Hide' }));
+    expect(dispatch).toHaveBeenLastCalledWith({
+      type: 'hideReveal',
+      playerId: 'p1',
+    });
+  });
+
+  it('looks at the top cards and applies the arrangement at once', async () => {
+    renderHand(viewOf({ keptHand: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Look at top…' }));
+    fireEvent.change(screen.getByLabelText('How many cards?'), {
+      target: { value: '3' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+
+    const look = await screen.findAllByTestId('look-card');
+    expect(look.map((el) => el.dataset.cardName)).toEqual([
+      'Grizzly Bears',
+      'Forest',
+      'Giant Growth',
+    ]);
+    fireEvent.click(
+      within(look[0]).getByRole('button', { name: 'Move right' })
+    );
+    fireEvent.change(within(look[2]).getByLabelText('Destination'), {
+      target: { value: 'bottom' },
+    });
+    fireEvent.change(
+      within(screen.getAllByTestId('look-card')[0]).getByLabelText(
+        'Destination'
+      ),
+      { target: { value: 'graveyard' } }
+    );
+    expect(dispatch).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect(dispatch).toHaveBeenCalledWith({
+      type: 'arrangeTop',
+      playerId: 'p1',
+      top: ['p1:20'],
+      bottom: ['p1:22'],
+      graveyard: ['p1:21'],
+      hand: [],
+    });
+    expect(screen.queryByTestId('look-at-top')).not.toBeInTheDocument();
+  });
+
+  it('searches by name or type, then moves and shuffles', async () => {
+    renderHand(viewOf({ keptHand: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Search library…' }));
+    expect(await screen.findAllByTestId('search-card')).toHaveLength(4);
+
+    fireEvent.change(screen.getByLabelText('Filter by name or type'), {
+      target: { value: 'land isl' },
+    });
+    const [island] = screen.getAllByTestId('search-card');
+    expect(screen.getAllByTestId('search-card')).toHaveLength(1);
+    fireEvent.click(within(island).getByTestId('card'));
+    fireEvent.change(screen.getByLabelText('Destination'), {
+      target: { value: 'battlefield' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Move 1 and shuffle' }));
+    expect(dispatch).toHaveBeenCalledWith({
+      type: 'searchLibrary',
+      playerId: 'p1',
+      instanceIds: ['p1:23'],
+      to: 'battlefield',
+      shuffle: true,
+    });
   });
 });

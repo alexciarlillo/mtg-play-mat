@@ -20,6 +20,8 @@ const view: PublicView = {
 };
 
 const dispatch = vi.fn((_action: unknown) => Promise.resolve());
+const undo = vi.fn(() => Promise.resolve());
+const redo = vi.fn(() => Promise.resolve());
 const onHelp = vi.fn();
 
 const Harness = ({ enabled = true }: { enabled?: boolean }) => {
@@ -28,11 +30,13 @@ const Harness = ({ enabled = true }: { enabled?: boolean }) => {
 };
 
 beforeEach(() => {
-  Object.assign(window, { api: { dispatch } });
+  Object.assign(window, { api: { dispatch, undo, redo } });
 });
 
 afterEach(() => {
   dispatch.mockClear();
+  undo.mockClear();
+  redo.mockClear();
   onHelp.mockClear();
 });
 
@@ -68,5 +72,30 @@ describe('useGameShortcuts', () => {
     expect(dispatch).not.toHaveBeenCalled();
     fireEvent.keyDown(window, { key: '?' });
     expect(onHelp).toHaveBeenCalledTimes(1);
+  });
+
+  it('undoes with Cmd/Ctrl+Z and redoes with Shift', () => {
+    render(<Harness />);
+    fireEvent.keyDown(window, { key: 'z', metaKey: true });
+    fireEvent.keyDown(window, { key: 'z', ctrlKey: true });
+    fireEvent.keyDown(window, { key: 'Z', metaKey: true, shiftKey: true });
+    fireEvent.keyDown(window, { key: 'z', metaKey: true, altKey: true });
+    fireEvent.keyDown(window, { key: 'z' });
+    expect(undo).toHaveBeenCalledTimes(2);
+    expect(redo).toHaveBeenCalledTimes(1);
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it('leaves undo to text fields and disabled windows', () => {
+    const { getByLabelText, rerender } = render(<Harness />);
+    const typed = fireEvent.keyDown(getByLabelText('text'), {
+      key: 'z',
+      metaKey: true,
+    });
+    // Not prevented, so the field's own undo still runs.
+    expect(typed).toBe(true);
+    rerender(<Harness enabled={false} />);
+    fireEvent.keyDown(window, { key: 'z', ctrlKey: true });
+    expect(undo).not.toHaveBeenCalled();
   });
 });

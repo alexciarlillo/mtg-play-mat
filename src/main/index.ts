@@ -108,7 +108,7 @@ const start = (onDeepLink: ReturnType<typeof watchDeepLinks>) => {
       ...createTokenHandlers({ cardDb }),
       ...online.handlers,
     },
-    online.guards
+    { ...online.guards, ...playTest.guards }
   );
 
   createAppWindow(playTest);

@@ -9,6 +9,7 @@ import { useContextMenu } from '../../../ui/ContextMenuProvider';
 import { ConfirmDialog, NumberPrompt } from '../common/Dialogs';
 import ShortcutHelp from '../common/ShortcutHelp';
 import { useGameShortcuts } from '../common/useGameShortcuts';
+import UndoButtons from '../common/UndoButtons';
 import { dispatch, useView, type ViewStore } from '../viewStore';
 import AttachDialog from './AttachDialog';
 import BattlefieldCard from './BattlefieldCard';
@@ -28,9 +29,11 @@ import LifeCounter from './LifeCounter';
 import OpponentSide from './OpponentSide';
 import { opponentCommanders, requestRoll, seatOrder } from './pod';
 import PlayerCounters from './PlayerCounters';
+import RevealPanel from './RevealPanel';
 import ScaledField from './ScaledField';
 import TableLog from './TableLog';
 import TokenDialog from './TokenDialog';
+import TurnPanel from './TurnPanel';
 import ZoneBrowser from './ZoneBrowser';
 import ZonePile from './ZonePile';
 
@@ -42,6 +45,7 @@ const noOpponent: ViewStore<OpponentState> = {
 type Dialog =
   | 'help'
   | 'drawMany'
+  | 'mill'
   | 'setLife'
   | 'restart'
   | 'graveyard'
@@ -51,6 +55,9 @@ type Dialog =
 
 // Dialogs about one permanent, opened from its menu.
 type CardDialog = { kind: 'counter' | 'attach'; card: CardView };
+
+const toolButtonClass =
+  'rounded bg-slate-700 px-2 py-1 text-sm font-medium text-white hover:bg-slate-600 disabled:opacity-40';
 
 const ToolButton = ({
   onClick,
@@ -64,7 +71,7 @@ const ToolButton = ({
   <button
     type="button"
     aria-label={label}
-    className="rounded bg-slate-700 px-2 py-1 text-sm font-medium text-white hover:bg-slate-600"
+    className={toolButtonClass}
     onClick={onClick}
   >
     {children}
@@ -135,6 +142,7 @@ const Board = ({ store, opponent }: Props) => {
           action: () => dispatch({ type: 'draw', playerId, count: 1 }),
         },
         { title: 'Draw N…', action: () => setDialog('drawMany') },
+        { title: 'Mill N…', action: () => setDialog('mill') },
         {
           title: 'Untap all',
           action: () => dispatch({ type: 'untapAll', playerId }),
@@ -192,6 +200,14 @@ const Board = ({ store, opponent }: Props) => {
             duel ? 'py-3' : 'py-6'
           )}
         >
+          {view && (
+            <RevealPanel
+              reveal={view.revealed}
+              onHide={() =>
+                dispatch({ type: 'hideReveal', playerId: view.playerId })
+              }
+            />
+          )}
           {(duel || log.length > 0) && (
             // A corner of the field, not the side panel, which is full in
             // a commander pod; it stays in view for screensharing.
@@ -235,6 +251,7 @@ const Board = ({ store, opponent }: Props) => {
                 counters={view.counters}
                 playerId={view.playerId}
               />
+              <TurnPanel view={view} compact={duel} />
               {!view.keptHand && (
                 <div
                   data-testid="mulligan-status"
@@ -254,6 +271,9 @@ const Board = ({ store, opponent }: Props) => {
                 <ToolButton onClick={() => setDialog('drawMany')}>
                   Draw N…
                 </ToolButton>
+                <ToolButton onClick={() => setDialog('mill')}>
+                  Mill N…
+                </ToolButton>
                 <ToolButton
                   onClick={() =>
                     dispatch({ type: 'shuffle', playerId: view.playerId })
@@ -264,6 +284,7 @@ const Board = ({ store, opponent }: Props) => {
                 <ToolButton onClick={() => setDialog('token')}>
                   Token…
                 </ToolButton>
+                <UndoButtons className={toolButtonClass} />
                 <ToolButton onClick={() => setDialog('restart')}>
                   Restart
                 </ToolButton>
@@ -290,6 +311,7 @@ const Board = ({ store, opponent }: Props) => {
                   count={view.libraryCount}
                   size={pileSize}
                   onDrawMany={() => setDialog('drawMany')}
+                  onMill={() => setDialog('mill')}
                 />
                 <div
                   data-testid="hand-count"
@@ -363,6 +385,19 @@ const Board = ({ store, opponent }: Props) => {
           max={Math.max(1, view.libraryCount)}
           onSubmit={(count) =>
             dispatch({ type: 'draw', playerId: view.playerId, count })
+          }
+          onClose={close}
+        />
+      )}
+      {view && dialog === 'mill' && (
+        <NumberPrompt
+          title="Mill cards"
+          label="How many from the top?"
+          initial={1}
+          min={1}
+          max={Math.max(1, view.libraryCount)}
+          onSubmit={(count) =>
+            dispatch({ type: 'mill', playerId: view.playerId, count })
           }
           onClose={close}
         />

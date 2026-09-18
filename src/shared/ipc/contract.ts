@@ -1,8 +1,10 @@
 import type {
+  CardView,
   CommanderMove,
   PlayerAction,
   PrivateView,
   PublicView,
+  UndoState,
 } from '../game';
 import type { NetCommand, NetReport, NetState, Profile } from '../net/lobby';
 import type { RollRequest } from '../net/protocol';
@@ -68,6 +70,12 @@ export const requests = {
   // the command zone; answering yes is a moveCard dispatch.
   getCommanderPrompts: request<[], CommanderMove[]>(),
   dismissCommanderPrompt: request<[instanceId: string]>(),
+  // Takes back or re-applies the local player's latest action.
+  undo: request<[]>(),
+  redo: request<[]>(),
+  getUndoState: request<[], UndoState>(),
+  // The library, top first. Only the private hand window may ask.
+  getLibrary: request<[], CardView[]>(),
   getCardDataStatus: request<[], CardDataStatus>(),
   // Starts a check-and-download; progress arrives as cardDataStatus.
   updateCardData: request<[], CardDataStatus>(),
@@ -102,6 +110,7 @@ export const events = {
   netCommand: event<NetCommand>(),
   opponentView: event<OpponentState>(),
   commanderPrompts: event<CommanderMove[]>(),
+  undoState: event<UndoState>(),
 };
 
 type SpecType<S> = S extends Spec<infer T> ? T : never;

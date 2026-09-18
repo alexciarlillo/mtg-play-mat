@@ -8,6 +8,7 @@ import {
   emptyGame,
   type GameAction,
   type GameState,
+  libraryView,
   OPENING_HAND_SIZE,
   parsePlayerAction,
   type PlayerAction,
@@ -15,13 +16,16 @@ import {
   privateView,
   publicView,
   type PublicView,
+  redoAction,
   reduce,
   startingLife,
+  undoLast,
+  type UndoState,
 } from '@shared/game';
 import type { DeckFormat } from '@shared/types/decks';
 import { BrowserWindow } from 'electron';
 
-import { type RequestHandlers, sendEvent } from '../../ipc';
+import { type RequestHandlers, type SenderGuards, sendEvent } from '../../ipc';
 import type CardDB from '../../shared/db/CardDB';
 import type DeckDB from '../../shared/db/DeckDB';
 import { createWindow, whenLoaded } from '../../windows';
@@ -53,6 +57,10 @@ type PlayTestHandlers = Pick<
   | 'getHandView'
   | 'getCommanderPrompts'
   | 'dismissCommanderPrompt'
+  | 'undo'
+  | 'redo'
+  | 'getUndoState'
+  | 'getLibrary'
 >;
 
 // Owns the authoritative game state and the board and hand windows, which
@@ -75,6 +83,12 @@ export default class PlayTest {
   // zones goes to the command zone instead. This is a rules prompt, not
   // game state, so it lives here rather than in the engine.
   private commanderPrompts: CommanderMove[] = [];
+
+  // Undo never reaches back past the game's setup (the opening shuffle
+  // and draw), and redo only lasts until the next new action.
+  private undoFloor = 0;
+
+  private redoStack: PlayerAction[] = [];
 
   private readonly playerId: PlayerId;
 
@@ -129,6 +143,16 @@ export default class PlayTest {
       this.commanderPrompts = rest;
       sendEvent(this.board, 'commanderPrompts', rest);
     },
+    undo: () => this.undo(),
+    redo: () => this.redo(),
+    getUndoState: () => this.undoState(),
+    getLibrary: () => libraryView(this.state, this.playerId) ?? [],
+  };
+
+  // The board is shown to others, so only the hand window sees the library.
+  readonly guards: SenderGuards = {
+    getLibrary: (sender) =>
+      this.hand !== null && this.hand.webContents === sender,
   };
 
   // A fixed seed is only passed by end-to-end tests, which may also ask
@@ -167,10 +191,47 @@ export default class PlayTest {
     if (actionPlayer(this.state, action) !== this.playerId) return;
     const next = reduce(this.state, action);
     if (next === this.state) return;
+    this.redoStack = [];
+    this.apply(next);
+  };
+
+  // Prompts follow the change whichever way it goes, so undoing a "Yes"
+  // asks again and undoing the move that caused a prompt drops it.
+  private apply = (next: GameState) => {
     const before = this.state;
     this.state = next;
     this.updateCommanderPrompts(before);
     this.pushViews();
+  };
+
+  private undo = () => {
+    const undone = undoLast(this.state, this.playerId, this.undoFloor);
+    if (!undone) return;
+    this.redoStack.push(undone.action);
+    this.apply(undone.state);
+  };
+
+  private redo = () => {
+    const action = this.redoStack.pop();
+    if (!action) return;
+    const next = redoAction(this.state, action);
+    if (next) {
+      this.apply(next);
+    } else {
+      this.redoStack = [];
+      this.pushUndoState();
+    }
+  };
+
+  private undoState = (): UndoState => ({
+    canUndo: this.state.log.length > this.undoFloor,
+    canRedo: this.redoStack.length > 0,
+  });
+
+  private pushUndoState = () => {
+    const state = this.undoState();
+    sendEvent(this.board, 'undoState', state);
+    sendEvent(this.hand, 'undoState', state);
   };
 
   // A prompt lasts until answered or until its commander moves again; a
@@ -197,6 +258,7 @@ export default class PlayTest {
     const hand = privateView(this.state, this.playerId);
     if (board) sendEvent(this.board, 'boardView', board);
     if (hand) sendEvent(this.hand, 'handView', hand);
+    this.pushUndoState();
     this.notifyPublic();
   };
 
@@ -220,6 +282,8 @@ export default class PlayTest {
     ];
     this.deck = deck;
     this.state = actions.reduce(reduce, this.state);
+    this.undoFloor = this.state.log.length;
+    this.redoStack = [];
     this.commanderPrompts = [];
     sendEvent(this.board, 'commanderPrompts', []);
   };

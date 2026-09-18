@@ -69,6 +69,27 @@ export interface CardInstance {
   attachedTo: InstanceId | null;
 }
 
+export const phases = [
+  'untap',
+  'upkeep',
+  'draw',
+  'main1',
+  'combat',
+  'main2',
+  'end',
+] as const;
+
+export type Phase = (typeof phases)[number];
+
+export type RevealSource = 'hand' | 'libraryTop' | 'card';
+
+// Hidden cards the player has shown everyone, until they hide them or
+// take any other action.
+export interface Reveal {
+  source: RevealSource;
+  instanceIds: InstanceId[];
+}
+
 export interface PlayerState {
   id: PlayerId;
   name: string;
@@ -84,6 +105,10 @@ export interface PlayerState {
   commanderDamage?: CommanderDamage[];
   // Stand-in opponents for solo play, tracked by this player.
   dummies?: DummyOpponent[];
+  // This player's own turn count and step; both public.
+  turn: number;
+  phase: Phase;
+  revealed?: Reveal;
 }
 
 export interface CommanderDamage {
@@ -263,6 +288,76 @@ export interface AttachAction {
   to: InstanceId | null;
 }
 
+// Puts the top count cards of the library into the graveyard.
+export interface MillAction {
+  type: 'mill';
+  playerId: PlayerId;
+  count: number;
+}
+
+// Applies a look at the top of the library (scry, surveil, and the like)
+// in one step. The four lists together must be exactly the top cards;
+// top and bottom keep the order given, first nearest the top.
+export interface ArrangeTopAction {
+  type: 'arrangeTop';
+  playerId: PlayerId;
+  top: InstanceId[];
+  bottom: InstanceId[];
+  graveyard: InstanceId[];
+  hand: InstanceId[];
+}
+
+export type SearchDestination =
+  'hand' | 'battlefield' | 'graveyard' | 'exile' | 'library';
+
+// Takes cards out of the library, optionally shuffles, then puts them in
+// place; 'library' means the top, after the shuffle.
+export interface SearchLibraryAction {
+  type: 'searchLibrary';
+  playerId: PlayerId;
+  instanceIds: InstanceId[];
+  to: SearchDestination;
+  shuffle: boolean;
+}
+
+// Shows the whole hand, the top count library cards, or one hand card.
+export type RevealAction = {
+  type: 'reveal';
+  playerId: PlayerId;
+} & (
+  | { source: 'hand' }
+  | { source: 'libraryTop'; count: number }
+  | { source: 'card'; instanceId: InstanceId }
+);
+
+export interface HideRevealAction {
+  type: 'hideReveal';
+  playerId: PlayerId;
+}
+
+// Starts the player's next turn, optionally untapping and drawing.
+export interface NextTurnAction {
+  type: 'nextTurn';
+  playerId: PlayerId;
+  untap: boolean;
+  draw: boolean;
+}
+
+export interface SetPhaseAction {
+  type: 'setPhase';
+  playerId: PlayerId;
+  phase: Phase;
+}
+
+export type LibraryAction =
+  | MillAction
+  | ArrangeTopAction
+  | SearchLibraryAction
+  | RevealAction
+  | HideRevealAction
+  | NextTurnAction
+  | SetPhaseAction;
+
 export type MtgCardAction =
   | TapAction
   | AdjustCounterAction
@@ -326,7 +421,8 @@ export type CommanderAction =
   | RemoveDummyAction
   | AdjustDummyLifeAction;
 
-export type GameAction = CoreAction | MtgAction | CommanderAction;
+export type GameAction =
+  CoreAction | MtgAction | CommanderAction | LibraryAction;
 
 // What a window may ask for. Starting a game is main's decision.
 export type PlayerAction = Exclude<GameAction, NewGameAction>;

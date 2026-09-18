@@ -1,13 +1,15 @@
 import { parseCardRef } from './cardRefs';
 import type {
   GameState,
+  Phase,
   PlayerAction,
   PlayerId,
   Position,
+  SearchDestination,
   ZoneId,
 } from './types';
 import { MAX_TOKENS } from './mtg';
-import { zoneIds } from './types';
+import { phases, zoneIds } from './types';
 
 export class InvalidActionError extends Error {
   constructor(message: string) {
@@ -76,6 +78,23 @@ const position = (fields: Fields, key: string): Position => {
   return { x: value.x as number, y: value.y as number };
 };
 
+const oneOf = <T extends string>(
+  fields: Fields,
+  key: string,
+  options: readonly T[]
+): T =>
+  (options as readonly unknown[]).includes(fields[key])
+    ? (fields[key] as T)
+    : fail(`${key} must be one of ${options.join(', ')}`);
+
+const searchDestinations: readonly SearchDestination[] = [
+  'hand',
+  'battlefield',
+  'graveyard',
+  'exile',
+  'library',
+];
+
 const MAX_COUNT = 1000;
 const MAX_LIFE = 1_000_000;
 const MAX_COUNTER_NAME = 40;
@@ -93,6 +112,30 @@ const counterName = (fields: Fields, key: string): string => {
     return fail(`${key} must be 1-${MAX_COUNTER_NAME} chars`);
   }
   return name;
+};
+
+const parseReveal = (input: Fields): PlayerAction => {
+  const playerId = string(input, 'playerId');
+  switch (input.source) {
+    case 'hand':
+      return { type: 'reveal', playerId, source: 'hand' };
+    case 'libraryTop':
+      return {
+        type: 'reveal',
+        playerId,
+        source: 'libraryTop',
+        count: integer(input, 'count', 1, MAX_COUNT),
+      };
+    case 'card':
+      return {
+        type: 'reveal',
+        playerId,
+        source: 'card',
+        instanceId: string(input, 'instanceId'),
+      };
+    default:
+      return fail('source must be one of hand, libraryTop, card');
+  }
 };
 
 // Actions arrive from renderers, so check their shape and rebuild them from
@@ -229,6 +272,46 @@ export const parsePlayerAction = (input: unknown): PlayerAction => {
         playerId: string(input, 'playerId'),
         dummyId: string(input, 'dummyId'),
         delta: signed(input, 'delta', MAX_LIFE),
+      };
+    case 'mill':
+      return {
+        type: 'mill',
+        playerId: string(input, 'playerId'),
+        count: integer(input, 'count', 1, MAX_COUNT),
+      };
+    case 'arrangeTop':
+      return {
+        type: 'arrangeTop',
+        playerId: string(input, 'playerId'),
+        top: strings(input, 'top', MAX_COUNT),
+        bottom: strings(input, 'bottom', MAX_COUNT),
+        graveyard: strings(input, 'graveyard', MAX_COUNT),
+        hand: strings(input, 'hand', MAX_COUNT),
+      };
+    case 'searchLibrary':
+      return {
+        type: 'searchLibrary',
+        playerId: string(input, 'playerId'),
+        instanceIds: strings(input, 'instanceIds', MAX_COUNT),
+        to: oneOf(input, 'to', searchDestinations),
+        shuffle: bool(input, 'shuffle'),
+      };
+    case 'reveal':
+      return parseReveal(input);
+    case 'hideReveal':
+      return { type: 'hideReveal', playerId: string(input, 'playerId') };
+    case 'nextTurn':
+      return {
+        type: 'nextTurn',
+        playerId: string(input, 'playerId'),
+        untap: bool(input, 'untap'),
+        draw: bool(input, 'draw'),
+      };
+    case 'setPhase':
+      return {
+        type: 'setPhase',
+        playerId: string(input, 'playerId'),
+        phase: oneOf<Phase>(input, 'phase', phases),
       };
     default:
       return fail(`unknown type ${JSON.stringify(input.type)}`);

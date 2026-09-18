@@ -16,6 +16,7 @@ export {
   parseCardRef,
 } from './cardRefs';
 export { cascadePosition, emptyGame, getPlayer } from './core';
+export { redoAction, type Undone, undoLast, type UndoState } from './history';
 export {
   ATTACH_OFFSET,
   counterNames,

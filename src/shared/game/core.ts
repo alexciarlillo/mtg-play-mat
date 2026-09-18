@@ -62,7 +62,7 @@ export const updatePlayer = (
   ),
 });
 
-const updateZone = (
+export const updateZone = (
   state: GameState,
   playerId: PlayerId,
   zone: ZoneId,
@@ -168,6 +168,8 @@ const newGame = (state: GameState, action: NewGameAction): GameState => {
     counters: {},
     mulligans: 0,
     keptHand: false,
+    turn: 1,
+    phase: 'main1',
     zones: {
       ...emptyZones(),
       library: setup.deck.map((ref) => place(ref, setup.id, 'library')),

@@ -3,10 +3,14 @@ import {
   type CommanderDamage,
   type DummyOpponent,
   parseCardRef,
+  type Phase,
+  phases,
   type PlayerId,
   type Position,
   type PublicView,
   type PublicZoneId,
+  type RevealSource,
+  type RevealView,
 } from '../game';
 
 // 2 added pods (roster, relayed messages) and host-rolled dice.
@@ -223,6 +227,34 @@ const dummy = (value: unknown): DummyOpponent => {
   };
 };
 
+const MAX_TURN = 100_000;
+const MAX_REVEALED = 100;
+const revealSources: readonly RevealSource[] = ['hand', 'libraryTop', 'card'];
+
+// Turn and phase are optional, for views from builds without them.
+const turnFields = (fields: Fields): { turn?: number; phase?: Phase } => ({
+  ...(fields.turn !== undefined && { turn: int(fields, 'turn', 0, MAX_TURN) }),
+  ...(fields.phase !== undefined && {
+    phase: (phases as readonly unknown[]).includes(fields.phase)
+      ? (fields.phase as Phase)
+      : fail('phase is unknown'),
+  }),
+});
+
+const revealed = (value: unknown): RevealView | null => {
+  if (value === null) return null;
+  const fields = object(value, 'revealed');
+  if (!(revealSources as readonly unknown[]).includes(fields.source)) {
+    fail('revealed.source is unknown');
+  }
+  return {
+    source: fields.source as RevealSource,
+    cards: list(fields.cards, 'revealed.cards', MAX_REVEALED).map((ref) =>
+      parseCardRef(ref, fail)
+    ),
+  };
+};
+
 const publicZones: PublicZoneId[] = [
   'battlefield',
   'graveyard',
@@ -255,6 +287,10 @@ export const parsePublicView = (value: unknown): PublicView => {
     libraryCount: int(fields, 'libraryCount', 0, MAX_COUNT),
     commanderDamage: commanderDamage(fields.commanderDamage),
     dummies: optionalList(fields.dummies, 'dummies', MAX_DUMMIES).map(dummy),
+    ...turnFields(fields),
+    ...(fields.revealed !== undefined && {
+      revealed: revealed(fields.revealed),
+    }),
   };
 };
 

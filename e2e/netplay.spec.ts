@@ -448,6 +448,34 @@ test('commanders, tax, and commander damage reach the other board', async () => 
   await expect(recorded).toHaveAttribute('data-lethal', 'true');
 });
 
+test('a reveal and the turn number reach the other board', async () => {
+  const [hostBoard, hostHand, guestBoard] = await Promise.all([
+    page(host, 'board.html'),
+    page(host, 'hand.html'),
+    page(guest, 'board.html'),
+  ]);
+  const panel = guestBoard.getByTestId('opponent-reveal-panel');
+  const turn = guestBoard.getByTestId('opponent-turn');
+  await expect(panel).toHaveCount(0);
+
+  const card = handCards(hostHand).first();
+  const name = await card.getAttribute('data-card-name');
+  await card.click({ button: 'right' });
+  await hostHand.getByRole('menuitem', { name: 'Reveal', exact: true }).click();
+  await expect(panel.getByTestId('card')).toHaveAttribute(
+    'data-card-name',
+    name!
+  );
+  // Only its owner can put it away.
+  await expect(panel.getByRole('button', { name: 'Hide' })).toHaveCount(0);
+
+  const before = Number(await hostBoard.getByTestId('turn').textContent());
+  await expect(turn).toContainText(`Turn ${before}`);
+  await hostBoard.getByRole('button', { name: 'Next turn' }).click();
+  await expect(turn).toContainText(`Turn ${before + 1}`);
+  await expect(panel).toHaveCount(0);
+});
+
 test('no renderer console errors in either instance', () => {
   expect([...host.errors, ...guest.errors]).toEqual([]);
 });

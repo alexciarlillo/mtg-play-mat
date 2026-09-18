@@ -49,3 +49,15 @@ export const dispatch = (action: PlayerAction) => {
     console.error('[play-test] action failed', action, err);
   });
 };
+
+const logUndoError = (err: unknown) => {
+  console.error('[play-test] undo failed', err);
+};
+
+export const undo = () => {
+  window.api.undo().catch(logUndoError);
+};
+
+export const redo = () => {
+  window.api.redo().catch(logUndoError);
+};

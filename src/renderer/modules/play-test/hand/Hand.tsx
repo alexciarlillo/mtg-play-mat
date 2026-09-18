@@ -5,9 +5,13 @@ import { useCallback, useState } from 'react';
 import Card from '../../../ui/Card';
 import type { ContextMenuSpec } from '../../../ui/ContextMenuStore';
 import { moveMenu, moveTo } from '../common/cardMenus';
+import { NumberPrompt } from '../common/Dialogs';
 import ShortcutHelp from '../common/ShortcutHelp';
+import UndoButtons from '../common/UndoButtons';
 import { useGameShortcuts } from '../common/useGameShortcuts';
 import { dispatch, useView, type ViewStore } from '../viewStore';
+import LookAtTopDialog from './LookAtTopDialog';
+import SearchLibraryDialog from './SearchLibraryDialog';
 
 const play = (card: CardView) => moveTo(card, 'battlefield');
 
@@ -20,6 +24,14 @@ const playAs = (
     instanceId: card.instanceId,
     to: 'battlefield',
     ...options,
+  });
+
+const revealCard = (card: CardView) =>
+  dispatch({
+    type: 'reveal',
+    playerId: card.owner,
+    source: 'card',
+    instanceId: card.instanceId,
   });
 
 // Play, discard and the other moves, plus the alternate ways to play:
@@ -37,6 +49,7 @@ const handMenu = (card: CardView): ContextMenuSpec[] => {
         ]
       : []),
     { title: 'Play face down', action: () => playAs(card, { faceDown: true }) },
+    { title: 'Reveal', action: () => revealCard(card) },
   ];
   const at = moves.findIndex((item) => item.title === 'Play') + 1;
   return [...moves.slice(0, at), ...extras, ...moves.slice(at)];
@@ -59,6 +72,17 @@ const FaceDownPeek = ({ cards }: { cards: CardView[] }) => (
     </div>
   </div>
 );
+
+const titleButton =
+  'rounded px-1.5 text-xs font-medium hover:bg-slate-300 disabled:opacity-40 [-webkit-app-region:no-drag]';
+
+const revealTitles = {
+  hand: 'your hand',
+  libraryTop: 'the top of your library',
+  card: 'a card from your hand',
+};
+
+type Dialog = 'help' | 'lookCount' | 'look' | 'search';
 
 const barButton =
   'rounded px-3 py-0.5 text-sm font-semibold disabled:opacity-40 [-webkit-app-region:no-drag]';
@@ -139,14 +163,19 @@ const MulliganBar = ({
 
 const Hand = ({ store }: { store: ViewStore<PrivateView> }) => {
   const view = useView(store);
-  const [helpOpen, setHelpOpen] = useState(false);
+  const [dialog, setDialog] = useState<Dialog | null>(null);
+  const [lookCount, setLookCount] = useState(3);
+  const close = useCallback(() => setDialog(null), []);
   // Choosing which cards pay for mulligans is a local, uncommitted pick;
   // main only hears about it as one keepHand action.
   const [choosing, setChoosing] = useState(false);
   const [picked, setPicked] = useState<string[]>([]);
 
-  const toggleHelp = useCallback(() => setHelpOpen((open) => !open), []);
-  useGameShortcuts(view, { enabled: !helpOpen, onHelp: toggleHelp });
+  const toggleHelp = useCallback(
+    () => setDialog((open) => (open === 'help' ? null : 'help')),
+    []
+  );
+  useGameShortcuts(view, { enabled: dialog === null, onHelp: toggleHelp });
 
   const handIds = new Set(view?.hand.map((card) => card.instanceId));
   const faceDown =
@@ -185,18 +214,76 @@ const Hand = ({ store }: { store: ViewStore<PrivateView> }) => {
 
   return (
     <div className="h-full w-screen bg-slate-800 flex flex-col">
-      <div className="relative w-screen h-6 shrink-0 text-center bg-slate-200 [-webkit-app-region:drag]">
-        Hand {view ? `(${view.hand.length})` : ''} · Library{' '}
-        {view?.libraryCount ?? 0}
-        <button
-          type="button"
-          aria-label="Keyboard shortcuts"
-          className="absolute right-2 top-0 px-2 font-bold [-webkit-app-region:no-drag]"
-          onClick={toggleHelp}
-        >
-          ?
-        </button>
+      <div className="flex h-6 w-screen shrink-0 items-center justify-between gap-2 bg-slate-200 px-2 [-webkit-app-region:drag]">
+        <div className="flex gap-1">
+          <button
+            type="button"
+            className={titleButton}
+            disabled={!view || view.libraryCount === 0}
+            onClick={() => setDialog('lookCount')}
+          >
+            Look at top…
+          </button>
+          <button
+            type="button"
+            className={titleButton}
+            disabled={!view}
+            onClick={() => setDialog('search')}
+          >
+            Search library…
+          </button>
+          <button
+            type="button"
+            className={titleButton}
+            disabled={!view || view.hand.length === 0}
+            onClick={() =>
+              view &&
+              dispatch({
+                type: 'reveal',
+                playerId: view.playerId,
+                source: 'hand',
+              })
+            }
+          >
+            Reveal hand
+          </button>
+        </div>
+        <span>
+          Hand {view ? `(${view.hand.length})` : ''} · Library{' '}
+          {view?.libraryCount ?? 0}
+        </span>
+        <div className="flex gap-1">
+          <UndoButtons className={titleButton} />
+          <button
+            type="button"
+            aria-label="Keyboard shortcuts"
+            className={`${titleButton} font-bold`}
+            onClick={toggleHelp}
+          >
+            ?
+          </button>
+        </div>
       </div>
+      {view?.revealed && (
+        <div
+          data-testid="hand-reveal-banner"
+          className="flex items-center gap-2 bg-sky-200 px-3 py-0.5 text-sm"
+        >
+          <span className="font-semibold">
+            Everyone can see {revealTitles[view.revealed.source]} (
+            {view.revealed.cards.length}). It hides at your next action.
+          </span>
+          <button
+            type="button"
+            className={`${barButton} ring-1 ring-slate-600`}
+            onClick={() =>
+              dispatch({ type: 'hideReveal', playerId: view.playerId })
+            }
+          >
+            Hide
+          </button>
+        </div>
+      )}
       {view && !view.keptHand && (
         <MulliganBar
           view={view}
@@ -231,7 +318,40 @@ const Hand = ({ store }: { store: ViewStore<PrivateView> }) => {
         })}
         {faceDown.length > 0 && <FaceDownPeek cards={faceDown} />}
       </div>
-      {helpOpen && <ShortcutHelp onClose={() => setHelpOpen(false)} />}
+      {dialog === 'help' && <ShortcutHelp onClose={close} />}
+      {view && dialog === 'lookCount' && (
+        <NumberPrompt
+          title="Look at the top of your library"
+          label="How many cards?"
+          initial={Math.min(lookCount, view.libraryCount)}
+          min={1}
+          max={Math.max(1, view.libraryCount)}
+          onSubmit={(count) => {
+            setLookCount(count);
+            setDialog('look');
+          }}
+          // The prompt closes itself after a submit, which must not also
+          // close the look it just opened.
+          onClose={() =>
+            setDialog((open) => (open === 'lookCount' ? null : open))
+          }
+        />
+      )}
+      {view && dialog === 'look' && (
+        <LookAtTopDialog
+          playerId={view.playerId}
+          seq={view.seq}
+          count={lookCount}
+          onClose={close}
+        />
+      )}
+      {view && dialog === 'search' && (
+        <SearchLibraryDialog
+          playerId={view.playerId}
+          seq={view.seq}
+          onClose={close}
+        />
+      )}
     </div>
   );
 };
