@@ -1,23 +1,21 @@
-import path from 'node:path';
-
 import { DEEP_LINK_SCHEME, findJoinLink } from '@shared/net/codec';
 import { app } from 'electron';
+
+import { protocolClientArgs } from './protocolClient';
 
 // Registration writes to OS settings, so tests never do it and dev runs
 // only do it on request; packaged builds always claim the scheme.
 export const registerDeepLinkScheme = (testHooks: boolean) => {
   if (testHooks) return;
-  if (app.isPackaged) {
-    app.setAsDefaultProtocolClient(DEEP_LINK_SCHEME);
-  } else if (process.env.MTG_PLAY_MAT_REGISTER_PROTOCOL === '1') {
-    // An unpackaged Electron needs the app path to relaunch this app.
-    const entry = process.argv[1];
-    if (entry) {
-      app.setAsDefaultProtocolClient(DEEP_LINK_SCHEME, process.execPath, [
-        path.resolve(entry),
-      ]);
-    }
-  }
+  const args = protocolClientArgs({
+    isPackaged: app.isPackaged,
+    execPath: process.execPath,
+    argv: process.argv,
+    env: process.env,
+  });
+  if (!args) return;
+  if (args.length === 0) app.setAsDefaultProtocolClient(DEEP_LINK_SCHEME);
+  else app.setAsDefaultProtocolClient(DEEP_LINK_SCHEME, ...args);
 };
 
 // null means another launch happened without a link: just come forward.

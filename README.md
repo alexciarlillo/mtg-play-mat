@@ -223,3 +223,25 @@ npm run build:mac      # or build:win / build:linux
 ```
 
 Builds are unsigned and meant for personal use.
+
+### Releases
+
+Push a version tag to build every platform on GitHub Actions and open a draft release:
+
+```sh
+npm version patch      # bumps package.json and creates the v* tag
+git push --follow-tags
+```
+
+Review the draft on GitHub and publish it. Assets:
+
+- **Windows:** `mtg-play-mat-<version>-portable.exe` runs on double-click with no install.
+  `-setup.exe` installs it with a Start menu entry. Both are unsigned, so SmartScreen asks
+  first: **More info → Run anyway**.
+- **macOS:** `.dmg` for arm64 and x64. It's unsigned, so on first launch right-click the app
+  and choose **Open**. If macOS says the app is damaged, run
+  `xattr -cr "/Applications/MTG Play Mat.app"`.
+- **Linux:** `.AppImage`. Mark it executable and run it.
+
+The workflow can also be run by hand from the Actions tab. That builds the assets and attaches
+them to the run instead of a release.

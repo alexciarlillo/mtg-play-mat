@@ -6,14 +6,12 @@ directories:
 files:
   - out/**/*
   - package.json
-asarUnpack:
-  - '**/*.node'
 # Invite links (mtgplaymat://join?c=...) open the app. This fills the macOS
 # Info.plist and the Linux desktop entry; Windows registers at runtime.
 protocols:
   - name: MTG Play Mat invite
     schemes: [mtgplaymat]
-# Personal/dev builds only: unsigned and never published.
+# Unsigned. Releases are uploaded by the release workflow, not by the builder.
 publish: null
 mac:
   identity: null
@@ -23,8 +21,16 @@ mac:
   category: public.app-category.games
 dmg:
   artifactName: ${name}-${version}-${arch}.${ext}
+# x64 only: multi-arch NSIS/portable exes bundle both arches into one file,
+# and Windows on ARM runs x64 builds under emulation.
 win:
-  target: [nsis]
+  target:
+    - target: portable
+      arch: [x64]
+    - target: nsis
+      arch: [x64]
+portable:
+  artifactName: ${name}-${version}-portable.${ext}
 nsis:
   artifactName: ${name}-${version}-setup.${ext}
 linux:
