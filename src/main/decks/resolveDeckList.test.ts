@@ -18,6 +18,14 @@ import { migrate } from '../shared/db/migrate';
 import { parseDeckList } from './parseDeckList';
 import { resolveDeckList, toCardResults } from './resolveDeckList';
 
+// Windows can't delete a folder holding an open SQLite file, so every
+// connection a test opens is closed before its temp dir is removed.
+const opened: { close(): void }[] = [];
+const track = <T extends { close(): void }>(db: T): T => {
+  opened.push(db);
+  return db;
+};
+
 let dir: string;
 let dbPath: string;
 
@@ -27,6 +35,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  opened.splice(0).forEach((db) => db.close());
   rmSync(dir, { recursive: true, force: true });
 });
 
@@ -65,7 +74,7 @@ const seed = (cards: ScryfallCard[]) => {
     insert.run(...printingColumns.map((column) => record[column]));
   });
   db.close();
-  return new CardDB(dbPath);
+  return track(new CardDB(dbPath));
 };
 
 const resolve = (db: CardDB, text: string) =>
@@ -286,7 +295,7 @@ describe('real-world exports against the ingest fixture', () => {
       dbPath,
       sourceUpdatedAt: '2026-09-18T00:00:00Z',
     });
-    return new CardDB(dbPath);
+    return track(new CardDB(dbPath));
   };
 
   it('resolves every line of a Moxfield Commander export', async () => {

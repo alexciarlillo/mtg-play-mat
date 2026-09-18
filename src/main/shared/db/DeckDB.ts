@@ -59,6 +59,11 @@ export default class DeckDB {
     }
   }
 
+  close = () => {
+    this.db?.close();
+    this.db = null;
+  };
+
   listDecks = (): DeckMetaRow[] => {
     if (!this.db) return [];
     return this.db

@@ -14,6 +14,14 @@ const A = '00000000-0000-4000-8000-00000000000a';
 const B = '00000000-0000-4000-8000-00000000000b';
 const C = '00000000-0000-4000-8000-00000000000c';
 
+// Windows can't delete a folder holding an open SQLite file, so every
+// connection a test opens is closed before its temp dir is removed.
+const opened: { close(): void }[] = [];
+const track = <T extends { close(): void }>(db: T): T => {
+  opened.push(db);
+  return db;
+};
+
 let dir: string;
 let dbPath: string;
 
@@ -23,6 +31,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  opened.splice(0).forEach((db) => db.close());
   rmSync(dir, { recursive: true, force: true });
 });
 
@@ -39,7 +48,7 @@ describe('deck schema migration', () => {
     `);
     old.close();
 
-    const db = new DeckDB(dbPath);
+    const db = track(new DeckDB(dbPath));
     const decks = db.listDecks();
     expect(decks.map((d) => [d.id, d.name, d.format, d.cardCount])).toEqual(
       expect.arrayContaining([
@@ -64,14 +73,14 @@ describe('deck schema migration', () => {
   });
 
   it('creates the new schema on a fresh file', () => {
-    const db = new DeckDB(dbPath);
+    const db = track(new DeckDB(dbPath));
     expect(db.listDecks()).toEqual([]);
   });
 });
 
 describe('DeckDB', () => {
   const make = () => {
-    const db = new DeckDB(dbPath);
+    const db = track(new DeckDB(dbPath));
     const id = db.createDeck({
       name: 'Test',
       format: 'commander',
@@ -158,6 +167,6 @@ describe('DeckDB', () => {
 
   it('persists across reopening', () => {
     const { id } = make();
-    expect(cards(new DeckDB(dbPath), id)).toHaveLength(3);
+    expect(cards(track(new DeckDB(dbPath)), id)).toHaveLength(3);
   });
 });
