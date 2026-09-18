@@ -39,6 +39,22 @@ const integer = (fields: Fields, key: string, min: number, max: number) => {
   return Math.min(value as number, max);
 };
 
+const signed = (fields: Fields, key: string, limit: number): number => {
+  const value = fields[key];
+  if (!Number.isInteger(value) || Math.abs(value as number) > limit) {
+    return fail(`${key} must be an integer within ±${limit}`);
+  }
+  return value as number;
+};
+
+const strings = (fields: Fields, key: string, max: number): string[] => {
+  const value = fields[key];
+  if (!Array.isArray(value) || value.length > max) {
+    return fail(`${key} must be an array of at most ${max} ids`);
+  }
+  return value.map((_, i) => string(value as unknown as Fields, String(i)));
+};
+
 const zone = (fields: Fields, key: string): ZoneId => {
   const value = fields[key];
   return (zoneIds as readonly unknown[]).includes(value)
@@ -59,6 +75,7 @@ const position = (fields: Fields, key: string): Position => {
 };
 
 const MAX_COUNT = 1000;
+const MAX_LIFE = 1_000_000;
 
 // Actions arrive from renderers, so check their shape and rebuild them from
 // known fields only; nothing unexpected reaches the reducer or the log.
@@ -92,10 +109,32 @@ export const parsePlayerAction = (input: unknown): PlayerAction => {
         instanceId: string(input, 'instanceId'),
         position: position(input, 'position'),
       };
+    case 'shuffleIntoLibrary':
     case 'tap':
     case 'untap':
     case 'toggleTap':
       return { type: input.type, instanceId: string(input, 'instanceId') };
+    case 'untapAll':
+    case 'mulligan':
+      return { type: input.type, playerId: string(input, 'playerId') };
+    case 'adjustLife':
+      return {
+        type: 'adjustLife',
+        playerId: string(input, 'playerId'),
+        delta: signed(input, 'delta', MAX_LIFE),
+      };
+    case 'setLife':
+      return {
+        type: 'setLife',
+        playerId: string(input, 'playerId'),
+        life: signed(input, 'life', MAX_LIFE),
+      };
+    case 'keepHand':
+      return {
+        type: 'keepHand',
+        playerId: string(input, 'playerId'),
+        bottom: strings(input, 'bottom', MAX_COUNT),
+      };
     default:
       return fail(`unknown type ${JSON.stringify(input.type)}`);
   }

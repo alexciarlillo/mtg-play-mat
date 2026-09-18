@@ -5,6 +5,7 @@ import { createRoot } from 'react-dom/client';
 
 import Hand from '../modules/play-test/hand/Hand';
 import { createViewStore } from '../modules/play-test/viewStore';
+import { CardPreviewProvider } from '../ui/CardPreview';
 import { ContextMenuProvider } from '../ui/ContextMenuProvider';
 
 const container = document.getElementById('hand');
@@ -17,7 +18,9 @@ if (container) {
   const root = createRoot(container);
   root.render(
     <ContextMenuProvider>
-      <Hand store={store} />
+      <CardPreviewProvider>
+        <Hand store={store} />
+      </CardPreviewProvider>
     </ContextMenuProvider>
   );
 }

@@ -71,8 +71,10 @@ describe('publicView', () => {
       [
         'counters',
         'handCount',
+        'keptHand',
         'libraryCount',
         'life',
+        'mulligans',
         'name',
         'playerId',
         'seq',
@@ -101,6 +103,30 @@ describe('publicView', () => {
     // Sanity check: the public cards are there, so the test can fail.
     const shown = zone(state, P1, 'battlefield').map((id) => state.cards[id]);
     expect(json).toContain(shown[0].ref.name);
+  });
+
+  it('shows mulligans without leaking the new or bottomed cards', () => {
+    let state = applyAll(startGame([{ id: P1, name: 'A', deck: secretDeck }]), [
+      { type: 'shuffle', playerId: P1 },
+      { type: 'draw', playerId: P1, count: 7 },
+      { type: 'mulligan', playerId: P1 },
+    ]);
+    const [bottomed] = zone(state, P1, 'hand');
+    state = reduce(state, {
+      type: 'keepHand',
+      playerId: P1,
+      bottom: [bottomed],
+    });
+
+    const view = publicView(state, P1);
+    expect(view).toMatchObject({ mulligans: 1, keptHand: true, handCount: 6 });
+    const json = JSON.stringify(view);
+    hiddenCards(state).forEach((card) => {
+      expect(json).not.toContain(card.ref.name);
+      expect(json).not.toContain(card.ref.id);
+      expect(json).not.toContain(`"${card.instanceId}"`);
+    });
+    expect(json).not.toContain('keepHand');
   });
 
   it('hides face-down permanents from everyone but their owner', () => {

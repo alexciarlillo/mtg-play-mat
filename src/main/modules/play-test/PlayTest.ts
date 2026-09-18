@@ -6,6 +6,7 @@ import {
   emptyGame,
   type GameAction,
   type GameState,
+  OPENING_HAND_SIZE,
   parsePlayerAction,
   type PlayerAction,
   privateView,
@@ -28,7 +29,11 @@ interface Deps {
 
 type PlayTestHandlers = Pick<
   RequestHandlers,
-  'startPlayTest' | 'dispatch' | 'getBoardView' | 'getHandView'
+  | 'startPlayTest'
+  | 'restartPlayTest'
+  | 'dispatch'
+  | 'getBoardView'
+  | 'getHandView'
 >;
 
 // The one seat this machine is authoritative for.
@@ -48,6 +53,8 @@ export default class PlayTest {
 
   private state: GameState = emptyGame();
 
+  private deck: CardRef[] = [];
+
   constructor({ cardDb, deckDb }: Deps) {
     this.cardDb = cardDb;
     this.deckDb = deckDb;
@@ -55,14 +62,16 @@ export default class PlayTest {
 
   readonly handlers: PlayTestHandlers = {
     startPlayTest: (deckId) => this.start(this.loadDeck(deckId)),
+    restartPlayTest: () => this.restart(),
     // Renderer input is untrusted, so parse it rather than trust its type.
     dispatch: (action: unknown) => this.dispatch(parsePlayerAction(action)),
     getBoardView: () => publicView(this.state, LOCAL_PLAYER),
     getHandView: () => privateView(this.state, LOCAL_PLAYER),
   };
 
-  openSampleDeck = () =>
-    this.start(buildSampleDeck()).catch((err) => {
+  // A fixed seed is only passed by end-to-end tests.
+  openSampleDeck = (seed?: number) =>
+    this.start(buildSampleDeck(), seed).catch((err) => {
       console.error('[PlayTest] failed to open sample deck', err);
     });
 
@@ -90,16 +99,28 @@ export default class PlayTest {
     if (hand) sendEvent(this.hand, 'handView', hand);
   };
 
-  private start = async (deck: CardRef[]) => {
+  private newGame = (deck: CardRef[], seed = randomInt(2 ** 32)) => {
     const actions: GameAction[] = [
       {
         type: 'newGame',
-        seed: randomInt(2 ** 32),
+        seed,
         players: [{ id: LOCAL_PLAYER, name: 'You', deck }],
       },
       { type: 'shuffle', playerId: LOCAL_PLAYER },
+      { type: 'draw', playerId: LOCAL_PLAYER, count: OPENING_HAND_SIZE },
     ];
+    this.deck = deck;
     this.state = actions.reduce(reduce, this.state);
+  };
+
+  private restart = () => {
+    if (!this.board && !this.hand) return;
+    this.newGame(this.deck);
+    this.pushViews();
+  };
+
+  private start = async (deck: CardRef[], seed?: number) => {
+    this.newGame(deck, seed);
 
     const { board, hand } = this.ensureWindows();
     const loaded = await Promise.all([whenLoaded(board), whenLoaded(hand)]);
@@ -125,8 +146,8 @@ export default class PlayTest {
       this.hand ??
       createWindow({
         html: 'hand.html',
-        width: 1200,
-        height: 330,
+        width: 1280,
+        height: 340,
         frame: false,
       });
 

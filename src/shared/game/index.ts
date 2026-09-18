@@ -1,5 +1,5 @@
 export { cascadePosition, emptyGame, getPlayer } from './core';
-export { mtgRules } from './mtg';
+export { mtgRules, OPENING_HAND_SIZE } from './mtg';
 export { reduce, replay } from './reducer';
 export { nextRandom, seedRng, shuffle } from './rng';
 export * from './types';

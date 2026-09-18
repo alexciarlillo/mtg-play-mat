@@ -1,8 +1,10 @@
 import type { CardView } from '@shared/game';
 import classNames from 'classnames';
-import type { MouseEvent } from 'react';
+import { type MouseEvent, useEffect } from 'react';
 
+import { useCardPreview } from './CardPreview';
 import CardImg from './CardImg';
+import { type CardSize, cardWidths } from './cardSizes';
 import { useContextMenu } from './ContextMenuProvider';
 import type { ContextMenuSpec } from './ContextMenuStore';
 
@@ -10,19 +12,26 @@ interface Props {
   card: CardView;
   onClick?(card: CardView): void;
   menu?: ContextMenuSpec[];
+  size?: CardSize;
   className?: string;
 }
 
 // A card face that renders whatever view main sent. Any change goes back
 // to main as an action; nothing about the card is kept locally.
-const Card = ({ card, onClick, menu = [], className }: Props) => {
+const Card = ({ card, onClick, menu = [], size = 'lg', className }: Props) => {
   const contextMenu = useContextMenu();
+  const preview = useCardPreview();
   const interactive = Boolean(onClick) || menu.length > 0;
+  const { instanceId } = card;
+
+  // A card that leaves the window while hovered never gets mouseleave.
+  useEffect(() => () => preview.hide(instanceId), [preview, instanceId]);
 
   const handleContextMenu = (e: MouseEvent) => {
     if (menu.length === 0) return;
     e.preventDefault();
     e.stopPropagation();
+    preview.hide(instanceId);
     contextMenu.open({ specs: menu, x: e.pageX, y: e.pageY });
   };
 
@@ -31,7 +40,8 @@ const Card = ({ card, onClick, menu = [], className }: Props) => {
   return (
     <div
       data-testid="card"
-      data-instance-id={card.instanceId}
+      data-instance-id={instanceId}
+      data-card-name={card.faceDown ? undefined : card.ref?.name}
       className={classNames(
         'handle',
         'origin-center',
@@ -39,7 +49,7 @@ const Card = ({ card, onClick, menu = [], className }: Props) => {
         'justify-center',
         'items-center',
         'aspect-card',
-        'w-52',
+        cardWidths[size],
         'ring-amber-300',
         'rounded-lg',
         'select-none',
@@ -51,6 +61,8 @@ const Card = ({ card, onClick, menu = [], className }: Props) => {
       )}
       onClick={onClick && (() => onClick(card))}
       onContextMenu={handleContextMenu}
+      onMouseEnter={(e) => preview.show(card, e.clientX)}
+      onMouseLeave={() => preview.hide(instanceId)}
     >
       <CardImg
         scryfallId={card.faceDown ? undefined : card.ref?.id}

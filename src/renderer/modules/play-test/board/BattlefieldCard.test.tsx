@@ -61,15 +61,61 @@ describe('BattlefieldCard', () => {
     });
   });
 
-  it('destroys to the graveyard from its context menu', () => {
+  it.each([
+    ['Move to graveyard', { to: 'graveyard' }],
+    ['Move to exile', { to: 'exile' }],
+    ['Move to hand', { to: 'hand' }],
+    ['Move to library top', { to: 'library', index: 0 }],
+    ['Move to library bottom', { to: 'library' }],
+  ])('%s from its context menu', (name, move) => {
     renderCard();
     fireEvent.contextMenu(screen.getByTestId('card'));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Destroy' }));
+    fireEvent.click(screen.getByRole('menuitem', { name }));
 
     expect(dispatch).toHaveBeenCalledWith({
       type: 'moveCard',
       instanceId: 'p1:7',
-      to: 'graveyard',
+      ...move,
     });
+  });
+
+  it('offers tap and shuffle but not a move to its own zone', () => {
+    renderCard();
+    fireEvent.contextMenu(screen.getByTestId('card'));
+    const names = screen
+      .getAllByRole('menuitem')
+      .map((item) => item.textContent);
+    expect(names).toContain('Tap');
+    expect(names).not.toContain('Move to battlefield');
+
+    fireEvent.click(
+      screen.getByRole('menuitem', { name: 'Shuffle into library' })
+    );
+    expect(dispatch).toHaveBeenCalledWith({
+      type: 'shuffleIntoLibrary',
+      instanceId: 'p1:7',
+    });
+  });
+
+  it('moves to a zone it is dropped on', () => {
+    const exile = document.createElement('div');
+    exile.dataset.dropZone = 'exile';
+    exile.getBoundingClientRect = () =>
+      ({ left: 400, right: 500, top: 200, bottom: 400 }) as DOMRect;
+    document.body.append(exile);
+
+    renderCard();
+    const face = screen.getByTestId('card');
+    fireEvent.mouseDown(face, { clientX: 10, clientY: 10 });
+    fireEvent.mouseMove(document, { clientX: 200, clientY: 100 });
+    fireEvent.mouseMove(document, { clientX: 450, clientY: 300 });
+    fireEvent.mouseUp(document, { clientX: 450, clientY: 300 });
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: 'moveCard',
+      instanceId: 'p1:7',
+      to: 'exile',
+    });
+    exile.remove();
   });
 });

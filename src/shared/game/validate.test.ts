@@ -45,7 +45,22 @@ describe('parsePlayerAction', () => {
       instanceId: 'p1:3',
       position: { x: 10, y: 20 },
     });
-    for (const type of ['tap', 'untap', 'toggleTap']) {
+    for (const type of ['untapAll', 'mulligan']) {
+      expect(parsePlayerAction({ type, playerId: 'p1', x: 1 })).toEqual({
+        type,
+        playerId: 'p1',
+      });
+    }
+    expect(
+      parsePlayerAction({ type: 'adjustLife', playerId: 'p1', delta: -3 })
+    ).toEqual({ type: 'adjustLife', playerId: 'p1', delta: -3 });
+    expect(
+      parsePlayerAction({ type: 'setLife', playerId: 'p1', life: -2 })
+    ).toEqual({ type: 'setLife', playerId: 'p1', life: -2 });
+    expect(
+      parsePlayerAction({ type: 'keepHand', playerId: 'p1', bottom: ['a'] })
+    ).toEqual({ type: 'keepHand', playerId: 'p1', bottom: ['a'] });
+    for (const type of ['tap', 'untap', 'toggleTap', 'shuffleIntoLibrary']) {
       expect(parsePlayerAction({ type, instanceId: 'p1:0' })).toEqual({
         type,
         instanceId: 'p1:0',
@@ -81,6 +96,12 @@ describe('parsePlayerAction', () => {
       { type: 'setPosition', instanceId: 'a', position: { x: NaN, y: 0 } },
     ],
     ['a missing position', { type: 'setPosition', instanceId: 'a' }],
+    ['a fractional delta', { type: 'adjustLife', playerId: 'p', delta: 0.5 }],
+    ['a huge life', { type: 'setLife', playerId: 'p', life: 1e12 }],
+    ['a missing life', { type: 'setLife', playerId: 'p' }],
+    ['a non-array bottom', { type: 'keepHand', playerId: 'p', bottom: 'a' }],
+    ['a numeric bottom id', { type: 'keepHand', playerId: 'p', bottom: [1] }],
+    ['an empty-id shuffle', { type: 'shuffleIntoLibrary', instanceId: '' }],
     [
       'an infinite position',
       {

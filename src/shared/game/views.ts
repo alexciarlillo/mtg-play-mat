@@ -23,6 +23,9 @@ export interface PublicView {
   name: string;
   life: number;
   counters: Record<string, number>;
+  // Mulligans are public knowledge at a real table.
+  mulligans: number;
+  keptHand: boolean;
   zones: Record<PublicZoneId, CardView[]>;
   handCount: number;
   libraryCount: number;
@@ -89,6 +92,8 @@ export const publicView = (
     name: player.name,
     life: player.life,
     counters: { ...player.counters },
+    mulligans: player.mulligans,
+    keptHand: player.keptHand,
     zones: zoneViews(state, player, true),
     handCount: player.zones.hand.length,
     libraryCount: player.zones.library.length,

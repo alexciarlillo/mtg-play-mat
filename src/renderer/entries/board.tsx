@@ -4,7 +4,9 @@ import type { PublicView } from '@shared/game';
 import { createRoot } from 'react-dom/client';
 
 import Board from '../modules/play-test/board/Board';
+import { SIDE_PANEL_WIDTH } from '../modules/play-test/board/layout';
 import { createViewStore } from '../modules/play-test/viewStore';
+import { CardPreviewProvider } from '../ui/CardPreview';
 import { ContextMenuProvider } from '../ui/ContextMenuProvider';
 
 const container = document.getElementById('board');
@@ -17,7 +19,9 @@ if (container) {
   const root = createRoot(container);
   root.render(
     <ContextMenuProvider>
-      <Board store={store} />
+      <CardPreviewProvider reserveRight={SIDE_PANEL_WIDTH}>
+        <Board store={store} />
+      </CardPreviewProvider>
     </ContextMenuProvider>
   );
 }

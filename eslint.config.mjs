@@ -27,7 +27,11 @@ export default defineConfig([
         'error',
         {
           extraHOCs: ['observer'],
-          allowExportNames: ['useRootStore', 'useContextMenu'],
+          allowExportNames: [
+            'useRootStore',
+            'useContextMenu',
+            'useCardPreview',
+          ],
         },
       ],
     },

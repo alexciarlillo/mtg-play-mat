@@ -64,6 +64,10 @@ export interface PlayerState {
   name: string;
   life: number;
   counters: Record<string, number>;
+  // London mulligan: how many times this hand was mulliganed, and whether
+  // the opening hand has been kept (which ends mulligans).
+  mulligans: number;
+  keptHand: boolean;
   // Ordered instance ids per zone. library[0] is the top of the library.
   zones: Record<ZoneId, InstanceId[]>;
 }
@@ -127,19 +131,64 @@ export interface SetPositionAction {
   position: Position;
 }
 
+// Puts a card into its owner's library, then shuffles it.
+export interface ShuffleIntoLibraryAction {
+  type: 'shuffleIntoLibrary';
+  instanceId: InstanceId;
+}
+
 export type CoreAction =
   | NewGameAction
   | ShuffleAction
   | DrawAction
   | MoveCardAction
-  | SetPositionAction;
+  | SetPositionAction
+  | ShuffleIntoLibraryAction;
 
 export interface TapAction {
   type: 'tap' | 'untap' | 'toggleTap';
   instanceId: InstanceId;
 }
 
-export type MtgAction = TapAction;
+export interface UntapAllAction {
+  type: 'untapAll';
+  playerId: PlayerId;
+}
+
+export interface AdjustLifeAction {
+  type: 'adjustLife';
+  playerId: PlayerId;
+  delta: number;
+}
+
+export interface SetLifeAction {
+  type: 'setLife';
+  playerId: PlayerId;
+  life: number;
+}
+
+// Shuffles the hand into the library and draws a new hand of seven.
+export interface MulliganAction {
+  type: 'mulligan';
+  playerId: PlayerId;
+}
+
+// Keeps the hand, putting one card per mulligan on the library bottom in
+// the order given.
+export interface KeepHandAction {
+  type: 'keepHand';
+  playerId: PlayerId;
+  bottom: InstanceId[];
+}
+
+export type MtgPlayerAction =
+  | UntapAllAction
+  | AdjustLifeAction
+  | SetLifeAction
+  | MulliganAction
+  | KeepHandAction;
+
+export type MtgAction = TapAction | MtgPlayerAction;
 
 export type GameAction = CoreAction | MtgAction;
 

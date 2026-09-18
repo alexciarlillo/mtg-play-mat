@@ -316,6 +316,322 @@ describe('tap / untap / toggleTap', () => {
   });
 });
 
+describe('opening hand and London mulligan', () => {
+  const opening = (size = 20, seed = 42) =>
+    applyAll(startGame([player('p1', size)], seed), [
+      { type: 'shuffle', playerId: P1 },
+      draw(7),
+    ]);
+  const p1 = (state: GameState) => state.players[0];
+
+  it('starts with no mulligans and the hand not kept', () => {
+    expect(p1(opening())).toMatchObject({ mulligans: 0, keptHand: false });
+    expect(zone(opening(), P1, 'hand')).toHaveLength(7);
+  });
+
+  it('shuffles the hand back and draws a fresh seven', () => {
+    const state = opening();
+    const next = reduce(state, { type: 'mulligan', playerId: P1 });
+
+    expect(p1(next).mulligans).toBe(1);
+    expect(zone(next, P1, 'hand')).toHaveLength(7);
+    expect(zone(next, P1, 'library')).toHaveLength(13);
+    expect(zone(next, P1, 'hand')).not.toEqual(zone(state, P1, 'hand'));
+    expect(next.rng).not.toBe(state.rng);
+    expect(
+      [...zone(next, P1, 'hand'), ...zone(next, P1, 'library')].sort()
+    ).toEqual(Object.keys(state.cards).sort());
+
+    const twice = reduce(next, { type: 'mulligan', playerId: P1 });
+    expect(p1(twice).mulligans).toBe(2);
+    expect(zone(twice, P1, 'hand')).toHaveLength(7);
+  });
+
+  it('draws what is left when the library is short', () => {
+    const state = applyAll(startGame([player('p1', 5)]), [draw(5)]);
+    const next = reduce(state, { type: 'mulligan', playerId: P1 });
+    expect(zone(next, P1, 'hand')).toHaveLength(5);
+  });
+
+  it('keeps without a cost after no mulligans', () => {
+    const state = opening();
+    const kept = reduce(state, { type: 'keepHand', playerId: P1, bottom: [] });
+    expect(p1(kept).keptHand).toBe(true);
+    expect(zone(kept, P1, 'hand')).toEqual(zone(state, P1, 'hand'));
+  });
+
+  it('puts one card per mulligan on the bottom, in order, on keep', () => {
+    const state = applyAll(opening(), [
+      { type: 'mulligan', playerId: P1 },
+      { type: 'mulligan', playerId: P1 },
+    ]);
+    const [a, , b] = zone(state, P1, 'hand');
+    const kept = reduce(state, {
+      type: 'keepHand',
+      playerId: P1,
+      bottom: [b, a],
+    });
+
+    expect(p1(kept)).toMatchObject({ mulligans: 2, keptHand: true });
+    expect(zone(kept, P1, 'hand')).toHaveLength(5);
+    expect(zone(kept, P1, 'library').slice(-2)).toEqual([b, a]);
+    expect(kept.cards[a].zone).toBe('library');
+  });
+
+  it('refuses a wrong bottom choice', () => {
+    const state = reduce(opening(), { type: 'mulligan', playerId: P1 });
+    const [a, b] = zone(state, P1, 'hand');
+    const [inLibrary] = zone(state, P1, 'library');
+    for (const bottom of [[], [a, b], [inLibrary], ['nope']]) {
+      expect(reduce(state, { type: 'keepHand', playerId: P1, bottom })).toBe(
+        state
+      );
+    }
+    const twice = reduce(state, { type: 'mulligan', playerId: P1 });
+    const [c] = zone(twice, P1, 'hand');
+    expect(
+      reduce(twice, { type: 'keepHand', playerId: P1, bottom: [c, c] })
+    ).toBe(twice);
+  });
+
+  it('ends mulligans once the hand is kept', () => {
+    const kept = reduce(opening(), {
+      type: 'keepHand',
+      playerId: P1,
+      bottom: [],
+    });
+    expect(reduce(kept, { type: 'mulligan', playerId: P1 })).toBe(kept);
+    expect(reduce(kept, { type: 'keepHand', playerId: P1, bottom: [] })).toBe(
+      kept
+    );
+  });
+
+  it('resets on a new game', () => {
+    const state = applyAll(opening(), [
+      { type: 'mulligan', playerId: P1 },
+      {
+        type: 'newGame',
+        seed: 3,
+        players: [player('p1', 20)],
+      },
+    ]);
+    expect(p1(state)).toMatchObject({ mulligans: 0, keptHand: false });
+  });
+});
+
+describe('life', () => {
+  it('adjusts and sets life, below zero too', () => {
+    let state = startGame();
+    state = reduce(state, { type: 'adjustLife', playerId: P1, delta: -3 });
+    expect(state.players[0].life).toBe(17);
+    state = reduce(state, { type: 'adjustLife', playerId: P1, delta: 5 });
+    expect(state.players[0].life).toBe(22);
+    state = reduce(state, { type: 'setLife', playerId: P1, life: -4 });
+    expect(state.players[0].life).toBe(-4);
+    expect(state.log.at(-1)).toEqual({
+      type: 'setLife',
+      playerId: P1,
+      life: -4,
+    });
+  });
+
+  it('ignores no-op changes and unknown players', () => {
+    const state = startGame([player('p1'), player('p2')]);
+    expect(reduce(state, { type: 'adjustLife', playerId: P1, delta: 0 })).toBe(
+      state
+    );
+    expect(reduce(state, { type: 'setLife', playerId: P1, life: 20 })).toBe(
+      state
+    );
+    expect(reduce(state, { type: 'adjustLife', playerId: 'x', delta: 1 })).toBe(
+      state
+    );
+    const hurt = reduce(state, {
+      type: 'adjustLife',
+      playerId: 'p2',
+      delta: -1,
+    });
+    expect(hurt.players[0]).toBe(state.players[0]);
+    expect(hurt.players[1].life).toBe(19);
+  });
+});
+
+describe('untapAll', () => {
+  it("untaps only the player's own tapped permanents", () => {
+    let state = applyAll(startGame([player('p1'), player('p2')]), [
+      draw(3),
+      { type: 'draw', playerId: 'p2', count: 1 },
+    ]);
+    state = play(play(play(state)));
+    const theirs = zone(state, 'p2', 'hand')[0];
+    state = reduce(state, {
+      type: 'moveCard',
+      instanceId: theirs,
+      to: 'battlefield',
+    });
+    const [a, b, c] = zone(state, P1, 'battlefield');
+    state = applyAll(state, [
+      { type: 'tap', instanceId: a },
+      { type: 'tap', instanceId: c },
+      { type: 'tap', instanceId: theirs },
+    ]);
+
+    const next = reduce(state, { type: 'untapAll', playerId: P1 });
+    expect([a, b, c].map((id) => next.cards[id].tapped)).toEqual([
+      false,
+      false,
+      false,
+    ]);
+    expect(next.cards[theirs].tapped).toBe(true);
+    expect(next.cards[a].position).toEqual(state.cards[a].position);
+  });
+
+  it('is a no-op when nothing is tapped', () => {
+    const state = play(applyAll(startGame(), [draw()]));
+    expect(reduce(state, { type: 'untapAll', playerId: P1 })).toBe(state);
+  });
+});
+
+describe('draw N', () => {
+  it('draws the requested number in library order', () => {
+    const state = startGame([player('p1', 10)]);
+    const next = reduce(state, draw(4));
+    expect(zone(next, P1, 'hand')).toEqual(
+      zone(state, P1, 'library').slice(0, 4)
+    );
+  });
+});
+
+describe('move to each zone', () => {
+  const onField = () => {
+    const state = play(applyAll(startGame(), [draw()]));
+    return { state, id: zone(state, P1, 'battlefield')[0] };
+  };
+
+  it.each(['hand', 'graveyard', 'exile', 'command'] as const)(
+    'moves a battlefield card to %s',
+    (to) => {
+      const { state, id } = onField();
+      const next = reduce(state, { type: 'moveCard', instanceId: id, to });
+      expect(zone(next, P1, to)).toEqual([id]);
+      expect(zone(next, P1, 'battlefield')).toEqual([]);
+      expect(next.cards[id]).toMatchObject({ zone: to, position: null });
+    }
+  );
+
+  it('moves to the library top and bottom', () => {
+    const { state, id } = onField();
+    const top = reduce(state, {
+      type: 'moveCard',
+      instanceId: id,
+      to: 'library',
+      index: 0,
+    });
+    expect(zone(top, P1, 'library')[0]).toBe(id);
+    const bottom = reduce(state, {
+      type: 'moveCard',
+      instanceId: id,
+      to: 'library',
+    });
+    expect(zone(bottom, P1, 'library').at(-1)).toBe(id);
+  });
+
+  it('discards and exiles from the hand, and returns to the battlefield', () => {
+    let state = applyAll(startGame(), [draw(2)]);
+    const [a, b] = zone(state, P1, 'hand');
+    state = applyAll(state, [
+      { type: 'moveCard', instanceId: a, to: 'graveyard' },
+      { type: 'moveCard', instanceId: b, to: 'exile' },
+    ]);
+    expect(zone(state, P1, 'graveyard')).toEqual([a]);
+    expect(zone(state, P1, 'exile')).toEqual([b]);
+    expect(zone(state, P1, 'hand')).toEqual([]);
+
+    state = reduce(state, {
+      type: 'moveCard',
+      instanceId: a,
+      to: 'battlefield',
+    });
+    expect(state.cards[a].position).toEqual(cascadePosition(0));
+  });
+});
+
+describe('shuffleIntoLibrary', () => {
+  it('puts the card in its library and shuffles it', () => {
+    const state = play(applyAll(startGame([player('p1', 20)]), [draw()]));
+    const [id] = zone(state, P1, 'battlefield');
+    const next = reduce(state, { type: 'shuffleIntoLibrary', instanceId: id });
+
+    expect(zone(next, P1, 'battlefield')).toEqual([]);
+    expect(zone(next, P1, 'library')).toHaveLength(20);
+    expect(zone(next, P1, 'library')).toContain(id);
+    expect(next.rng).not.toBe(state.rng);
+    expect(next.cards[id]).toMatchObject({ zone: 'library', tapped: false });
+  });
+
+  it('ignores unknown cards', () => {
+    const state = startGame();
+    expect(
+      reduce(state, { type: 'shuffleIntoLibrary', instanceId: 'nope' })
+    ).toBe(state);
+  });
+});
+
+describe('restart', () => {
+  it('is a new game from the same deck with a fresh seed', () => {
+    const deck = player('p1', 20);
+    const played = applyAll(startGame([deck], 1), [
+      { type: 'shuffle', playerId: P1 },
+      draw(7),
+      { type: 'mulligan', playerId: P1 },
+      { type: 'adjustLife', playerId: P1, delta: -5 },
+    ]);
+    const restarted = applyAll(played, [
+      { type: 'newGame', seed: 2, players: [deck] },
+      { type: 'shuffle', playerId: P1 },
+      draw(7),
+    ]);
+
+    expect(restarted.players[0]).toMatchObject({
+      life: 20,
+      mulligans: 0,
+      keptHand: false,
+    });
+    expect(zone(restarted, P1, 'hand')).toHaveLength(7);
+    expect(zone(restarted, P1, 'library')).toHaveLength(13);
+    expect(restarted.log.map((a) => a.type)).toEqual([
+      'newGame',
+      'shuffle',
+      'draw',
+    ]);
+    expect(restarted.seq).toBeGreaterThan(played.seq);
+  });
+});
+
+describe('new actions replay', () => {
+  it('replays a mulligan-to-goldfish game exactly', () => {
+    let state = applyAll(startGame([player('p1', 30)], 9), [
+      { type: 'shuffle', playerId: P1 },
+      draw(7),
+      { type: 'mulligan', playerId: P1 },
+    ]);
+    state = reduce(state, {
+      type: 'keepHand',
+      playerId: P1,
+      bottom: [zone(state, P1, 'hand')[3]],
+    });
+    state = play(applyAll(state, [draw(2)]));
+    const [id] = zone(state, P1, 'battlefield');
+    state = applyAll(state, [
+      { type: 'tap', instanceId: id },
+      { type: 'untapAll', playerId: P1 },
+      { type: 'adjustLife', playerId: P1, delta: -3 },
+      { type: 'shuffleIntoLibrary', instanceId: id },
+    ]);
+    expect(replay(state.log)).toEqual(state);
+  });
+});
+
 describe('purity and replay', () => {
   const script = (state: GameState): GameState => {
     let next = applyAll(state, [{ type: 'shuffle', playerId: P1 }, draw(3)]);

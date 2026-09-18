@@ -2,10 +2,19 @@ import { emptyGame, reduceCore } from './core';
 import { mtgRules, reduceMtg } from './mtg';
 import type { GameAction, GameState, MtgAction } from './types';
 
+const mtgActionTypes: ReadonlySet<string> = new Set<MtgAction['type']>([
+  'tap',
+  'untap',
+  'toggleTap',
+  'untapAll',
+  'adjustLife',
+  'setLife',
+  'mulligan',
+  'keepHand',
+]);
+
 const isMtgAction = (action: GameAction): action is MtgAction =>
-  action.type === 'tap' ||
-  action.type === 'untap' ||
-  action.type === 'toggleTap';
+  mtgActionTypes.has(action.type);
 
 // Applies one action. Actions that change nothing (an unknown card, an
 // empty library) return the same state object and are not logged.

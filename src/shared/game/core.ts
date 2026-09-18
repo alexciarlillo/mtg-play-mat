@@ -51,6 +51,17 @@ export const getPlayer = (
 const zoneHolder = (card: CardInstance): PlayerId =>
   card.zone === 'battlefield' ? card.controller : card.owner;
 
+export const updatePlayer = (
+  state: GameState,
+  playerId: PlayerId,
+  patch: Partial<PlayerState>
+): GameState => ({
+  ...state,
+  players: state.players.map((player) =>
+    player.id === playerId ? { ...player, ...patch } : player
+  ),
+});
+
 const updateZone = (
   state: GameState,
   playerId: PlayerId,
@@ -110,6 +121,8 @@ const newGame = (state: GameState, action: NewGameAction): GameState => {
     name: setup.name,
     life: setup.life ?? 20,
     counters: {},
+    mulligans: 0,
+    keptHand: false,
     zones: {
       ...emptyZones(),
       library: setup.deck.map((ref) => place(ref, setup.id, 'library')),
@@ -172,6 +185,29 @@ export const moveCard = (
   };
 };
 
+export const shuffleLibrary = (
+  state: GameState,
+  playerId: PlayerId
+): GameState => {
+  const player = getPlayer(state, playerId);
+  if (!player) return state;
+  const [library, rng] = shuffle(player.zones.library, state.rng);
+  return { ...updateZone(state, player.id, 'library', () => library), rng };
+};
+
+export const drawCards = (
+  state: GameState,
+  rules: Rules,
+  playerId: PlayerId,
+  count: number
+): GameState =>
+  (getPlayer(state, playerId)?.zones.library ?? [])
+    .slice(0, Math.max(0, count))
+    .reduce(
+      (next, instanceId) => moveCard(next, rules, instanceId, 'hand'),
+      state
+    );
+
 export const reduceCore = (
   state: GameState,
   action: CoreAction,
@@ -181,25 +217,17 @@ export const reduceCore = (
     case 'newGame':
       return newGame(state, action);
 
-    case 'shuffle': {
-      const player = getPlayer(state, action.playerId);
-      if (!player) return state;
-      const [library, rng] = shuffle(player.zones.library, state.rng);
-      return {
-        ...updateZone(state, player.id, 'library', () => library),
-        rng,
-      };
-    }
+    case 'shuffle':
+      return shuffleLibrary(state, action.playerId);
 
-    case 'draw': {
-      const player = getPlayer(state, action.playerId);
-      if (!player) return state;
-      return player.zones.library
-        .slice(0, Math.max(0, action.count))
-        .reduce(
-          (next, instanceId) => moveCard(next, rules, instanceId, 'hand'),
-          state
-        );
+    case 'draw':
+      return drawCards(state, rules, action.playerId, action.count);
+
+    case 'shuffleIntoLibrary': {
+      const card = state.cards[action.instanceId];
+      if (!card) return state;
+      const moved = moveCard(state, rules, card.instanceId, 'library');
+      return shuffleLibrary(moved, card.owner);
     }
 
     case 'moveCard':

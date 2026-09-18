@@ -34,6 +34,8 @@ export const requests = {
   >(),
   listSets: request<[], CurrentSetListReturn[]>(),
   startPlayTest: request<[deckId: number]>(),
+  // A new game with the same deck and a fresh seed.
+  restartPlayTest: request<[]>(),
   // Main validates the action and pushes fresh views to both windows.
   dispatch: request<[action: PlayerAction]>(),
   // Board and hand fetch their view on load, so a reload restores it.

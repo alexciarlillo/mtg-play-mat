@@ -1,41 +1,70 @@
 import classNames from 'classnames';
+import type { MouseEvent } from 'react';
 
+import { cardWidths } from '../../../ui/cardSizes';
 import CardImg from '../../../ui/CardImg';
+import { useContextMenu } from '../../../ui/ContextMenuProvider';
 import { dispatch } from '../viewStore';
 
 interface Props {
   playerId?: string;
   count: number;
+  onDrawMany(): void;
 }
 
-const Library = ({ playerId, count }: Props) => {
+const Library = ({ playerId, count, onDrawMany }: Props) => {
+  const menu = useContextMenu();
   const canDraw = playerId !== undefined && count > 0;
 
   const drawCard = () => {
     if (playerId) dispatch({ type: 'draw', playerId, count: 1 });
   };
 
+  const handleContextMenu = (e: MouseEvent) => {
+    if (!playerId) return;
+    e.preventDefault();
+    e.stopPropagation();
+    menu.open({
+      specs: [
+        { title: 'Draw a card', action: canDraw ? drawCard : null },
+        { title: 'Draw N…', action: onDrawMany },
+        {
+          title: 'Shuffle library',
+          action: () => dispatch({ type: 'shuffle', playerId }),
+        },
+      ],
+      x: e.pageX,
+      y: e.pageY,
+    });
+  };
+
   return (
-    <div>
+    <div
+      data-testid="library"
+      data-drop-zone="library"
+      data-count={count}
+      className="flex flex-col items-center gap-1"
+      onContextMenu={handleContextMenu}
+    >
       <div
         role="button"
         tabIndex={0}
         aria-label="Draw a card"
         className={classNames(
-          'origin-center',
-          'flex',
-          'justify-center',
-          'items-center',
-          'aspect-card',
-          'w-52',
-          'rounded-lg',
+          'flex justify-center items-center aspect-card rounded-lg',
+          cardWidths.sm,
+          count === 0
+            ? 'border-2 border-dashed border-slate-500'
+            : 'hover:ring-4 ring-amber-300',
           { 'hover:cursor-pointer': canDraw }
         )}
         onClick={canDraw ? drawCard : undefined}
       >
-        <CardImg />
+        {count > 0 && <CardImg name="Library" />}
       </div>
-      <div>Cards: {count}</div>
+      <div className="text-sm font-medium">
+        Library <span className="tabular-nums">{count}</span>
+      </div>
     </div>
   );
 };

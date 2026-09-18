@@ -69,6 +69,20 @@ The main process owns the authoritative state. Windows send actions through
 contents), and the board gets `publicView`, which never contains hand or library card
 identities. A reloaded window fetches its current view, so nothing is lost.
 
+## Playing a test game
+
+A new game shuffles and draws seven. The hand window offers **Keep** or **Mulligan**
+(London: each mulligan draws a fresh seven; on keep you pick one card per mulligan to
+put on the bottom). The board shows life (click the number to set it), Untap all,
+Draw N, Shuffle, and Restart, plus the library, hand count, graveyard, and exile.
+Right-click any card for "Move to…" (hand, battlefield, graveyard, exile, library
+top/bottom) or "Shuffle into library". Click the graveyard or exile to browse it.
+Drag a battlefield card onto a pile to move it there. Hovering a card shows a large
+preview in that window only.
+
+Shortcuts (in either window): **D** draw, **U** untap all, **S** shuffle, **M**
+mulligan (until you keep), **?** help. Keys with Cmd/Ctrl/Alt are left alone.
+
 ## Building
 
 ```sh
