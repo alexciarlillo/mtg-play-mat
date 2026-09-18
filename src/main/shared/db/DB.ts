@@ -1,29 +1,35 @@
-import path from 'path';
+import path from 'node:path';
 
 import Database from 'better-sqlite3';
-import { getErrorMessage } from 'main/util';
+import { app } from 'electron';
 
-import webpackPaths from '../../../../.erb/configs/webpack.paths';
+import { getErrorMessage } from '../../util';
+
+interface DBOptions {
+  name: string;
+  readonly: boolean;
+  fileMustExist?: boolean;
+}
+
+export const getDbDir = () => path.join(app.getPath('userData'), 'db');
 
 export default class DB {
-  db!: Database.Database;
+  // Null when the database file is missing or fails to open. Callers treat
+  // that as "no data" so the app still starts without card data.
+  db: Database.Database | null = null;
 
-  name = null;
+  name: string;
 
-  filePath = '';
+  filePath: string;
 
-  constructor({ name, readonly, fileMustExist = true }) {
+  constructor({ name, readonly, fileMustExist = true }: DBOptions) {
     this.name = name;
-
-    this.filePath =
-      process.env.NODE_ENV === 'development'
-        ? path.join(webpackPaths.appPath, `./db/${name}.sqlite`)
-        : path.join(__dirname, `../../db/${name}.sqlite`); // In prod, __dirname is release/app/dist/main. We want release/app/sql
+    this.filePath = path.join(getDbDir(), `${name}.sqlite`);
 
     try {
       this.db = new Database(this.filePath, { readonly, fileMustExist });
     } catch (err) {
-      console.error('[DB Load Error]', {
+      console.warn('[DB Load Error]', {
         message: getErrorMessage(err),
         name: this.name,
         filePath: this.filePath,

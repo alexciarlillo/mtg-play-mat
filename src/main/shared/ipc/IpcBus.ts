@@ -1,56 +1,43 @@
+import IpcChannel from '@shared/ipc/IpcChannel';
+import IpcEvents from '@shared/ipc/IpcEvents';
 import { ipcMain } from 'electron';
-import IpcEvents from 'IpcEvents';
 
-import IpcChannel from './IpcChannel';
+// Payloads are untyped until the IPC layer gets a typed channel map.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Handler = (arg: any) => void;
 
-interface RegsiterHandlerOptions {
+interface RegisterHandlerOptions {
   event: IpcEvents;
-  handle<T>(options: T): void;
+  handle: Handler;
 }
 
-type EventHandlerType = Record<IpcEvents, any>;
-
 export default class IpcBus {
-  mainChannel;
+  mainChannel: IpcChannel;
 
-  eventHandlers: EventHandlerType; // function
+  eventHandlers: Partial<Record<IpcEvents, Handler[]>>;
 
   constructor() {
     this.mainChannel = new IpcChannel({ ipc: ipcMain });
-    this.eventHandlers = {} as EventHandlerType;
+    this.eventHandlers = {};
 
-    Object.keys(IpcEvents).forEach((ipcEvent) => {
-      this.mainChannel.On(ipcEvent, async (event: IpcEvents, arg: any) => {
+    Object.values(IpcEvents).forEach((ipcEvent) => {
+      this.mainChannel.On(ipcEvent, (_event: unknown, arg: unknown) => {
         this.eventHandlers[ipcEvent]?.forEach((handle) => {
-          handle(arg);
+          try {
+            handle(arg);
+          } catch (err) {
+            console.error(`[IpcBus] handler for ${ipcEvent} failed`, err);
+          }
         });
       });
     });
-
-    this.initializeMainHandlers();
   }
 
-  registerHandler = ({ event, handle }: RegsiterHandlerOptions) => {
+  registerHandler = ({ event, handle }: RegisterHandlerOptions) => {
     if (!this.eventHandlers[event]) {
       this.eventHandlers[event] = [];
     }
 
     this.eventHandlers[event].push(handle);
-  };
-
-  initializeMainHandlers = () => {
-    // TODO: Enumerate and register automatically
-    // TODO: fix this. defer this to some type of singleton manager
-    // instance??
-    // this.mainChannel.On(IpcEvents.IMPORT, async (event, arg) => {
-    //   const cardDb = new CardDB();
-    //   const deckPath =
-    //     process.env.NODE_ENV === 'development'
-    //       ? path.join(webpackPaths.appPath, './db/slimefoot.txt')
-    //       : path.join(__dirname, '../../db/slimefoot.txt');
-    //   const importer = new DeckImporter({ cardDb });
-    //   const cards = importer.importFromFile({ filePath: deckPath });
-    //   this.windowsByType[WindowTypes.BOARD]?.send(IpcEvents.DECK_LOADED, cards);
-    // });
   };
 }

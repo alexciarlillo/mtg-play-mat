@@ -1,20 +1,17 @@
-import React, { ReactNode, useContext } from 'react';
+import { createContext, ReactNode, useContext, useState } from 'react';
 
 import RootStore from './rootStore';
 
-let store: RootStore;
+const StoreContext = createContext<RootStore | undefined>(undefined);
 
-// create the context
-const StoreContext = React.createContext<RootStore | undefined>(undefined);
-
-// create the provider component
 export const RootStoreProvider = ({ children }: { children: ReactNode }) => {
-  const root = store ?? new RootStore();
+  // Created once per provider so store IPC listeners aren't re-registered
+  // on every render.
+  const [root] = useState(() => new RootStore());
 
   return <StoreContext.Provider value={root}>{children}</StoreContext.Provider>;
 };
 
-// create the hook
 export const useRootStore = () => {
   const context = useContext(StoreContext);
   if (context === undefined) {

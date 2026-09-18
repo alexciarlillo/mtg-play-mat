@@ -1,8 +1,8 @@
-import { observer } from 'mobx-react';
-import React, { ReactElement, useEffect, useMemo, useState } from 'react';
-import { useRootStore } from 'renderer/core/rootContext';
-import useDimensions from 'renderer/hooks/useDimensions';
-import useKeyPress from 'renderer/hooks/useKeyPress';
+import { observer } from 'mobx-react-lite';
+import { ReactElement, useEffect, useMemo, useState } from 'react';
+
+import { useRootStore } from '../../../core/rootContext';
+import useDimensions from '../../../hooks/useDimensions';
 
 import CollectionCardWrapper from './CollectionCardWrapper';
 
@@ -11,11 +11,6 @@ const cardWidth = 192;
 const CollectionMain = (): ReactElement => {
   const { collectionStore } = useRootStore();
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
-  const leftPress = useKeyPress('ArrowLeft');
-  const rightPress = useKeyPress('ArrowRight');
-  const upPress = useKeyPress('ArrowUp');
-  const downPress = useKeyPress('ArrowDown');
-
   const {
     ref,
     dimensions: { width },
@@ -30,41 +25,32 @@ const CollectionMain = (): ReactElement => {
     measure();
   }, [collectionStore.searchResults.length, measure]);
 
-  useEffect(() => {
-    if (rightPress) {
-      setSelectedIndex((prevState) =>
-        prevState < collectionStore.searchResults.length - 1
-          ? prevState + 1
-          : prevState
-      );
-    }
-  }, [collectionStore.searchResults.length, rightPress]);
+  const resultCount = collectionStore.searchResults.length;
 
   useEffect(() => {
-    if (leftPress) {
-      setSelectedIndex((prevState) =>
-        prevState > 0 ? prevState - 1 : prevState
-      );
-    }
-  }, [collectionStore.searchResults.length, leftPress]);
+    const lastIndex = Math.max(resultCount - 1, 0);
 
-  useEffect(() => {
-    if (upPress) {
-      setSelectedIndex((prevState) => {
-        const newUpdatedValue = prevState - cardsPerRow;
-        return newUpdatedValue >= 0 ? newUpdatedValue : 0;
-      });
-    }
-  }, [collectionStore.searchResults.length, upPress, cardsPerRow]);
+    const onKeyDown = (event: KeyboardEvent) => {
+      switch (event.key) {
+        case 'ArrowRight':
+          setSelectedIndex((prev) => Math.min(prev + 1, lastIndex));
+          break;
+        case 'ArrowLeft':
+          setSelectedIndex((prev) => Math.max(prev - 1, 0));
+          break;
+        case 'ArrowUp':
+          setSelectedIndex((prev) => Math.max(prev - cardsPerRow, 0));
+          break;
+        case 'ArrowDown':
+          setSelectedIndex((prev) => Math.min(prev + cardsPerRow, lastIndex));
+          break;
+        default:
+      }
+    };
 
-  useEffect(() => {
-    if (downPress) {
-      setSelectedIndex((prevState) => {
-        const newUpdatedValue = prevState + cardsPerRow;
-        return newUpdatedValue;
-      });
-    }
-  }, [collectionStore.searchResults.length, downPress, cardsPerRow]);
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [resultCount, cardsPerRow]);
 
   return (
     <div className="h-full w-full">

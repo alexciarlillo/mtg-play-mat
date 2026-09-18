@@ -1,0 +1,6 @@
+@import 'tailwindcss';
+
+@theme {
+  --aspect-card: 5 / 7;
+  --aspect-tapped-card: 7 / 5;
+}

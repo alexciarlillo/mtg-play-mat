@@ -1,21 +1,18 @@
-import path from 'path';
-/* eslint import/prefer-default-export: off, import/no-mutable-exports: off */
-import { URL } from 'url';
+import path from 'node:path';
 
-export let resolveHtmlPath: (htmlFileName: string) => string;
+import { BrowserWindow } from 'electron';
 
-if (process.env.NODE_ENV === 'development') {
-  const port = process.env.PORT || 1212;
-  resolveHtmlPath = (htmlFileName: string) => {
-    const url = new URL(`http://localhost:${port}`);
-    url.pathname = htmlFileName;
-    return url.href;
-  };
-} else {
-  resolveHtmlPath = (htmlFileName: string) => {
-    return `file://${path.resolve(__dirname, '../renderer/', htmlFileName)}`;
-  };
-}
+// electron-vite serves renderer entries over HTTP in dev (for HMR) and
+// emits them as files next to the main bundle in production.
+export const loadHtml = (window: BrowserWindow, htmlFileName: string) => {
+  const devServerUrl = process.env.ELECTRON_RENDERER_URL;
+
+  if (devServerUrl) {
+    return window.loadURL(`${devServerUrl}/${htmlFileName}`);
+  }
+
+  return window.loadFile(path.join(__dirname, '../renderer', htmlFileName));
+};
 
 export const getErrorMessage = (error: unknown): string => {
   if (error instanceof Error) return error.message;

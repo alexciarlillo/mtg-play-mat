@@ -1,15 +1,19 @@
 import { BrowserWindow } from 'electron';
 
+import type IpcBus from './ipc/IpcBus';
 import WindowManager, {
   RegisterModuleWindowOptions,
   WindowOnClosedOptions,
 } from './WindowManager';
 
-export interface BaseModuleConstructorOptions {
+export interface ModuleDeps {
+  windowManager: WindowManager;
+  ipcBus: IpcBus;
+}
+
+export interface BaseModuleConstructorOptions extends ModuleDeps {
   name: string;
   label: string;
-  windowManager: WindowManager;
-  ipcBus: any; // Need ipcBus types
 }
 
 export default class BaseModule {
@@ -19,7 +23,7 @@ export default class BaseModule {
 
   windowManager: WindowManager;
 
-  ipcBus: any;
+  ipcBus: IpcBus;
 
   windowsById: { [key: number]: BrowserWindow };
 
@@ -41,19 +45,15 @@ export default class BaseModule {
   }
 
   registerModuleWindow = ({
-    type,
     width = 500,
     height = 500,
-    html,
     onReady,
     onClosed,
     ...windowProps
   }: RegisterModuleWindowOptions) => {
     const win = this.windowManager.registerWindow({
-      type,
       width,
       height,
-      html,
       onReady: (_window: BrowserWindow) => {
         onReady?.(_window);
       },

@@ -1,25 +1,26 @@
-import { useEffect } from 'react';
-import { observer } from 'mobx-react';
-import Library from 'Library';
-import Graveyard from 'Graveyard';
-import Card from 'Card';
-import { useBoardStore } from 'BoardStore';
-import { useContextMenu } from 'ContextMenuProvider';
-import 'tailwindcss/tailwind.css';
+import type CardModel from '@shared/models/CardModel';
+import { observer } from 'mobx-react-lite';
+import { MouseEvent } from 'react';
+
+import Card from '../../../ui/Card';
+import { useContextMenu } from '../../../ui/ContextMenuProvider';
+import { useBoardStore } from './BoardStoreContext';
+import Graveyard from './Graveyard';
+import Library from './Library';
 
 const Board = () => {
   const board = useBoardStore();
   const menu = useContextMenu();
 
-  handleMoved = (id) => {
-    board.moved(id);
+  const handleMoved = (card: CardModel) => {
+    board.moved(card);
   };
 
-  handleDestroyed = (id) => {
-    board.destroy(id);
+  const handleDestroyed = (card: CardModel) => {
+    board.destroy(card);
   };
 
-  handleContextMenu = (e) => {
+  const handleContextMenu = (e: MouseEvent) => {
     e.preventDefault();
     menu.open({
       specs: [{ title: 'Add Token', action: null }],
@@ -28,15 +29,13 @@ const Board = () => {
     });
   };
 
-  console.log(board.battlefield);
-
   return (
     <div
       className="h-screen w-screen bg-slate-300 relative flex"
       onContextMenu={handleContextMenu}
     >
       <div className="w-4/5 h-full bg-neutral-400 px-12 py-8">
-        {board.battlefield.map((card, index) => (
+        {board.battlefield.map((card) => (
           <Card
             card={card}
             key={card.key}

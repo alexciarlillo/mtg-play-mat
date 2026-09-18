@@ -1,20 +1,13 @@
-import path from 'path';
+import path from 'node:path';
 
-import { BrowserWindow, app } from 'electron';
+import { BrowserWindow, BrowserWindowConstructorOptions } from 'electron';
 
-import { resolveHtmlPath } from '../util';
+import icon from '../../../assets/icon.png?asset';
+import { loadHtml } from '../util';
 import WindowTypes from './ipc/WindowTypes';
 
-const RESOURCES_PATH = app.isPackaged
-  ? path.join(process.resourcesPath, 'assets')
-  : path.join(__dirname, '../../../assets');
-
-const getAssetPath = (...paths: string[]): string => {
-  return path.join(RESOURCES_PATH, ...paths);
-};
-
-export interface RegisterModuleWindowOptions {
-  type: keyof typeof WindowTypes;
+export interface RegisterModuleWindowOptions extends BrowserWindowConstructorOptions {
+  type: WindowTypes;
   width: number;
   height: number;
   html: string;
@@ -26,18 +19,20 @@ export interface WindowOnClosedOptions {
   windowId: number;
 }
 
-type Windowtype = Record<WindowTypes, BrowserWindow>;
+type WindowsByType = Partial<Record<WindowTypes, BrowserWindow>>;
 
 export default class WindowManager {
-  windows: Windowtype;
+  windows: WindowsByType;
 
   constructor() {
-    this.windows = {} as Windowtype;
+    this.windows = {};
   }
 
   get mainWindow() {
     return this.windows[WindowTypes.APP];
   }
+
+  getWindow = (type: WindowTypes) => this.windows[type];
 
   registerWindow = ({
     type,
@@ -54,52 +49,49 @@ export default class WindowManager {
       show: false,
       width,
       height,
-      icon: getAssetPath('icon.png'),
+      icon,
       webPreferences: {
-        preload: app.isPackaged
-          ? path.join(__dirname, '../preload.js')
-          : path.join(__dirname, '../../../.erb/dll/preload.js'),
+        preload: path.join(__dirname, '../preload/index.js'),
       },
       ...windowProps,
     });
 
     windows[type] = window;
 
-    windows[type].loadURL(resolveHtmlPath(html));
+    loadHtml(window, html).catch((err) => {
+      console.error(`[WindowManager] failed to load ${html}`, err);
+    });
 
-    windows[type].on('ready-to-show', () => {
-      if (!windows[type]) {
-        throw new Error(`Window type ${type} is not defined`);
-      }
-
-      onReady?.(windows[type]);
+    window.on('ready-to-show', () => {
+      onReady?.(window);
 
       if (process.env.START_MODULE === 'play-test') {
         if (type === WindowTypes.BOARD || type === WindowTypes.HAND) {
-          windows[type].show();
+          window.show();
         }
       } else if (type === WindowTypes.APP) {
-        windows[type].show();
+        window.show();
       }
     });
 
     const windowId = window.id;
 
-    windows[type].on('closed', () => {
-      delete windows[type];
+    window.on('closed', () => {
+      if (windows[type] === window) {
+        delete windows[type];
+      }
       onClosed?.({ windowId });
     });
 
     // Open urls in the user's browser
-    windows[type].webContents.setWindowOpenHandler((edata: any) => {
-      // shell.openExternal(edata.url); // ?
+    window.webContents.setWindowOpenHandler(() => {
       return { action: 'deny' };
     });
 
-    return windows[type];
+    return window;
   };
 
-  closeWindow = ({ type }: { type: keyof typeof WindowTypes }) => {
+  closeWindow = ({ type }: { type: WindowTypes }) => {
     this.windows[type]?.close();
   };
 }

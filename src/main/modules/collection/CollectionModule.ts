@@ -1,32 +1,23 @@
-import CardDB from 'main/shared/db/CardDB';
-import WindowManager from 'main/shared/WindowManager';
-import IpcEvents from 'shared/ipc/IpcEvents';
+import IpcEvents from '@shared/ipc/IpcEvents';
+import { SearchCardsByNameOptions } from '@shared/types/cards';
 
-import BaseModule from '../../shared/BaseModule';
-
-export interface SearchCardOptions {
-  keyword: string;
-}
-
-interface CollectionModuleOptions {
-  windowManager: WindowManager;
-  ipcBus: any; //needs type
-}
+import BaseModule, { ModuleDeps } from '../../shared/BaseModule';
+import CardDB from '../../shared/db/CardDB';
 
 export default class CollectionModule extends BaseModule {
-  cardDb;
+  cardDb: CardDB;
 
-  constructor({ ...rest }: CollectionModuleOptions) {
-    super({ name: 'Collection', label: 'Collection Test', ...rest });
+  constructor(deps: ModuleDeps) {
+    super({ name: 'Collection', label: 'Collection Test', ...deps });
 
     this.cardDb = new CardDB();
 
     this.ipcBus.registerHandler({
       event: IpcEvents.SEARCH_CARDS,
-      handle: (searchOptions: SearchCardOptions) => {
+      handle: (searchOptions: SearchCardsByNameOptions) => {
         const cards = this.cardDb.searchCardsByName(searchOptions);
 
-        this.mainWindow?.send(IpcEvents.SEARCH_RESULTS, cards);
+        this.mainWindow?.webContents.send(IpcEvents.SEARCH_RESULTS, cards);
       },
     });
 
@@ -35,7 +26,7 @@ export default class CollectionModule extends BaseModule {
       handle: () => {
         const sets = this.cardDb.getCurrentSetList();
 
-        this.mainWindow?.send(IpcEvents.GET_SETS, sets);
+        this.mainWindow?.webContents.send(IpcEvents.GET_SETS, sets);
       },
     });
   }

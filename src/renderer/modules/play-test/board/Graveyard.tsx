@@ -1,7 +1,7 @@
-import { observer } from 'mobx-react';
-import Card from 'Card';
-import { useBoardStore } from 'BoardStore';
-import 'tailwindcss/tailwind.css';
+import { observer } from 'mobx-react-lite';
+
+import Card from '../../../ui/Card';
+import { useBoardStore } from './BoardStoreContext';
 
 const Graveyard = () => {
   const board = useBoardStore();

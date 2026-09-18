@@ -1,19 +1,22 @@
 import classNames from 'classnames';
-import { observer } from 'mobx-react';
-import { useBoardStore } from 'BoardStore';
-import 'tailwindcss/tailwind.css';
-import CardImg from 'CardImg';
+import { observer } from 'mobx-react-lite';
+
+import CardImg from '../../../ui/CardImg';
+import { useBoardStore } from './BoardStoreContext';
 
 const Library = () => {
   const board = useBoardStore();
 
-  drawCard = () => {
+  const drawCard = () => {
     board.drawCard();
   };
 
   return (
     <div>
       <div
+        role="button"
+        tabIndex={0}
+        aria-label="Draw a card"
         className={classNames(
           'origin-center',
           'flex',
@@ -27,11 +30,11 @@ const Library = () => {
             'hover:cursor-pointer': board.library.length > 0,
           }
         )}
-        onClick={board.library.length > 0 ? drawCard : null}
+        onClick={board.library.length > 0 ? drawCard : undefined}
       >
         <CardImg />
       </div>
-      <div className={classNames()}>Cards: {board.library.length}</div>
+      <div>Cards: {board.library.length}</div>
     </div>
   );
 };

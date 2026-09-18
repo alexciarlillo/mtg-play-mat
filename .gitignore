@@ -1,29 +1,19 @@
 # Logs
 logs
 *.log
+npm-debug.log*
 
-# Runtime data
-pids
-*.pid
-*.seed
+# Dependencies
+node_modules
 
-# Coverage directory used by tools like istanbul
+# Build output
+out
+dist
+
+# Tooling caches
 coverage
 .eslintcache
 
-# Dependency directory
-# https://www.npmjs.org/doc/misc/npm-faq.html#should-i-check-my-node_modules-folder-into-git
-node_modules
-
-# OSX
+# OS / editors
 .DS_Store
-
-release/app/dist
-release/build
-.erb/dll
-
 .idea
-npm-debug.log.*
-*.css.d.ts
-*.sass.d.ts
-*.scss.d.ts

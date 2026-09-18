@@ -1,37 +1,12 @@
-import React from 'react';
-import { makeAutoObservable } from 'mobx';
-import ContextMenu from 'ContextMenu';
+import { createContext, ReactNode, useContext, useState } from 'react';
 
-export default class ContextMenuStore {
-  isOpen = false;
+import ContextMenu from './ContextMenu';
+import ContextMenuStore from './ContextMenuStore';
 
-  specs = [];
+const ContextMenuContext = createContext<ContextMenuStore | null>(null);
 
-  posX = 0;
-
-  posY = 0;
-
-  constructor() {
-    makeAutoObservable(this);
-  }
-
-  open({ specs, x, y }) {
-    this.isOpen = true;
-    this.specs = specs;
-    this.posX = x;
-    this.posY = y;
-  }
-
-  close() {
-    this.isOpen = false;
-    this.specs = [];
-  }
-}
-
-const ContextMenuContext = React.createContext();
-
-export const ContextMenuProvider = ({ children }) => {
-  const store = new ContextMenuStore();
+export const ContextMenuProvider = ({ children }: { children: ReactNode }) => {
+  const [store] = useState(() => new ContextMenuStore());
   return (
     <ContextMenuContext.Provider value={store}>
       {children}
@@ -40,4 +15,10 @@ export const ContextMenuProvider = ({ children }) => {
   );
 };
 
-export const useContextMenu = () => React.useContext(ContextMenuContext);
+export const useContextMenu = () => {
+  const store = useContext(ContextMenuContext);
+  if (!store) {
+    throw new Error('useContextMenu must be used within ContextMenuProvider');
+  }
+  return store;
+};

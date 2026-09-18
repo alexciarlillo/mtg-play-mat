@@ -1,32 +1,53 @@
-import PropTypes from 'prop-types';
-import Draggable from 'react-draggable';
+import type CardModel from '@shared/models/CardModel';
 import classNames from 'classnames';
-import { useState, useEffect } from 'react';
-import CardImg from 'CardImg';
-import AbilityIndicators from 'AbilityIndicators';
-import { useContextMenu } from 'ContextMenuProvider';
+import { MouseEvent, useRef, useState } from 'react';
+import Draggable, { DraggableEventHandler } from 'react-draggable';
+
+import CardImg from './CardImg';
+import { useContextMenu } from './ContextMenuProvider';
+import { ContextMenuSpec } from './ContextMenuStore';
+
+type CardLocation = 'battlefield' | 'graveyard' | 'hand';
+
+interface Props {
+  card: CardModel;
+  location: CardLocation;
+  draggable?: boolean;
+  tappable?: boolean;
+  playable?: boolean;
+  onPlayed?(card: CardModel): void;
+  onMoved?(card: CardModel): void;
+  onDestroy?(card: CardModel): void;
+  onExile?(card: CardModel): void;
+}
 
 const Card = ({
   card,
-  draggable,
-  tappable,
-  playable,
+  draggable = true,
+  tappable = true,
+  playable = false,
   onPlayed,
   onMoved,
   onDestroy,
   onExile,
   location,
-}) => {
+}: Props) => {
   const menu = useContextMenu();
   const [tapped, setTapped] = useState(false);
+  // react-draggable needs a ref to its child since React 19 removed
+  // findDOMNode, which it otherwise falls back to.
+  const nodeRef = useRef<HTMLDivElement>(null);
 
-  const [lastPosition, setLastPosition] = useState(null);
+  const [lastPosition, setLastPosition] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
 
-  toggleTapped = () => {
+  const toggleTapped = () => {
     setTapped(!tapped);
   };
 
-  handleClick = () => {
+  const handleClick = () => {
     if (tappable && !playable) {
       toggleTapped();
     } else if (playable) {
@@ -34,13 +55,14 @@ const Card = ({
     }
   };
 
-  onDragStart = (event, data) => {
+  const onDragStart: DraggableEventHandler = (_event, data) => {
     setLastPosition({ x: data.lastX, y: data.lastY });
   };
 
-  onDragStop = (_, data) => {
-    const dX = Math.abs(data.x - lastPosition.x);
-    const dY = Math.abs(data.y - lastPosition.y);
+  const onDragStop: DraggableEventHandler = (_event, data) => {
+    const start = lastPosition ?? { x: data.x, y: data.y };
+    const dX = Math.abs(data.x - start.x);
+    const dY = Math.abs(data.y - start.y);
 
     // count small movements as intended clicks
     if (dX <= 2 && dY <= 2) {
@@ -52,29 +74,33 @@ const Card = ({
     setLastPosition(null);
   };
 
-  handleContextMenu = (e) => {
+  const handleContextMenu = (e: MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    menu.open({
-      specs: [
-        location !== 'graveyard' && {
+
+    const specs: (ContextMenuSpec | false)[] = [
+      location !== 'graveyard' &&
+        !!onDestroy && {
           title: 'Destroy',
           action: () => onDestroy(card),
         },
-        { title: 'Exile', action: () => onExile(card) },
-        location === 'graveyard' && {
-          title: 'Return to battlefield',
-          action: () => {
-            /* todo */
-          },
+      !!onExile && { title: 'Exile', action: () => onExile(card) },
+      location === 'graveyard' && {
+        title: 'Return to battlefield',
+        action: () => {
+          /* todo */
         },
-        location !== 'hand' && {
-          title: 'Return to hand',
-          action: () => {
-            /* todo */
-          },
+      },
+      location !== 'hand' && {
+        title: 'Return to hand',
+        action: () => {
+          /* todo */
         },
-      ].filter(Boolean),
+      },
+    ];
+
+    menu.open({
+      specs: specs.filter((spec): spec is ContextMenuSpec => Boolean(spec)),
       x: e.pageX,
       y: e.pageY,
     });
@@ -83,14 +109,17 @@ const Card = ({
   return (
     <div className="relative">
       <Draggable
+        nodeRef={nodeRef}
         onStart={onDragStart}
         onStop={onDragStop}
         disabled={!draggable}
         handle=".handle"
       >
         <div
+          ref={nodeRef}
+          data-testid="card"
           className={classNames({ absolute: draggable })}
-          onClick={draggable ? null : handleClick}
+          onClick={draggable ? undefined : handleClick}
           onContextMenu={handleContextMenu}
         >
           <div
@@ -112,8 +141,7 @@ const Card = ({
               }
             )}
           >
-            <CardImg scryfallId={card.scryfallId} />
-            {draggable && <AbilityIndicators abilities={card.keywords} />}
+            <CardImg scryfallId={card.scryfallId} name={card.name} />
           </div>
         </div>
       </Draggable>
@@ -145,23 +173,6 @@ const Card = ({
       )}
     </div>
   );
-};
-
-Card.propTypes = {
-  scryfallId: PropTypes.string.isRequired,
-  draggable: PropTypes.bool,
-  tappable: PropTypes.bool,
-  playable: PropTypes.bool,
-  onPlayed: PropTypes.func,
-  onMoved: PropTypes.func,
-};
-
-Card.defaultProps = {
-  draggable: true,
-  tappable: true,
-  playable: false,
-  onPlayed: null,
-  onMoved: null,
 };
 
 export default Card;

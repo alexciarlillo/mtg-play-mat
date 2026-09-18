@@ -1,10 +1,7 @@
-import { useEffect, Fragment } from 'react';
-import { observer } from 'mobx-react';
-import 'tailwindcss/tailwind.css';
-import classNames from 'classnames';
-import { Menu, Transition } from '@headlessui/react';
-import { ChevronDownIcon } from '@heroicons/react/20/solid';
-import { useContextMenu } from 'ContextMenuProvider';
+import { observer } from 'mobx-react-lite';
+import { useEffect } from 'react';
+
+import { useContextMenu } from './ContextMenuProvider';
 
 const ContextMenu = () => {
   const contextMenu = useContextMenu();
@@ -17,21 +14,28 @@ const ContextMenu = () => {
     document.body.addEventListener('click', closeMenu);
 
     return function cleanup() {
-      window.removeEventListener('click', closeMenu);
+      document.body.removeEventListener('click', closeMenu);
     };
   }, [contextMenu]);
 
-  return contextMenu.isOpen ? (
+  if (!contextMenu.isOpen) return null;
+
+  return (
     <div
       className="absolute"
       style={{ top: contextMenu.posY, left: contextMenu.posX }}
     >
-      <div as="div" className="relative inline-block text-left">
-        <div className="absolute right-0 z-10 mt-2 w-24 origin-top-right rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none bg-stone-100 py-1">
+      <div className="relative inline-block text-left">
+        <div
+          role="menu"
+          className="absolute right-0 z-10 mt-2 w-24 origin-top-right rounded-md shadow-lg ring-1 ring-black/5 focus:outline-hidden bg-stone-100 py-1"
+        >
           {contextMenu.specs.map((spec) => (
             <button
+              type="button"
+              role="menuitem"
               className="text-gray-700 block px-2 py-0.5 text-sm  hover:bg-stone-300 w-full"
-              onClick={spec.action}
+              onClick={spec.action ?? undefined}
               key={spec.title}
             >
               {spec.title}
@@ -40,8 +44,6 @@ const ContextMenu = () => {
         </div>
       </div>
     </div>
-  ) : (
-    <></>
   );
 };
 

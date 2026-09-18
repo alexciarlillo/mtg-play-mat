@@ -1,13 +1,24 @@
-import IpcEvents from 'IpcEvents';
+import IpcEvents from '@shared/ipc/IpcEvents';
+import CardModel from '@shared/models/CardModel';
+import { BrowserWindow } from 'electron';
+
+import BaseModule, { ModuleDeps } from '../../shared/BaseModule';
 import CardDB from '../../shared/db/CardDB';
 import DeckDB from '../../shared/db/DeckDB';
-import BaseModule from '../../shared/BaseModule';
 import WindowTypes from '../../shared/ipc/WindowTypes';
-import CardModel from '../../../shared/models/CardModel';
+import buildSampleDeck from './sampleDeck';
 
 export default class PlayTestModule extends BaseModule {
-  constructor({ ...rest }) {
-    super({ name: 'PlayTest', label: 'Play Test', ...rest });
+  cardDb: CardDB;
+
+  deckDb: DeckDB;
+
+  boardWindow: BrowserWindow | null;
+
+  handWindow: BrowserWindow | null;
+
+  constructor(deps: ModuleDeps) {
+    super({ name: 'PlayTest', label: 'Play Test', ...deps });
 
     this.cardDb = new CardDB();
     this.deckDb = new DeckDB();
@@ -17,6 +28,11 @@ export default class PlayTestModule extends BaseModule {
       width: 1560,
       height: 728,
       html: 'board.html',
+      onReady: () => {
+        if (process.env.START_MODULE === 'play-test') {
+          this.openSampleDeck();
+        }
+      },
       onClosed: () => {
         this.boardWindow = null;
         this.handWindow?.close();
@@ -37,42 +53,56 @@ export default class PlayTestModule extends BaseModule {
 
     this.ipcBus.registerHandler({
       event: IpcEvents.PLAY,
-      handle: (arg) => {
-        this.boardWindow?.send(IpcEvents.ETB, arg);
+      handle: (arg: string) => {
+        this.boardWindow?.webContents.send(IpcEvents.ETB, arg);
       },
     });
 
     this.ipcBus.registerHandler({
       event: IpcEvents.DRAW,
-      handle: (arg) => {
-        this.handWindow?.send(IpcEvents.DRAW, arg);
+      handle: (arg: string) => {
+        this.handWindow?.webContents.send(IpcEvents.DRAW, arg);
       },
     });
 
     this.ipcBus.registerHandler({
       event: IpcEvents.PLAY_TEST,
-      handle: (deckId) => {
+      handle: (deckId: string) => {
         const cards = this.deckDb
           .getDeckCards({ deckId })
           .map((card, index) => {
-            const _card = this.cardDb.getCardById({ id: card.card_id });
-            _card.keywords =
-              _card.keywords
-                ?.split(',')
-                .map((keyword) => keyword.toLowerCase()) || [];
-            _card.id = _card.uuid;
-            _card.key = index;
-            return new CardModel(_card);
-          });
+            const row = this.cardDb.getCardById({ id: card.card_id });
+            if (!row) return null;
 
-        this.handWindow.show();
-        this.boardWindow.show();
-        this.boardWindow?.send(IpcEvents.DECK_LOADED, cards);
+            return new CardModel({
+              ...row,
+              keywords:
+                row.keywords
+                  ?.split(',')
+                  .map((keyword) => keyword.toLowerCase()) ?? [],
+              id: row.uuid,
+              key: index,
+            });
+          })
+          .filter((card): card is CardModel => card !== null);
+
+        this.loadDeck(cards);
       },
     });
   }
 
-  open = () => {};
+  loadDeck = (cards: CardModel[]) => {
+    if (!this.boardWindow || !this.handWindow) {
+      console.warn('[PlayTest] play test windows were closed');
+      return;
+    }
 
-  close = () => {};
+    this.handWindow.show();
+    this.boardWindow.show();
+    this.boardWindow.webContents.send(IpcEvents.DECK_LOADED, cards);
+  };
+
+  openSampleDeck = () => {
+    this.loadDeck(buildSampleDeck());
+  };
 }

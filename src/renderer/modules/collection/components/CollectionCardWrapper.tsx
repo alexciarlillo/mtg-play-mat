@@ -1,9 +1,8 @@
-/* eslint-disable jsx-a11y/click-events-have-key-events */
-/* eslint-disable jsx-a11y/interactive-supports-focus */
+import { SearchCardsByNameRet } from '@shared/types/cards';
 import classNames from 'classnames';
-import { SearchCardsByNameRet } from 'main/shared/db/CardDB';
-import React, { ReactElement, useEffect } from 'react';
-import CardImg from 'renderer/ui/CardImg';
+import { ReactElement, useEffect, useRef } from 'react';
+
+import CardImg from '../../../ui/CardImg';
 
 interface Props {
   selected: boolean;
@@ -16,7 +15,7 @@ const CollectionCardWrapper = ({
   setSelected,
   card,
 }: Props): ReactElement => {
-  const fieldRef = React.useRef<HTMLInputElement>(null);
+  const fieldRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (selected && fieldRef.current) {
@@ -33,16 +32,17 @@ const CollectionCardWrapper = ({
       ref={fieldRef}
       role="button"
       className={classNames(
-        'w-52 aspect-card p-4 h-66 border-gray-300 border-solid border',
+        'w-52 aspect-card p-4 border-gray-300 border-solid border',
         selected && 'bg-blue-200'
       )}
-      key={card.id}
       onClick={setSelected}
     >
       <div className="flex justify-between items-center pb-2">
         <div className="truncate font-sans text-sm">{card.name}</div>
         <i
-          className={classNames(`ss ss-${card.keyruneCode.toLowerCase()} pl-2`)}
+          className={classNames(
+            `ss ss-${card.keyruneCode?.toLowerCase()} pl-2`
+          )}
         />
       </div>
       <CardImg

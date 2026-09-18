@@ -1,13 +1,13 @@
-import 'tailwindcss/tailwind.css';
-
 import { PlusIcon } from '@heroicons/react/24/outline';
-import CardImg from 'CardImg';
-import { useContextMenu } from 'ContextMenuProvider';
-import DeckImportModal from 'DeckImportModal';
-import { useDeckStore } from 'DeckStore';
-import { observer } from 'mobx-react';
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { DeckRow } from '@shared/types/cards';
+import { observer } from 'mobx-react-lite';
+import { MouseEvent, useEffect, useState } from 'react';
+import { Link } from 'react-router';
+
+import CardImg from '../../ui/CardImg';
+import { useContextMenu } from '../../ui/ContextMenuProvider';
+import DeckImportModal, { DeckImportValues } from './DeckImportModal';
+import { useDeckStore } from './DeckStoreContext';
 
 const DeckBuilder = () => {
   const store = useDeckStore();
@@ -15,16 +15,16 @@ const DeckBuilder = () => {
 
   const [importingDeck, setImportingDeck] = useState(false);
 
-  handleImport = ({ name, deckList }) => {
+  const handleImport = ({ name, deckList }: DeckImportValues) => {
     store.addDeck({ name, deckList });
     setImportingDeck(false);
   };
 
   useEffect(() => {
     store.refreshDecks();
-  }, []);
+  }, [store]);
 
-  deckMenu = (e, deck) => {
+  const deckMenu = (e: MouseEvent, deck: DeckRow) => {
     e.preventDefault();
     menu.open({
       specs: [
@@ -40,7 +40,7 @@ const DeckBuilder = () => {
       <div className="w-full h-full grid grid-cols-3">
         <button
           type="button"
-          className="relative block aspect-card w-52 rounded-lg border-2 border-dashed border-gray-300 p-12 text-center hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 flex flex-col items-center justify-center"
+          className="relative aspect-card w-52 rounded-lg border-2 border-dashed border-gray-300 p-12 text-center hover:border-gray-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 flex flex-col items-center justify-center"
           onClick={() => setImportingDeck(true)}
         >
           <PlusIcon className="h-6 w-6" />
@@ -59,7 +59,7 @@ const DeckBuilder = () => {
               <div>
                 <CardImg
                   scryfallId={deck.displayScryfallId}
-                  className="hover:ring hover:ring-indigo-400"
+                  className="hover:ring-3 hover:ring-indigo-400"
                 />
               </div>
               <span className="mt-2 block text-sm font-medium text-gray-900 text-center">
@@ -73,7 +73,7 @@ const DeckBuilder = () => {
         isOpen={importingDeck}
         onClose={() => setImportingDeck(false)}
         onCancel={() => setImportingDeck(false)}
-        onSubmit={({ name, deckList }) => handleImport({ name, deckList })}
+        onSubmit={handleImport}
       />
     </div>
   );

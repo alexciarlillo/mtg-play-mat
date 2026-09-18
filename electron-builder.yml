@@ -1,0 +1,29 @@
+appId: com.alexciarlillo.mtgplaymat
+productName: MTG Play Mat
+directories:
+  buildResources: assets
+  output: dist
+files:
+  - out/**/*
+  - package.json
+asarUnpack:
+  - '**/*.node'
+# Personal/dev builds only: unsigned and never published.
+publish: null
+mac:
+  identity: null
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+  category: public.app-category.games
+dmg:
+  artifactName: ${name}-${version}-${arch}.${ext}
+win:
+  target: [nsis]
+nsis:
+  artifactName: ${name}-${version}-setup.${ext}
+linux:
+  target: [AppImage]
+  category: Game
+appImage:
+  artifactName: ${name}-${version}.${ext}
