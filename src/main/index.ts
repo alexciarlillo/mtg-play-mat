@@ -1,64 +1,65 @@
 import { app, BrowserWindow } from 'electron';
 
+import { registerRequestHandlers } from './ipc';
 import MenuBuilder from './menu';
-import CollectionModule from './modules/collection/CollectionModule';
-import DeckBuilderModule from './modules/deck-builder/DeckBuilderModule';
-import PlayTestModule from './modules/play-test/PlayTestModule';
-import IpcBus from './shared/ipc/IpcBus';
-import WindowTypes from './shared/ipc/WindowTypes';
-import ModuleManager from './shared/ModuleManager';
-import WindowManager from './shared/WindowManager';
+import createCollectionHandlers from './modules/collection/collectionHandlers';
+import createDeckHandlers from './modules/decks/deckHandlers';
+import PlayTest from './modules/play-test/PlayTest';
+import CardDB from './shared/db/CardDB';
+import DeckDB from './shared/db/DeckDB';
+import { createWindow } from './windows';
 
 let appWindow: BrowserWindow | null = null;
 
-const windowManager = new WindowManager();
+const createAppWindow = (playTest: PlayTest) => {
+  const window = createWindow({ html: 'app.html', width: 1500, height: 500 });
+  appWindow = window;
 
-const createAppWindow = (playTestModule: PlayTestModule) => {
-  appWindow = windowManager.registerWindow({
-    type: WindowTypes.APP,
-    html: 'app.html',
-    width: 1500,
-    height: 500,
-    onReady: (window) => {
-      window.show();
-    },
-    onClosed: () => {
-      appWindow = null;
-    },
+  window.once('ready-to-show', () => window.show());
+  window.on('closed', () => {
+    appWindow = null;
+    // The board and hand are secondary windows; without the app window
+    // there is nothing left to drive them.
+    if (process.platform !== 'darwin') app.quit();
   });
 
-  const menuBuilder = new MenuBuilder(appWindow, {
-    openSamplePlayTest: playTestModule.openSampleDeck,
-  });
-  menuBuilder.buildMenu();
+  new MenuBuilder(window, {
+    openSamplePlayTest: playTest.openSampleDeck,
+  }).buildMenu();
 };
 
 const start = () => {
-  const moduleManager = new ModuleManager();
-  const ipcBus = new IpcBus();
+  const cardDb = new CardDB();
+  const deckDb = new DeckDB();
+  const playTest = new PlayTest({ cardDb, deckDb });
 
-  const playTestModule = new PlayTestModule({ windowManager, ipcBus });
-  moduleManager.registerModule(playTestModule);
-  moduleManager.registerModule(
-    new DeckBuilderModule({ windowManager, ipcBus })
-  );
-  moduleManager.registerModule(new CollectionModule({ windowManager, ipcBus }));
+  registerRequestHandlers({
+    ...createDeckHandlers({ cardDb, deckDb }),
+    ...createCollectionHandlers({ cardDb }),
+    ...playTest.handlers,
+  });
 
-  createAppWindow(playTestModule);
+  createAppWindow(playTest);
+
+  if (process.env.START_MODULE === 'play-test') {
+    void playTest.openSampleDeck();
+  }
+
+  // Lets end-to-end tests open a play test in any build without driving
+  // the dev-only menu. Never set outside tests.
+  if (process.env.MTG_PLAY_MAT_TEST_HOOKS === '1') {
+    Object.assign(globalThis, {
+      testHooks: { openSamplePlayTest: playTest.openSampleDeck },
+    });
+  }
 
   app.on('activate', () => {
-    // On macOS the dock icon should bring back a closed app window. Modules
-    // and IPC handlers stay registered, so only the window is recreated.
-    if (appWindow === null) createAppWindow(playTestModule);
+    if (appWindow === null) createAppWindow(playTest);
   });
 };
 
 app.on('window-all-closed', () => {
-  // Respect the OSX convention of having the application in memory even
-  // after all windows have been closed
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
+  if (process.platform !== 'darwin') app.quit();
 });
 
 app.whenReady().then(start).catch(console.error);

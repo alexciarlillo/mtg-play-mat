@@ -1,15 +1,29 @@
-import { contextBridge } from 'electron';
+import {
+  type Api,
+  eventChannels,
+  eventListenerName,
+  requestChannels,
+} from '@shared/ipc/contract';
+import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 
-import BoardIpcHandler from './handlers/BoardIpcHandler';
-import CollectionIpcHandler from './handlers/CollectionIpcHandler';
-import DeckBuilderIpcHandler from './handlers/DeckBuilderIpcHandler';
-import HandIpcHandler from './handlers/HandIpcHandler';
-import MainIpcHandler from './handlers/MainIpcHandler';
-import PlayTestIpcHandler from './handlers/PlayTestIpcHandler';
+// Build window.api from the contract so the renderer only gets named
+// functions, never ipcRenderer or its event objects.
+const api: Record<string, unknown> = {};
 
-contextBridge.exposeInMainWorld('DeckBuilder', new DeckBuilderIpcHandler());
-contextBridge.exposeInMainWorld('Board', new BoardIpcHandler());
-contextBridge.exposeInMainWorld('Hand', new HandIpcHandler());
-contextBridge.exposeInMainWorld('PlayTest', new PlayTestIpcHandler());
-contextBridge.exposeInMainWorld('Main', new MainIpcHandler());
-contextBridge.exposeInMainWorld('Collection', new CollectionIpcHandler());
+requestChannels.forEach((channel) => {
+  api[channel] = (...args: unknown[]) => ipcRenderer.invoke(channel, ...args);
+});
+
+eventChannels.forEach((channel) => {
+  api[eventListenerName(channel)] = (listener: (payload: unknown) => void) => {
+    const forward = (_event: IpcRendererEvent, payload: unknown) => {
+      listener(payload);
+    };
+    ipcRenderer.on(channel, forward);
+    return () => {
+      ipcRenderer.removeListener(channel, forward);
+    };
+  };
+});
+
+contextBridge.exposeInMainWorld('api', api as Api);

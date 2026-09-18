@@ -5,7 +5,7 @@ const DeckViewer = () => {
 
   const playTest = () => {
     if (deckId) {
-      window.PlayTest.load({ deckId });
+      void window.api.startPlayTest(Number(deckId));
     }
   };
 

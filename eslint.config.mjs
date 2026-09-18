@@ -6,11 +6,16 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 export default defineConfig([
-  globalIgnores(['out', 'dist', 'node_modules']),
+  globalIgnores(['out', 'dist', 'node_modules', 'test-results']),
   js.configs.recommended,
   tseslint.configs.recommended,
   {
-    files: ['src/main/**/*.ts', 'src/preload/**/*.ts', '*.config.{ts,mjs}'],
+    files: [
+      'src/main/**/*.ts',
+      'src/preload/**/*.ts',
+      'e2e/**/*.ts',
+      '*.config.{ts,mjs}',
+    ],
     languageOptions: { globals: globals.node },
   },
   {

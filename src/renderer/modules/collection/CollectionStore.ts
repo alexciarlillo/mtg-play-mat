@@ -1,4 +1,3 @@
-import IpcEvents from '@shared/ipc/IpcEvents';
 import {
   CurrentSetListReturn,
   SearchCardsByNameOptions,
@@ -13,28 +12,14 @@ export default class CollectionStore {
 
   constructor() {
     makeAutoObservable(this);
-
-    window.Collection.rendererChannel.On(
-      IpcEvents.SEARCH_RESULTS,
-      (_: unknown, results: SearchCardsByNameRet[]) => {
-        this.setSearchResults(results);
-      }
-    );
-
-    window.Collection.rendererChannel.On(
-      IpcEvents.GET_SETS,
-      (_: unknown, sets: CurrentSetListReturn[]) => {
-        this.setSets(sets);
-      }
-    );
   }
 
   getSets = () => {
-    window.Collection.getSets();
+    void window.api.listSets().then(this.setSets);
   };
 
   findCard = (options: SearchCardsByNameOptions) => {
-    window.Collection.searchCards(options);
+    void window.api.searchCards(options).then(this.setSearchResults);
   };
 
   setSearchResults = (results: SearchCardsByNameRet[]) => {

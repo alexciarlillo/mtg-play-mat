@@ -17,3 +17,5 @@ coverage
 # OS / editors
 .DS_Store
 .idea
+test-results
+playwright-report

@@ -1,6 +1,7 @@
-import IpcEvents from '@shared/ipc/IpcEvents';
-import CardModel, { CardModelProps } from '@shared/models/CardModel';
+import CardModel from '@shared/models/CardModel';
 import { makeAutoObservable } from 'mobx';
+
+import { toCardProps } from '../cardProps';
 
 export default class BoardStore {
   battlefield: CardModel[] = [];
@@ -12,20 +13,10 @@ export default class BoardStore {
   constructor() {
     makeAutoObservable(this);
 
-    window.Board.rendererChannel.On(
-      IpcEvents.ETB,
-      (_event: unknown, cardJson: string) => {
-        const card = new CardModel(JSON.parse(cardJson) as CardModelProps);
-        this.play(card);
-      }
-    );
-
-    window.Board.rendererChannel.On(
-      IpcEvents.DECK_LOADED,
-      (_event: unknown, cards: CardModelProps[]) => {
-        this.reset(cards.map((card) => new CardModel(card)));
-      }
-    );
+    window.api.onDeckLoaded((cards) => {
+      this.reset(cards.map((card) => new CardModel(card)));
+    });
+    window.api.onCardPlayed((card) => this.play(new CardModel(card)));
   }
 
   play(card: CardModel) {
@@ -42,7 +33,7 @@ export default class BoardStore {
   drawCard() {
     const card = this.library.shift();
     if (card) {
-      window.Board.draw(JSON.stringify(card));
+      void window.api.drawCard(toCardProps(card));
     }
   }
 

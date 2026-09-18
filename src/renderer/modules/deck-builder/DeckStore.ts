@@ -1,4 +1,3 @@
-import IpcEvents from '@shared/ipc/IpcEvents';
 import { DeckRow } from '@shared/types/cards';
 import { makeAutoObservable } from 'mobx';
 
@@ -7,28 +6,21 @@ export default class DeckStore {
 
   constructor() {
     makeAutoObservable(this);
-
-    window.DeckBuilder.rendererChannel.On(
-      IpcEvents.GET_DECKS,
-      (_event: unknown, decks: DeckRow[]) => {
-        this.setDecks(decks);
-      }
-    );
   }
 
-  setDecks(decks: DeckRow[]) {
+  setDecks = (decks: DeckRow[]) => {
     this.decks = decks;
-  }
+  };
 
   refreshDecks() {
-    window.DeckBuilder.getDecks();
+    void window.api.listDecks().then(this.setDecks);
   }
 
   addDeck({ name, deckList }: { name: string; deckList: string }) {
-    window.DeckBuilder.import({ name, deckList });
+    void window.api.importDeck({ name, deckList }).then(this.setDecks);
   }
 
   deleteDeck({ id }: { id: number }) {
-    window.DeckBuilder.delete({ id });
+    void window.api.deleteDeck(id).then(this.setDecks);
   }
 }

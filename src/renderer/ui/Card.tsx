@@ -106,14 +106,17 @@ const Card = ({
     });
   };
 
+  // react-draggable's user-select hack injects a <style> tag, which the
+  // CSP blocks, so text selection is disabled with a class instead.
   return (
-    <div className="relative">
+    <div className="relative select-none">
       <Draggable
         nodeRef={nodeRef}
         onStart={onDragStart}
         onStop={onDragStop}
         disabled={!draggable}
         handle=".handle"
+        enableUserSelectHack={false}
       >
         <div
           ref={nodeRef}

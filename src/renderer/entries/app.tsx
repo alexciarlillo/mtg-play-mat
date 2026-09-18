@@ -1,3 +1,4 @@
+import 'keyrune/css/keyrune.css';
 import '../styles.css';
 
 import { createRoot } from 'react-dom/client';
