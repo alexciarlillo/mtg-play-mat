@@ -8,6 +8,11 @@ files:
   - package.json
 asarUnpack:
   - '**/*.node'
+# Invite links (mtgplaymat://join?c=...) open the app. This fills the macOS
+# Info.plist and the Linux desktop entry; Windows registers at runtime.
+protocols:
+  - name: MTG Play Mat invite
+    schemes: [mtgplaymat]
 # Personal/dev builds only: unsigned and never published.
 publish: null
 mac:

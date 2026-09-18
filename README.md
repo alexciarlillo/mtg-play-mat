@@ -104,6 +104,39 @@ preview in that window only.
 Shortcuts (in either window): **D** draw, **U** untap all, **S** shuffle, **M**
 mulligan (until you keep), **?** help. Keys with Cmd/Ctrl/Alt are left alone.
 
+## Playing online
+
+**Play online** in the app window connects you directly to one opponent (WebRTC, no
+server). Set your name, then:
+
+1. The host clicks **Host a game** and sends the invite code (or the
+   `mtgplaymat://join?c=…` link) to the opponent.
+2. The opponent clicks **Join a game**, pastes the invite (a link fills it in), and
+   sends back the reply code.
+3. The host pastes the reply and clicks **Connect**.
+
+Hosting is independent of the play test. Once both players are connected and have a
+game open, each board splits in two and shows the other player's battlefield,
+graveyard, exile, command zone, life, mulligans, and hand and library counts,
+read-only. Each player sends only their own public view, so hand contents and library
+order never leave the machine. **Resend state** re-sends yours; **Leave** disconnects
+and clears the opponent's half.
+
+Connections use public STUN servers (Google, Twilio) and no TURN relay, so some
+strict networks (symmetric NAT, corporate firewalls) can't connect; the lobby says so.
+
+The WebRTC connection lives in a hidden "net" window (`src/renderer/net.html`),
+because Electron's main process has no `RTCPeerConnection`. Main is the hub: it builds
+and validates every message (`src/shared/net/protocol.ts`) and forwards the
+opponent's view to the board.
+
+Invite links: packaged builds register the `mtgplaymat://` scheme. In development
+nothing is registered unless you set `MTG_PLAY_MAT_REGISTER_PROTOCOL=1`, which
+registers the dev Electron binary plus this checkout (undo it by running a packaged
+build, or with `app.removeAsDefaultProtocolClient`). A second launch with a link
+passes it to the running app. Under test hooks, ICE servers default to none
+(loopback only) and can be set with `MTG_PLAY_MAT_ICE_SERVERS` (JSON).
+
 ## Building
 
 ```sh

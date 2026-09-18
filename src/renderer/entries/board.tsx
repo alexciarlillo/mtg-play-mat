@@ -1,6 +1,7 @@
 import '../styles.css';
 
 import type { PublicView } from '@shared/game';
+import type { OpponentState } from '@shared/net/remoteViews';
 import { createRoot } from 'react-dom/client';
 
 import Board from '../modules/play-test/board/Board';
@@ -16,11 +17,15 @@ if (container) {
     subscribe: window.api.onBoardView,
     fetch: window.api.getBoardView,
   });
+  const opponent = createViewStore<OpponentState>({
+    subscribe: window.api.onOpponentView,
+    fetch: window.api.getOpponentView,
+  });
   const root = createRoot(container);
   root.render(
     <ContextMenuProvider>
       <CardPreviewProvider reserveRight={SIDE_PANEL_WIDTH}>
-        <Board store={store} />
+        <Board store={store} opponent={opponent} />
       </CardPreviewProvider>
     </ContextMenuProvider>
   );

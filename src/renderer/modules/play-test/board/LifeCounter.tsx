@@ -3,6 +3,8 @@ import { dispatch } from '../viewStore';
 interface Props {
   playerId: string;
   life: number;
+  // Smaller, for a board shared with an opponent.
+  compact?: boolean;
   onSetLife(): void;
 }
 
@@ -12,14 +14,14 @@ const stepLabel = (delta: number) =>
   `${delta < 0 ? 'Lose' : 'Gain'} ${Math.abs(delta)} life`;
 
 // Big and high-contrast because the board is what gets screenshared.
-const LifeCounter = ({ playerId, life, onSetLife }: Props) => (
+const LifeCounter = ({ playerId, life, compact, onSetLife }: Props) => (
   <div className="flex flex-col items-center rounded-lg bg-slate-900 px-2 py-2">
     <div className="text-xs uppercase tracking-widest text-slate-400">Life</div>
     <button
       type="button"
       aria-label="Set life"
       data-testid="life"
-      className="text-7xl font-black leading-none tabular-nums text-white hover:text-amber-200"
+      className={`${compact ? 'text-5xl' : 'text-7xl'} font-black leading-none tabular-nums text-white hover:text-amber-200`}
       onClick={onSetLife}
     >
       {life}

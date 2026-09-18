@@ -160,6 +160,19 @@ test('window.api is a narrow typed bridge', async () => {
       'updateCardData',
       'searchCards',
       'startPlayTest',
+      'getProfile',
+      'setDisplayName',
+      'getNetState',
+      'netHost',
+      'netAcceptReply',
+      'netJoin',
+      'netLeave',
+      'netResend',
+      'netReport',
+      'getOpponentView',
+      'onNetState',
+      'onNetCommand',
+      'onOpponentView',
     ].sort()
   );
   expect(surface.allFunctions).toBe(true);

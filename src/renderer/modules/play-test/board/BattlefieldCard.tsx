@@ -26,7 +26,13 @@ const pointOf = (e: DraggableEvent) => {
 const clamp = (value: number, max: number) =>
   Math.max(0, Math.min(value, Math.max(0, max)));
 
-const BattlefieldCard = ({ card }: { card: CardView }) => {
+interface Props {
+  card: CardView;
+  // The field's CSS scale, so drags track the pointer when it is shrunk.
+  scale?: number;
+}
+
+const BattlefieldCard = ({ card, scale = 1 }: Props) => {
   const nodeRef = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState(false);
   // Holds the drop point until main's next view of this card arrives, so
@@ -109,6 +115,7 @@ const BattlefieldCard = ({ card }: { card: CardView }) => {
       <Draggable
         nodeRef={nodeRef}
         position={position}
+        scale={scale}
         handle=".handle"
         onDrag={handleDrag}
         onStop={handleStop}

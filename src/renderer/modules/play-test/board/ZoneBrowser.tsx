@@ -8,10 +8,12 @@ interface Props {
   title: string;
   cards: CardView[];
   onClose(): void;
+  readOnly?: boolean;
 }
 
-// Every card in a public zone, newest first, each with the move menu.
-const ZoneBrowser = ({ title, cards, onClose }: Props) => (
+// Every card in a public zone, newest first, each with the move menu
+// unless it belongs to an opponent.
+const ZoneBrowser = ({ title, cards, onClose, readOnly = false }: Props) => (
   <Modal title={`${title} (${cards.length})`} onClose={onClose} wide>
     {cards.length === 0 ? (
       <p className="text-sm text-slate-600">No cards.</p>
@@ -25,14 +27,16 @@ const ZoneBrowser = ({ title, cards, onClose }: Props) => (
             key={card.instanceId}
             card={card}
             size="sm"
-            menu={moveMenu(card)}
+            menu={readOnly ? [] : moveMenu(card)}
           />
         ))}
       </div>
     )}
-    <p className="mt-3 text-xs text-slate-600">
-      Right-click a card to move it.
-    </p>
+    {!readOnly && (
+      <p className="mt-3 text-xs text-slate-600">
+        Right-click a card to move it.
+      </p>
+    )}
   </Modal>
 );
 

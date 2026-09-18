@@ -57,6 +57,7 @@ export default defineConfig({
           app: resolve('src/renderer/app.html'),
           board: resolve('src/renderer/board.html'),
           hand: resolve('src/renderer/hand.html'),
+          net: resolve('src/renderer/net.html'),
         },
       },
     },

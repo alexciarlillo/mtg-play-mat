@@ -1,4 +1,6 @@
 import type { PlayerAction, PrivateView, PublicView } from '../game';
+import type { NetCommand, NetReport, NetState, Profile } from '../net/lobby';
+import type { OpponentState } from '../net/remoteViews';
 import type { CardDataStatus } from '../types/cardData';
 import type {
   CurrentSetListReturn,
@@ -45,6 +47,18 @@ export const requests = {
   getCardDataStatus: request<[], CardDataStatus>(),
   // Starts a check-and-download; progress arrives as cardDataStatus.
   updateCardData: request<[], CardDataStatus>(),
+  getProfile: request<[], Profile>(),
+  setDisplayName: request<[name: string], Profile>(),
+  // Lobby actions; results and errors arrive as netState.
+  getNetState: request<[], NetState>(),
+  netHost: request<[]>(),
+  netAcceptReply: request<[code: string]>(),
+  netJoin: request<[code: string]>(),
+  netLeave: request<[]>(),
+  netResend: request<[]>(),
+  // Only the hidden net window may call this.
+  netReport: request<[report: NetReport]>(),
+  getOpponentView: request<[], OpponentState>(),
 };
 
 // Main -> renderer pushes. The preload exposes each as on<Name>(listener).
@@ -52,6 +66,9 @@ export const events = {
   boardView: event<PublicView>(),
   handView: event<PrivateView>(),
   cardDataStatus: event<CardDataStatus>(),
+  netState: event<NetState>(),
+  netCommand: event<NetCommand>(),
+  opponentView: event<OpponentState>(),
 };
 
 type SpecType<S> = S extends Spec<infer T> ? T : never;

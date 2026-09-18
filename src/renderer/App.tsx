@@ -10,11 +10,13 @@ import { RootStoreProvider } from './core/rootContext';
 import CardDataPanel from './modules/card-data/CardDataPanel';
 import DeckStore from './modules/deck-builder/DeckStore';
 import { DeckStoreProvider } from './modules/deck-builder/DeckStoreContext';
+import useInviteNavigation from './modules/online/useInviteNavigation';
 import { ContextMenuProvider } from './ui/ContextMenuProvider';
 
 const modules = [
   { label: 'Deck Builder', route: 'decks' },
   { label: 'Collection', route: 'collection' },
+  { label: 'Play online', route: 'online' },
 ];
 
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
@@ -25,6 +27,8 @@ const navLinkClass = ({ isActive }: { isActive: boolean }) =>
 const deckStore = new DeckStore();
 
 const Start = () => {
+  useInviteNavigation();
+
   return (
     <ContextMenuProvider>
       <RootStoreProvider>

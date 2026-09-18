@@ -10,10 +10,13 @@ export interface CreateWindowOptions extends Omit<
   'webPreferences'
 > {
   html: string;
+  // Hidden windows that must react promptly (the net window) opt out.
+  backgroundThrottling?: boolean;
 }
 
 export const createWindow = ({
   html,
+  backgroundThrottling = true,
   ...windowOptions
 }: CreateWindowOptions): BrowserWindow => {
   const window = new BrowserWindow({
@@ -26,6 +29,7 @@ export const createWindow = ({
       sandbox: true,
       nodeIntegration: false,
       webSecurity: true,
+      backgroundThrottling,
     },
   });
 

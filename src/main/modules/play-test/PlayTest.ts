@@ -9,8 +9,10 @@ import {
   OPENING_HAND_SIZE,
   parsePlayerAction,
   type PlayerAction,
+  type PlayerId,
   privateView,
   publicView,
+  type PublicView,
   reduce,
 } from '@shared/game';
 import { BrowserWindow } from 'electron';
@@ -25,7 +27,12 @@ import buildSampleDeck from './sampleDeck';
 interface Deps {
   cardDb: CardDB;
   deckDb: DeckDB;
+  // The local player: the one seat this machine is authoritative for.
+  playerId: PlayerId;
+  playerName(): string;
 }
+
+type PublicListener = (view: PublicView | null) => void;
 
 type PlayTestHandlers = Pick<
   RequestHandlers,
@@ -35,9 +42,6 @@ type PlayTestHandlers = Pick<
   | 'getBoardView'
   | 'getHandView'
 >;
-
-// The one seat this machine is authoritative for.
-const LOCAL_PLAYER = 'p1';
 
 // Owns the authoritative game state and the board and hand windows, which
 // only render views of it. The windows exist only while a play test is
@@ -55,18 +59,50 @@ export default class PlayTest {
 
   private deck: CardRef[] = [];
 
-  constructor({ cardDb, deckDb }: Deps) {
+  private readonly playerId: PlayerId;
+
+  private readonly playerName: () => string;
+
+  private readonly publicListeners = new Set<PublicListener>();
+
+  constructor({ cardDb, deckDb, playerId, playerName }: Deps) {
     this.cardDb = cardDb;
     this.deckDb = deckDb;
+    this.playerId = playerId;
+    this.playerName = playerName;
   }
+
+  get gameState(): GameState {
+    return this.state;
+  }
+
+  get boardWindow(): BrowserWindow | null {
+    return this.board;
+  }
+
+  // What peers may see: the public view while a play test is open.
+  currentPublicView = (): PublicView | null =>
+    this.board || this.hand ? publicView(this.state, this.playerId) : null;
+
+  onPublicChange = (listener: PublicListener) => {
+    this.publicListeners.add(listener);
+    return () => {
+      this.publicListeners.delete(listener);
+    };
+  };
+
+  private notifyPublic = () => {
+    const view = this.currentPublicView();
+    this.publicListeners.forEach((listener) => listener(view));
+  };
 
   readonly handlers: PlayTestHandlers = {
     startPlayTest: (deckId) => this.start(this.loadDeck(deckId)),
     restartPlayTest: () => this.restart(),
     // Renderer input is untrusted, so parse it rather than trust its type.
     dispatch: (action: unknown) => this.dispatch(parsePlayerAction(action)),
-    getBoardView: () => publicView(this.state, LOCAL_PLAYER),
-    getHandView: () => privateView(this.state, LOCAL_PLAYER),
+    getBoardView: () => publicView(this.state, this.playerId),
+    getHandView: () => privateView(this.state, this.playerId),
   };
 
   // A fixed seed is only passed by end-to-end tests.
@@ -85,7 +121,7 @@ export default class PlayTest {
   // Windows may only act on the local player's cards; stale actions on
   // cards that no longer exist are dropped the same way.
   private dispatch = (action: PlayerAction) => {
-    if (actionPlayer(this.state, action) !== LOCAL_PLAYER) return;
+    if (actionPlayer(this.state, action) !== this.playerId) return;
     const next = reduce(this.state, action);
     if (next === this.state) return;
     this.state = next;
@@ -93,10 +129,11 @@ export default class PlayTest {
   };
 
   private pushViews = () => {
-    const board = publicView(this.state, LOCAL_PLAYER);
-    const hand = privateView(this.state, LOCAL_PLAYER);
+    const board = publicView(this.state, this.playerId);
+    const hand = privateView(this.state, this.playerId);
     if (board) sendEvent(this.board, 'boardView', board);
     if (hand) sendEvent(this.hand, 'handView', hand);
+    this.notifyPublic();
   };
 
   private newGame = (deck: CardRef[], seed = randomInt(2 ** 32)) => {
@@ -104,10 +141,10 @@ export default class PlayTest {
       {
         type: 'newGame',
         seed,
-        players: [{ id: LOCAL_PLAYER, name: 'You', deck }],
+        players: [{ id: this.playerId, name: this.playerName(), deck }],
       },
-      { type: 'shuffle', playerId: LOCAL_PLAYER },
-      { type: 'draw', playerId: LOCAL_PLAYER, count: OPENING_HAND_SIZE },
+      { type: 'shuffle', playerId: this.playerId },
+      { type: 'draw', playerId: this.playerId, count: OPENING_HAND_SIZE },
     ];
     this.deck = deck;
     this.state = actions.reduce(reduce, this.state);
@@ -156,6 +193,7 @@ export default class PlayTest {
       board.on('closed', () => {
         this.board = null;
         this.hand?.close();
+        this.notifyPublic();
       });
     }
 
@@ -164,6 +202,7 @@ export default class PlayTest {
       hand.on('closed', () => {
         this.hand = null;
         this.board?.close();
+        this.notifyPublic();
       });
     }
 

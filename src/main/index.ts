@@ -10,11 +10,16 @@ import {
   cardSchemePrivileges,
   createCardImageHandler,
 } from './imageCache/cardProtocol';
+import { registerDeepLinkScheme, watchDeepLinks } from './deepLink';
 import { registerRequestHandlers, sendEvent } from './ipc';
 import MenuBuilder from './menu';
 import createCardDataHandlers from './modules/card-data/cardDataHandlers';
 import createCollectionHandlers from './modules/collection/collectionHandlers';
 import createDeckHandlers from './modules/decks/deckHandlers';
+import {
+  createProfileStore,
+  setupNetplay,
+} from './modules/netplay/setupNetplay';
 import PlayTest from './modules/play-test/PlayTest';
 import CardDB from './shared/db/CardDB';
 import DeckDB from './shared/db/DeckDB';
@@ -53,12 +58,24 @@ const createAppWindow = (playTest: PlayTest) => {
   }).buildMenu();
 };
 
-const start = () => {
+const start = (onDeepLink: ReturnType<typeof watchDeepLinks>) => {
   mkdirSync(getDbDir(), { recursive: true });
   const appVersion = app.getVersion();
   const cardDb = new CardDB(cardDbPath());
   const deckDb = new DeckDB(deckDbPath());
-  const playTest = new PlayTest({ cardDb, deckDb });
+  const profile = createProfileStore();
+  const playTest = new PlayTest({
+    cardDb,
+    deckDb,
+    playerId: profile.playerId,
+    playerName: () => profile.name,
+  });
+  const online = setupNetplay({
+    profile,
+    playTest,
+    getAppWindow: () => appWindow,
+    testHooks: testHooksEnabled,
+  });
 
   const cardData = new CardDataService({
     cardDb,
@@ -81,14 +98,25 @@ const start = () => {
     })
   );
 
-  registerRequestHandlers({
-    ...createDeckHandlers({ cardDb, deckDb }),
-    ...createCollectionHandlers({ cardDb }),
-    ...createCardDataHandlers({ cardData }),
-    ...playTest.handlers,
-  });
+  registerRequestHandlers(
+    {
+      ...createDeckHandlers({ cardDb, deckDb }),
+      ...createCollectionHandlers({ cardDb }),
+      ...createCardDataHandlers({ cardData }),
+      ...playTest.handlers,
+      ...online.handlers,
+    },
+    online.guards
+  );
 
   createAppWindow(playTest);
+
+  onDeepLink((link) => {
+    if (link) online.netplay.receiveLink(link);
+    if (!appWindow) createAppWindow(playTest);
+    if (appWindow?.isMinimized()) appWindow.restore();
+    appWindow?.focus();
+  });
 
   if (!testHooksEnabled || bulkDataUrlOverride) void cardData.check();
 
@@ -100,7 +128,11 @@ const start = () => {
   // the dev-only menu. Never set outside tests.
   if (testHooksEnabled) {
     Object.assign(globalThis, {
-      testHooks: { openSamplePlayTest: playTest.openSampleDeck },
+      testHooks: {
+        openSamplePlayTest: playTest.openSampleDeck,
+        gameState: () => playTest.gameState,
+        profile: () => profile.profile,
+      },
     });
   }
 
@@ -113,4 +145,16 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
-app.whenReady().then(start).catch(console.error);
+// A second launch (e.g. from a mtgplaymat:// link on Windows or Linux)
+// hands its argv to the running app and exits. The lock is per user data
+// directory, so separate profiles can still run side by side.
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  registerDeepLinkScheme(testHooksEnabled);
+  const onDeepLink = watchDeepLinks();
+  app
+    .whenReady()
+    .then(() => start(onDeepLink))
+    .catch(console.error);
+}

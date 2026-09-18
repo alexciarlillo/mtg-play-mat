@@ -9,6 +9,9 @@ describe('ipc contract', () => {
       'onBoardView',
       'onHandView',
       'onCardDataStatus',
+      'onNetState',
+      'onNetCommand',
+      'onOpponentView',
     ]);
   });
 

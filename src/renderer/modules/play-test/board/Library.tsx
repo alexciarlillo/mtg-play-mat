@@ -1,7 +1,7 @@
 import classNames from 'classnames';
 import type { MouseEvent } from 'react';
 
-import { cardWidths } from '../../../ui/cardSizes';
+import { type CardSize, cardWidths } from '../../../ui/cardSizes';
 import CardImg from '../../../ui/CardImg';
 import { useContextMenu } from '../../../ui/ContextMenuProvider';
 import { dispatch } from '../viewStore';
@@ -9,10 +9,11 @@ import { dispatch } from '../viewStore';
 interface Props {
   playerId?: string;
   count: number;
+  size?: CardSize;
   onDrawMany(): void;
 }
 
-const Library = ({ playerId, count, onDrawMany }: Props) => {
+const Library = ({ playerId, count, size = 'sm', onDrawMany }: Props) => {
   const menu = useContextMenu();
   const canDraw = playerId !== undefined && count > 0;
 
@@ -52,7 +53,7 @@ const Library = ({ playerId, count, onDrawMany }: Props) => {
         aria-label="Draw a card"
         className={classNames(
           'flex justify-center items-center aspect-card rounded-lg',
-          cardWidths.sm,
+          cardWidths[size],
           count === 0
             ? 'border-2 border-dashed border-slate-500'
             : 'hover:ring-4 ring-amber-300',

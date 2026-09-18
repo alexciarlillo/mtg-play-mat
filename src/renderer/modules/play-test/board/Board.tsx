@@ -1,4 +1,5 @@
 import type { PublicView } from '@shared/game';
+import type { OpponentState } from '@shared/net/remoteViews';
 import classNames from 'classnames';
 import { type MouseEvent, type ReactNode, useCallback, useState } from 'react';
 
@@ -12,8 +13,15 @@ import BattlefieldCard from './BattlefieldCard';
 import Library from './Library';
 import { SIDE_PANEL_WIDTH } from './layout';
 import LifeCounter from './LifeCounter';
+import OpponentSide from './OpponentSide';
+import ScaledField from './ScaledField';
 import ZoneBrowser from './ZoneBrowser';
 import ZonePile from './ZonePile';
+
+const noOpponent: ViewStore<OpponentState> = {
+  subscribe: () => () => {},
+  getSnapshot: () => null,
+};
 
 type Dialog =
   'help' | 'drawMany' | 'setLife' | 'restart' | 'graveyard' | 'exile';
@@ -37,8 +45,17 @@ const ToolButton = ({
   </button>
 );
 
-const Board = ({ store }: { store: ViewStore<PublicView> }) => {
+interface Props {
+  store: ViewStore<PublicView>;
+  opponent?: ViewStore<OpponentState>;
+}
+
+const Board = ({ store, opponent }: Props) => {
   const view = useView(store);
+  const remote = useView(opponent ?? noOpponent);
+  const peer = remote?.peer ?? null;
+  // With an opponent the board splits in two and the own panel compacts.
+  const duel = peer !== null;
   const menu = useContextMenu();
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const close = useCallback(() => setDialog(null), []);
@@ -77,105 +94,132 @@ const Board = ({ store }: { store: ViewStore<PublicView> }) => {
     });
   };
 
-  return (
-    <div
-      className="h-screen w-screen overflow-hidden bg-neutral-400 flex"
-      onContextMenu={handleContextMenu}
-    >
-      <div className="flex-1 h-full px-8 py-6">
-        {/* Positions are relative to this box. */}
-        <div data-testid="battlefield" className="relative h-full w-full">
-          {view?.zones.battlefield.map((card) => (
-            <BattlefieldCard key={card.instanceId} card={card} />
-          ))}
-        </div>
-      </div>
+  const pileSize = duel ? 'xs' : 'sm';
 
-      <aside
-        style={{ width: SIDE_PANEL_WIDTH }}
-        className="h-full shrink-0 bg-slate-800 text-slate-100 flex flex-col gap-3 p-3"
-      >
-        {view && (
-          <>
-            <LifeCounter
-              playerId={view.playerId}
-              life={view.life}
-              onSetLife={() => setDialog('setLife')}
-            />
-            {!view.keptHand && (
-              <div
-                data-testid="mulligan-status"
-                className="rounded bg-amber-200 px-2 py-1 text-center text-sm font-semibold text-slate-900"
-              >
-                Choosing opening hand · Mulligans {view.mulligans}
-              </div>
-            )}
-            <div className="flex flex-wrap gap-1">
-              <ToolButton
-                onClick={() =>
-                  dispatch({ type: 'untapAll', playerId: view.playerId })
-                }
-              >
-                Untap all
-              </ToolButton>
-              <ToolButton onClick={() => setDialog('drawMany')}>
-                Draw N…
-              </ToolButton>
-              <ToolButton
-                onClick={() =>
-                  dispatch({ type: 'shuffle', playerId: view.playerId })
-                }
-              >
-                Shuffle
-              </ToolButton>
-              <ToolButton onClick={() => setDialog('restart')}>
-                Restart
-              </ToolButton>
-              <ToolButton label="Keyboard shortcuts" onClick={toggleHelp}>
-                ?
-              </ToolButton>
-            </div>
-            <div className="grid grid-cols-2 gap-x-2 gap-y-3">
-              <Library
+  return (
+    <div className="h-screen w-screen overflow-hidden bg-neutral-400 flex flex-col">
+      {peer && (
+        <div className="h-1/2 min-h-0">
+          <OpponentSide peer={peer} view={remote?.view ?? null} />
+        </div>
+      )}
+      <div className="flex flex-1 min-h-0" onContextMenu={handleContextMenu}>
+        <div
+          className={classNames('flex-1 h-full px-8', duel ? 'py-3' : 'py-6')}
+        >
+          {/* Positions are relative to this box, in logical field units. */}
+          <ScaledField testId="battlefield">
+            {(scale) =>
+              view?.zones.battlefield.map((card) => (
+                <BattlefieldCard
+                  key={card.instanceId}
+                  card={card}
+                  scale={scale}
+                />
+              ))
+            }
+          </ScaledField>
+        </div>
+
+        <aside
+          style={{ width: SIDE_PANEL_WIDTH }}
+          className={classNames(
+            'h-full shrink-0 overflow-y-auto bg-slate-800 text-slate-100 flex flex-col p-3',
+            duel ? 'gap-2' : 'gap-3'
+          )}
+        >
+          {view && (
+            <>
+              <LifeCounter
                 playerId={view.playerId}
-                count={view.libraryCount}
-                onDrawMany={() => setDialog('drawMany')}
+                life={view.life}
+                compact={duel}
+                onSetLife={() => setDialog('setLife')}
               />
-              <div
-                data-testid="hand-count"
-                data-drop-zone="hand"
-                data-count={view.handCount}
-                className="flex flex-col items-center gap-1"
-              >
+              {!view.keptHand && (
                 <div
-                  className={classNames(
-                    'aspect-card rounded-lg border-2 border-dashed border-slate-500',
-                    'flex items-center justify-center text-4xl font-bold tabular-nums',
-                    cardWidths.sm
-                  )}
+                  data-testid="mulligan-status"
+                  className="rounded bg-amber-200 px-2 py-1 text-center text-sm font-semibold text-slate-900"
                 >
-                  {view.handCount}
+                  Choosing opening hand · Mulligans {view.mulligans}
                 </div>
-                <div className="text-sm font-medium">
-                  Hand <span className="tabular-nums">{view.handCount}</span>
-                </div>
+              )}
+              <div className="flex flex-wrap gap-1">
+                <ToolButton
+                  onClick={() =>
+                    dispatch({ type: 'untapAll', playerId: view.playerId })
+                  }
+                >
+                  Untap all
+                </ToolButton>
+                <ToolButton onClick={() => setDialog('drawMany')}>
+                  Draw N…
+                </ToolButton>
+                <ToolButton
+                  onClick={() =>
+                    dispatch({ type: 'shuffle', playerId: view.playerId })
+                  }
+                >
+                  Shuffle
+                </ToolButton>
+                <ToolButton onClick={() => setDialog('restart')}>
+                  Restart
+                </ToolButton>
+                <ToolButton label="Keyboard shortcuts" onClick={toggleHelp}>
+                  ?
+                </ToolButton>
               </div>
-              <ZonePile
-                zone="graveyard"
-                label="Graveyard"
-                cards={view.zones.graveyard}
-                onOpen={() => setDialog('graveyard')}
-              />
-              <ZonePile
-                zone="exile"
-                label="Exile"
-                cards={view.zones.exile}
-                onOpen={() => setDialog('exile')}
-              />
-            </div>
-          </>
-        )}
-      </aside>
+              <div
+                className={classNames(
+                  'grid gap-x-2',
+                  duel ? 'grid-cols-4 gap-y-1' : 'grid-cols-2 gap-y-3'
+                )}
+              >
+                <Library
+                  playerId={view.playerId}
+                  count={view.libraryCount}
+                  size={pileSize}
+                  onDrawMany={() => setDialog('drawMany')}
+                />
+                <div
+                  data-testid="hand-count"
+                  data-drop-zone="hand"
+                  data-count={view.handCount}
+                  className="flex flex-col items-center gap-1"
+                >
+                  <div
+                    className={classNames(
+                      'aspect-card rounded-lg border-2 border-dashed border-slate-500',
+                      'flex items-center justify-center font-bold tabular-nums',
+                      duel ? 'text-2xl' : 'text-4xl',
+                      cardWidths[pileSize]
+                    )}
+                  >
+                    {view.handCount}
+                  </div>
+                  <div className="text-sm font-medium">
+                    Hand <span className="tabular-nums">{view.handCount}</span>
+                  </div>
+                </div>
+                <ZonePile
+                  zone="graveyard"
+                  label="Graveyard"
+                  cards={view.zones.graveyard}
+                  size={pileSize}
+                  onOpen={() => setDialog('graveyard')}
+                />
+                <ZonePile
+                  zone="exile"
+                  label="Exile"
+                  cards={view.zones.exile}
+                  size={pileSize}
+                  onOpen={() => setDialog('exile')}
+                />
+              </div>
+            </>
+          )}
+        </aside>
+      </div>
 
       {view && dialog === 'graveyard' && (
         <ZoneBrowser
