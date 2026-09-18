@@ -6,6 +6,7 @@ import {
   _electron as electron,
   type ElectronApplication,
   expect,
+  type Locator,
   type Page,
   test,
 } from '@playwright/test';
@@ -38,19 +39,31 @@ const openSamplePlayTest = () =>
     ).testHooks.openSamplePlayTest()
   );
 
+// A closing window can still be listed after its webContents is destroyed,
+// so skip those instead of letting getURL throw.
 const windowUrls = () =>
   app.evaluate(({ BrowserWindow }) =>
-    BrowserWindow.getAllWindows().map((w) => w.webContents.getURL())
+    BrowserWindow.getAllWindows()
+      .filter((w) => !w.isDestroyed() && !w.webContents.isDestroyed())
+      .map((w) => w.webContents.getURL())
   );
 
 const closeWindow = (html: string) =>
   app.evaluate(({ BrowserWindow }, name) => {
     BrowserWindow.getAllWindows()
+      .filter((w) => !w.isDestroyed() && !w.webContents.isDestroyed())
       .find((w) => w.webContents.getURL().includes(name))
       ?.close();
   }, html);
 
 const cards = (page: Page) => page.locator('[data-testid="card"]');
+const battlefield = (board: Page) =>
+  board.getByTestId('battlefield').getByTestId('card');
+const graveyard = (board: Page) =>
+  board.getByTestId('graveyard').getByTestId('card');
+
+const instanceIds = (locator: Locator) =>
+  locator.evaluateAll((els) => els.map((el) => el.dataset.instanceId));
 
 const drawAndPlay = async () => {
   const board = await windowByPage('board.html');
@@ -120,14 +133,14 @@ test('window.api is a narrow typed bridge', async () => {
   expect(surface.keys).toEqual(
     [
       'deleteDeck',
-      'drawCard',
+      'dispatch',
+      'getBoardView',
+      'getHandView',
       'importDeck',
       'listDecks',
       'listSets',
-      'onCardDrawn',
-      'onCardPlayed',
-      'onDeckLoaded',
-      'playCard',
+      'onBoardView',
+      'onHandView',
       'searchCards',
       'startPlayTest',
     ].sort()
@@ -157,16 +170,19 @@ test('play test opens, reuses, closes as a pair, and reopens', async () => {
   await openSamplePlayTest();
   const { board } = await drawAndPlay();
 
-  // The draggable wrapper is zero-sized, so target the card face itself.
-  const battlefieldCard = board.locator(
-    '.w-4\\/5 [data-testid="card"] .handle'
-  );
-  await battlefieldCard.click();
-  await expect(battlefieldCard).toHaveClass(/rotate-90/);
-  await battlefieldCard.click({ button: 'right' });
+  // Tap by clicking the card itself: its wrapper has a real hitbox now.
+  const card = battlefield(board);
+  const wrapper = board.getByTestId('battlefield-card');
+  const box = await wrapper.boundingBox();
+  expect(box?.width).toBeGreaterThan(100);
+  expect(box?.height).toBeGreaterThan(100);
+  await card.click();
+  await expect(card).toHaveClass(/rotate-90/);
+
+  await card.click({ button: 'right' });
   await board.getByRole('menuitem', { name: 'Destroy' }).click();
-  await expect(cards(board)).toHaveCount(1);
-  await expect(board.locator('.w-4\\/5 [data-testid="card"]')).toHaveCount(0);
+  await expect(graveyard(board)).toHaveCount(1);
+  await expect(battlefield(board)).toHaveCount(0);
 
   // Starting again while open reuses the windows and resets both.
   await board.getByRole('button', { name: 'Draw a card' }).click();
@@ -188,6 +204,77 @@ test('play test opens, reuses, closes as a pair, and reopens', async () => {
   await expect(board2.getByText('Cards: 0')).toBeVisible();
 
   await closeWindow('hand.html');
+  await expect.poll(windowUrls).toHaveLength(1);
+});
+
+test('board and hand state survive window reloads', async () => {
+  await openSamplePlayTest();
+  const { board, hand } = await drawAndPlay();
+
+  const card = battlefield(board);
+  const wrapper = board.getByTestId('battlefield-card');
+  const id = await card.getAttribute('data-instance-id');
+
+  // Drag the card, then tap it; both go to main as actions.
+  const box = await wrapper.boundingBox();
+  if (!box) throw new Error('battlefield card has no box');
+  const grab = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  await board.mouse.move(grab.x, grab.y);
+  await board.mouse.down();
+  await board.mouse.move(grab.x + 120, grab.y + 60, { steps: 10 });
+  await board.mouse.move(grab.x + 240, grab.y + 90, { steps: 10 });
+  await board.mouse.up();
+  await expect(wrapper).toHaveAttribute('style', /translate\(240px, ?90px\)/);
+  await card.click();
+  await expect(card).toHaveClass(/rotate-90/);
+
+  // Two cards in hand to check that the hand also comes back intact.
+  const draw = board.getByRole('button', { name: 'Draw a card' });
+  await draw.click();
+  await expect(board.getByText('Cards: 18')).toBeVisible();
+  await draw.click();
+  await expect(cards(hand)).toHaveCount(2);
+  const handIds = await instanceIds(cards(hand));
+
+  await board.reload();
+  await expect(board.getByText('Cards: 17')).toBeVisible();
+  await expect(battlefield(board)).toHaveCount(1);
+  await expect(card).toHaveAttribute('data-instance-id', id ?? '');
+  await expect(card).toHaveClass(/rotate-90/);
+  await expect(wrapper).toHaveAttribute('style', /translate\(240px, ?90px\)/);
+
+  await hand.reload();
+  await expect(cards(hand)).toHaveCount(2);
+  expect(await instanceIds(cards(hand))).toEqual(handIds);
+
+  // The reloaded windows are still live views, not snapshots.
+  await cards(hand).first().click();
+  await expect(cards(hand)).toHaveCount(1);
+  await expect(battlefield(board)).toHaveCount(2);
+  await card.first().click({ button: 'right' });
+  await board.getByRole('menuitem', { name: 'Destroy' }).click();
+  await expect(graveyard(board)).toHaveCount(1);
+  await expect(battlefield(board)).toHaveCount(1);
+
+  // Main validates actions: a window cannot start a game or send junk.
+  for (const bad of [
+    { type: 'newGame', seed: 1, players: [] },
+    { type: 'draw', playerId: 'p1', count: 'all' },
+    { type: 'moveCard', instanceId: id, to: 'sideboard' },
+  ]) {
+    const result = await board.evaluate(
+      (action) =>
+        window.api.dispatch(action as never).then(
+          () => 'accepted',
+          (err: unknown) => String(err)
+        ),
+      bad
+    );
+    expect(result).toMatch(/invalid action/);
+  }
+  await expect(board.getByText('Cards: 17')).toBeVisible();
+
+  await closeWindow('board.html');
   await expect.poll(windowUrls).toHaveLength(1);
 });
 

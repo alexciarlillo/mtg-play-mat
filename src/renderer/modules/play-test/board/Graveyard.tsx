@@ -1,28 +1,19 @@
-import { observer } from 'mobx-react-lite';
+import type { CardView } from '@shared/game';
 
 import Card from '../../../ui/Card';
-import { useBoardStore } from './BoardStoreContext';
 
-const Graveyard = () => {
-  const board = useBoardStore();
+const Graveyard = ({ cards }: { cards: CardView[] }) => (
+  <div data-testid="graveyard" className="relative">
+    {cards.map((card, index) => (
+      <div
+        className="absolute"
+        style={{ top: `${index * 30}px` }}
+        key={card.instanceId}
+      >
+        <Card card={card} />
+      </div>
+    ))}
+  </div>
+);
 
-  return (
-    <div className="flex flex-col justify-evenly relative">
-      {board.graveyard.map((card, index) => (
-        <div
-          style={{ position: 'absolute', top: `${index * 30}px` }}
-          key={card.key}
-        >
-          <Card
-            card={card}
-            draggable={false}
-            tappable={false}
-            location="graveyard"
-          />
-        </div>
-      ))}
-    </div>
-  );
-};
-
-export default observer(Graveyard);
+export default Graveyard;

@@ -1,35 +1,31 @@
-import type CardModel from '@shared/models/CardModel';
-import { observer } from 'mobx-react-lite';
+import type { CardView, PrivateView } from '@shared/game';
 
 import Card from '../../../ui/Card';
-import { useHandStore } from './HandStoreContext';
+import { dispatch, useView, type ViewStore } from '../viewStore';
 
-const Hand = () => {
-  const hand = useHandStore();
+const play = (card: CardView) => {
+  dispatch({
+    type: 'moveCard',
+    instanceId: card.instanceId,
+    to: 'battlefield',
+  });
+};
 
-  const handlePlayed = (card: CardModel) => {
-    hand.play(card);
-  };
+const Hand = ({ store }: { store: ViewStore<PrivateView> }) => {
+  const view = useView(store);
 
   return (
     <div className="h-full w-screen bg-slate-800">
       <div className="w-screen h-6 text-center bg-slate-200 [-webkit-app-region:drag]">
         Hand
       </div>
-      <div className="grid grid-cols-7 gap-y-2">
-        {hand.cards.map((card) => (
-          <Card
-            key={card.key}
-            card={card}
-            playable
-            onPlayed={handlePlayed}
-            draggable={false}
-            location="hand"
-          />
+      <div data-testid="hand" className="grid grid-cols-7 gap-y-2">
+        {view?.hand.map((card) => (
+          <Card key={card.instanceId} card={card} onClick={play} />
         ))}
       </div>
     </div>
   );
 };
 
-export default observer(Hand);
+export default Hand;

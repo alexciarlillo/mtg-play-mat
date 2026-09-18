@@ -1,14 +1,18 @@
 import classNames from 'classnames';
-import { observer } from 'mobx-react-lite';
 
 import CardImg from '../../../ui/CardImg';
-import { useBoardStore } from './BoardStoreContext';
+import { dispatch } from '../viewStore';
 
-const Library = () => {
-  const board = useBoardStore();
+interface Props {
+  playerId?: string;
+  count: number;
+}
+
+const Library = ({ playerId, count }: Props) => {
+  const canDraw = playerId !== undefined && count > 0;
 
   const drawCard = () => {
-    board.drawCard();
+    if (playerId) dispatch({ type: 'draw', playerId, count: 1 });
   };
 
   return (
@@ -24,19 +28,16 @@ const Library = () => {
           'items-center',
           'aspect-card',
           'w-52',
-          'handle',
           'rounded-lg',
-          {
-            'hover:cursor-pointer': board.library.length > 0,
-          }
+          { 'hover:cursor-pointer': canDraw }
         )}
-        onClick={board.library.length > 0 ? drawCard : undefined}
+        onClick={canDraw ? drawCard : undefined}
       >
         <CardImg />
       </div>
-      <div>Cards: {board.library.length}</div>
+      <div>Cards: {count}</div>
     </div>
   );
 };
 
-export default observer(Library);
+export default Library;

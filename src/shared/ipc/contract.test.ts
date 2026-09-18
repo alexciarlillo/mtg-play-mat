@@ -4,11 +4,10 @@ import { eventChannels, eventListenerName, requestChannels } from './contract';
 
 describe('ipc contract', () => {
   it('derives on<Event> listener names', () => {
-    expect(eventListenerName('deckLoaded')).toBe('onDeckLoaded');
+    expect(eventListenerName('boardView')).toBe('onBoardView');
     expect(eventChannels.map(eventListenerName)).toEqual([
-      'onDeckLoaded',
-      'onCardDrawn',
-      'onCardPlayed',
+      'onBoardView',
+      'onHandView',
     ]);
   });
 

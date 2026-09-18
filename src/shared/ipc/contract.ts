@@ -1,4 +1,4 @@
-import type { CardModelProps } from '../models/CardModel';
+import type { PlayerAction, PrivateView, PublicView } from '../game';
 import type {
   CurrentSetListReturn,
   DeckRow,
@@ -34,15 +34,17 @@ export const requests = {
   >(),
   listSets: request<[], CurrentSetListReturn[]>(),
   startPlayTest: request<[deckId: number]>(),
-  drawCard: request<[card: CardModelProps]>(),
-  playCard: request<[card: CardModelProps]>(),
+  // Main validates the action and pushes fresh views to both windows.
+  dispatch: request<[action: PlayerAction]>(),
+  // Board and hand fetch their view on load, so a reload restores it.
+  getBoardView: request<[], PublicView | null>(),
+  getHandView: request<[], PrivateView | null>(),
 };
 
 // Main -> renderer pushes. The preload exposes each as on<Name>(listener).
 export const events = {
-  deckLoaded: event<CardModelProps[]>(),
-  cardDrawn: event<CardModelProps>(),
-  cardPlayed: event<CardModelProps>(),
+  boardView: event<PublicView>(),
+  handView: event<PrivateView>(),
 };
 
 type SpecType<S> = S extends Spec<infer T> ? T : never;

@@ -1,22 +1,23 @@
 import '../styles.css';
 
+import type { PrivateView } from '@shared/game';
 import { createRoot } from 'react-dom/client';
 
 import Hand from '../modules/play-test/hand/Hand';
-import HandStore from '../modules/play-test/hand/HandStore';
-import { HandStoreProvider } from '../modules/play-test/hand/HandStoreContext';
+import { createViewStore } from '../modules/play-test/viewStore';
 import { ContextMenuProvider } from '../ui/ContextMenuProvider';
 
 const container = document.getElementById('hand');
 
 if (container) {
-  const store = new HandStore();
+  const store = createViewStore<PrivateView>({
+    subscribe: window.api.onHandView,
+    fetch: window.api.getHandView,
+  });
   const root = createRoot(container);
   root.render(
     <ContextMenuProvider>
-      <HandStoreProvider store={store}>
-        <Hand />
-      </HandStoreProvider>
+      <Hand store={store} />
     </ContextMenuProvider>
   );
 }

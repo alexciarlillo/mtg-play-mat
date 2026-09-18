@@ -55,6 +55,20 @@ subscription per push (main → renderer) that returns an unsubscribe function. 
 a channel, add one line to `requests` or `events`; the type checker then requires a
 handler in main, and the renderer gets the typed function automatically.
 
+## Game state
+
+The game engine in `src/shared/game/` is pure TypeScript with no Electron or React
+imports. A `GameState` is plain JSON: players, zones as ordered instance ids, card
+instances that carry their own display data (`CardRef`), a seeded PRNG, and an action
+log. `reduce(state, action)` is the only way to change it. The generic core
+(`core.ts`) handles zones and movement; `mtg.ts` adds Magic rules such as tapping and
+what happens when a card leaves the battlefield.
+
+The main process owns the authoritative state. Windows send actions through
+`window.api.dispatch` and receive views: the hand gets `privateView` (including hand
+contents), and the board gets `publicView`, which never contains hand or library card
+identities. A reloaded window fetches its current view, so nothing is lost.
+
 ## Building
 
 ```sh
