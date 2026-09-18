@@ -26,7 +26,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "npm run build && playwright test",
-    "postinstall": "electron-builder install-app-deps"
+    "postinstall": "node -e \"require('electron')\""
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
