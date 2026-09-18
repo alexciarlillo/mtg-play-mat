@@ -20,6 +20,7 @@ import {
 
 interface TestHooks {
   openSamplePlayTest(seed?: number): Promise<void>;
+  openSampleCommanderPlayTest(seed?: number): Promise<void>;
   gameState(): GameState;
   profile(): { playerId: string; displayName: string };
 }
@@ -79,6 +80,15 @@ const openPlayTest = ({ app }: Instance, seed: number) =>
       (
         globalThis as unknown as { testHooks: TestHooks }
       ).testHooks.openSamplePlayTest(s),
+    seed
+  );
+
+const openCommanderPlayTest = ({ app }: Instance, seed: number) =>
+  app.evaluate(
+    (_electron, s) =>
+      (
+        globalThis as unknown as { testHooks: TestHooks }
+      ).testHooks.openSampleCommanderPlayTest(s),
     seed
   );
 
@@ -381,6 +391,61 @@ test('an invite link reaches the running app and reconnects', async () => {
     'data-count',
     '1'
   );
+});
+
+test('commanders, tax, and commander damage reach the other board', async () => {
+  const DREADMAW = 'Colossal Dreadmaw';
+  await openCommanderPlayTest(host, 3333);
+  const [hostBoard, guestBoard] = await Promise.all([
+    page(host, 'board.html'),
+    page(guest, 'board.html'),
+  ]);
+  const seen = guestBoard
+    .getByTestId('opponent-command')
+    .locator(`[data-testid="commander"][data-card-name="${DREADMAW}"]`);
+
+  await expect(guestBoard.getByTestId('opponent-life')).toHaveText('40');
+  await expect(seen).toHaveAttribute('data-zone', 'command');
+  await expect(seen.getByTestId('commander-tax')).toHaveText('Tax +0');
+  await expect(seen.getByTestId('commander-badge')).toBeVisible();
+
+  // Read-only: clicking the opponent's commander casts nothing.
+  await seen.getByTestId('card').click();
+  await seen.getByTestId('card').click({ button: 'right' });
+  await expect(guestBoard.getByRole('menuitem')).toHaveCount(0);
+  await expect(seen).toHaveAttribute('data-zone', 'command');
+
+  await hostBoard.getByTestId('command-zone').getByTestId('card').click();
+  await expect(seen).toHaveAttribute('data-zone', 'battlefield');
+  await expect(seen.getByTestId('commander-tax')).toHaveText('Tax +2');
+  await expect(
+    opponentField(guestBoard).getByTestId('commander-badge')
+  ).toHaveCount(1);
+
+  // The guest records the damage it took; the host sees it and the life.
+  const taken = guestBoard
+    .getByTestId('commander-damage-taken')
+    .getByTestId('commander-damage');
+  await expect(taken).toHaveAttribute('data-source-name', DREADMAW);
+  const more = guestBoard.getByRole('button', {
+    name: `More commander damage from ${DREADMAW}`,
+  });
+  for (let i = 0; i < 3; i += 1) await more.click();
+  await expect(taken).toHaveAttribute('data-damage', '3');
+  await expect(guestBoard.getByTestId('life')).toHaveText('17');
+
+  const recorded = hostBoard
+    .getByTestId('opponent-commander-damage')
+    .getByTestId('commander-damage');
+  await expect(recorded).toHaveAttribute('data-damage', '3');
+  await expect(recorded).toHaveAttribute('data-source-name', DREADMAW);
+  await expect(hostBoard.getByTestId('opponent-life')).toHaveText('17');
+  await expect(recorded.getByRole('button')).toHaveCount(0);
+
+  for (let i = 0; i < 18; i += 1) await more.click();
+  await expect(taken).toHaveAttribute('data-lethal', 'true');
+  await expect(recorded).toHaveAttribute('data-damage', '21');
+  await expect(recorded).toHaveAttribute('data-lethal', 'true');
 });
 
 test('no renderer console errors in either instance', () => {

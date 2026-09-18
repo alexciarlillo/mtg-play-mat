@@ -44,6 +44,7 @@ const Card = ({ card, onClick, menu = [], size = 'lg', className }: Props) => {
       data-card-name={card.faceDown ? undefined : card.ref?.name}
       className={classNames(
         'handle',
+        'relative',
         'origin-center',
         'flex',
         'justify-center',
@@ -69,6 +70,15 @@ const Card = ({ card, onClick, menu = [], size = 'lg', className }: Props) => {
         face={card.faceIndex}
         name={card.faceDown ? 'Face-down card' : card.ref?.name}
       />
+      {card.isCommander && (
+        <span
+          data-testid="commander-badge"
+          title="Commander"
+          className="pointer-events-none absolute left-1 top-1 rounded-full bg-slate-900/80 px-1 text-xs leading-5 text-amber-300"
+        >
+          ♛
+        </span>
+      )}
     </div>
   );
 };

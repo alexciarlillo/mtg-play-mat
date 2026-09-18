@@ -19,6 +19,8 @@ const view = (playerId: string, life = 20): PublicView => ({
   zones: { battlefield: [], graveyard: [], exile: [], command: [] },
   handCount: 7,
   libraryCount: 53,
+  commanderDamage: [],
+  dummies: [],
 });
 
 const setup = () => {

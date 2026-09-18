@@ -126,6 +126,25 @@ preview in that window only.
 Shortcuts (in either window): **D** draw, **U** untap all, **S** shuffle, **M**
 mulligan (until you keep), **?** help. Keys with Cmd/Ctrl/Alt are left alone.
 
+### Commander
+
+A deck whose format is Commander starts at 40 life with its commander board (one
+commander, or two for partners/backgrounds) in the command zone on the board panel.
+Click a commander there to cast it. Each cast from the command zone adds 2 to its
+tax ("Tax +2"), which is shown for each commander wherever it is. Right-click a
+commander to fix the tax by hand or to move it to the command zone. Commanders wear
+a crown badge. When a commander goes to the graveyard, exile, hand, or library, the
+board asks **Return to command zone?**. Main keeps that prompt, so it survives a
+reload, and the engine itself only moves cards.
+
+For goldfishing, **+ Opponent** (or right-click the board, then **Add placeholder
+opponent**) adds up to three stand-in opponents. Each has a life total and the
+commander damage it took from each of your commanders. Online, the panel lists the
+opponent's commanders under **Commander damage taken**, so you can record what they
+dealt you. Commander damage also changes life, and 21 or more from one commander is
+flagged as lethal. The command zone, tax, commander damage, and placeholder opponents
+are all public, so they show on the opponent's board read-only.
+
 ## Playing online
 
 **Play online** in the app window connects you directly to one opponent (WebRTC, no

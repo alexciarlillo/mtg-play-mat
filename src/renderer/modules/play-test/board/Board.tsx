@@ -1,4 +1,4 @@
-import type { PublicView } from '@shared/game';
+import { MAX_DUMMIES, type PublicView } from '@shared/game';
 import type { OpponentState } from '@shared/net/remoteViews';
 import classNames from 'classnames';
 import { type MouseEvent, type ReactNode, useCallback, useState } from 'react';
@@ -10,6 +10,15 @@ import ShortcutHelp from '../common/ShortcutHelp';
 import { useGameShortcuts } from '../common/useGameShortcuts';
 import { dispatch, useView, type ViewStore } from '../viewStore';
 import BattlefieldCard from './BattlefieldCard';
+import CommanderPrompt from './CommanderPrompt';
+import {
+  commanderSources,
+  hasCommanders,
+  useCommanderPrompts,
+  visibleCommanders,
+} from './commanders';
+import { CommanderDamageTaken, DummyOpponents } from './CommanderTracker';
+import CommandZone from './CommandZone';
 import Library from './Library';
 import { SIDE_PANEL_WIDTH } from './layout';
 import LifeCounter from './LifeCounter';
@@ -45,6 +54,13 @@ const ToolButton = ({
   </button>
 );
 
+const dummyName = (view: PublicView) => {
+  const names = new Set(view.dummies.map((d) => d.name));
+  let n = 1;
+  while (names.has(`Opponent ${n}`)) n += 1;
+  return `Opponent ${n}`;
+};
+
 interface Props {
   store: ViewStore<PublicView>;
   opponent?: ViewStore<OpponentState>;
@@ -64,9 +80,24 @@ const Board = ({ store, opponent }: Props) => {
     []
   );
 
-  useGameShortcuts(view, { enabled: dialog === null, onHelp: toggleHelp });
+  const prompts = useCommanderPrompts();
+
+  useGameShortcuts(view, {
+    enabled: dialog === null && prompts.length === 0,
+    onHelp: toggleHelp,
+  });
 
   const playerId = view?.playerId;
+  const canAddDummy = view !== null && view.dummies.length < MAX_DUMMIES;
+  const addDummy = () => {
+    if (view && canAddDummy) {
+      dispatch({
+        type: 'addDummy',
+        playerId: view.playerId,
+        name: dummyName(view),
+      });
+    }
+  };
 
   const handleContextMenu = (e: MouseEvent) => {
     e.preventDefault();
@@ -87,6 +118,9 @@ const Board = ({ store, opponent }: Props) => {
           title: 'Shuffle library',
           action: () => dispatch({ type: 'shuffle', playerId }),
         },
+        ...(canAddDummy
+          ? [{ title: 'Add placeholder opponent', action: addDummy }]
+          : []),
         { title: 'Keyboard shortcuts', action: () => setDialog('help') },
       ],
       x: e.pageX,
@@ -94,7 +128,11 @@ const Board = ({ store, opponent }: Props) => {
     });
   };
 
-  const pileSize = duel ? 'xs' : 'sm';
+  const commanderGame = view !== null && hasCommanders(view);
+  // The command zone needs room too, so piles shrink to one row for it.
+  const compactPiles = duel || commanderGame;
+  const pileSize = compactPiles ? 'xs' : 'sm';
+  const opponentView = remote?.view ?? null;
 
   return (
     <div className="h-screen w-screen overflow-hidden bg-neutral-400 flex flex-col">
@@ -165,6 +203,14 @@ const Board = ({ store, opponent }: Props) => {
                 <ToolButton onClick={() => setDialog('restart')}>
                   Restart
                 </ToolButton>
+                {commanderGame && canAddDummy && (
+                  <ToolButton
+                    label="Add placeholder opponent"
+                    onClick={addDummy}
+                  >
+                    + Opponent
+                  </ToolButton>
+                )}
                 <ToolButton label="Keyboard shortcuts" onClick={toggleHelp}>
                   ?
                 </ToolButton>
@@ -172,7 +218,7 @@ const Board = ({ store, opponent }: Props) => {
               <div
                 className={classNames(
                   'grid gap-x-2',
-                  duel ? 'grid-cols-4 gap-y-1' : 'grid-cols-2 gap-y-3'
+                  compactPiles ? 'grid-cols-4 gap-y-1' : 'grid-cols-2 gap-y-3'
                 )}
               >
                 <Library
@@ -191,7 +237,7 @@ const Board = ({ store, opponent }: Props) => {
                     className={classNames(
                       'aspect-card rounded-lg border-2 border-dashed border-slate-500',
                       'flex items-center justify-center font-bold tabular-nums',
-                      duel ? 'text-2xl' : 'text-4xl',
+                      compactPiles ? 'text-2xl' : 'text-4xl',
                       cardWidths[pileSize]
                     )}
                   >
@@ -215,7 +261,24 @@ const Board = ({ store, opponent }: Props) => {
                   size={pileSize}
                   onOpen={() => setDialog('exile')}
                 />
+                {commanderGame && (
+                  <CommandZone view={view} size={duel ? 'xs' : 'sm'} />
+                )}
               </div>
+              <CommanderDamageTaken
+                playerId={view.playerId}
+                sources={
+                  opponentView
+                    ? commanderSources(visibleCommanders(opponentView))
+                    : []
+                }
+                taken={view.commanderDamage}
+              />
+              <DummyOpponents
+                playerId={view.playerId}
+                dummies={view.dummies}
+                commanders={commanderSources(visibleCommanders(view))}
+              />
             </>
           )}
         </aside>
@@ -271,6 +334,9 @@ const Board = ({ store, opponent }: Props) => {
         />
       )}
       {dialog === 'help' && <ShortcutHelp onClose={close} />}
+      {prompts[0] && (
+        <CommanderPrompt key={prompts[0].instanceId} prompt={prompts[0]} />
+      )}
     </div>
   );
 };

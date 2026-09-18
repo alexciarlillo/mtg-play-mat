@@ -179,6 +179,9 @@ test('window.api is a narrow typed bridge', async () => {
       'onNetState',
       'onNetCommand',
       'onOpponentView',
+      'getCommanderPrompts',
+      'dismissCommanderPrompt',
+      'onCommanderPrompts',
     ].sort()
   );
   expect(surface.allFunctions).toBe(true);

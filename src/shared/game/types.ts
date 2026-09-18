@@ -57,6 +57,10 @@ export interface CardInstance {
   faceIndex: number;
   counters: Record<string, number>;
   isToken: boolean;
+  // Commander identity survives every zone change, unlike other state.
+  isCommander?: boolean;
+  // Casts from the command zone; the commander tax is 2 per cast.
+  commanderCasts?: number;
 }
 
 export interface PlayerState {
@@ -70,6 +74,25 @@ export interface PlayerState {
   keptHand: boolean;
   // Ordered instance ids per zone. library[0] is the top of the library.
   zones: Record<ZoneId, InstanceId[]>;
+  // Commander damage this player has taken, one entry per source.
+  commanderDamage?: CommanderDamage[];
+  // Stand-in opponents for solo play, tracked by this player.
+  dummies?: DummyOpponent[];
+}
+
+export interface CommanderDamage {
+  // Opaque key of the dealing commander, e.g. a (namespaced) instance id.
+  source: string;
+  // Display name of the source, so any viewer can label it.
+  name: string;
+  damage: number;
+}
+
+export interface DummyOpponent {
+  id: string;
+  name: string;
+  life: number;
+  commanderDamage: CommanderDamage[];
 }
 
 export interface GameState {
@@ -190,7 +213,51 @@ export type MtgPlayerAction =
 
 export type MtgAction = TapAction | MtgPlayerAction;
 
-export type GameAction = CoreAction | MtgAction;
+// Commander tax: changes a commander's cast count by delta (not below 0).
+export interface AdjustCommanderCastsAction {
+  type: 'adjustCommanderCasts';
+  instanceId: InstanceId;
+  delta: number;
+}
+
+// Changes the commander damage a player (or one of their dummies) has
+// taken from one source; life moves by the same amount the other way.
+export interface AdjustCommanderDamageAction {
+  type: 'adjustCommanderDamage';
+  playerId: PlayerId;
+  dummyId?: string;
+  source: string;
+  sourceName: string;
+  delta: number;
+}
+
+export interface AddDummyAction {
+  type: 'addDummy';
+  playerId: PlayerId;
+  name: string;
+}
+
+export interface RemoveDummyAction {
+  type: 'removeDummy';
+  playerId: PlayerId;
+  dummyId: string;
+}
+
+export interface AdjustDummyLifeAction {
+  type: 'adjustDummyLife';
+  playerId: PlayerId;
+  dummyId: string;
+  delta: number;
+}
+
+export type CommanderAction =
+  | AdjustCommanderCastsAction
+  | AdjustCommanderDamageAction
+  | AddDummyAction
+  | RemoveDummyAction
+  | AdjustDummyLifeAction;
+
+export type GameAction = CoreAction | MtgAction | CommanderAction;
 
 // What a window may ask for. Starting a game is main's decision.
 export type PlayerAction = Exclude<GameAction, NewGameAction>;

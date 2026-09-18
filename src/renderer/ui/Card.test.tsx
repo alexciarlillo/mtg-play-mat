@@ -80,4 +80,18 @@ describe('Card', () => {
     fireEvent.contextMenu(screen.getByTestId('card'));
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
   });
+
+  it('wears a crown only when it is a commander', () => {
+    const { rerender } = renderCard();
+    expect(screen.queryByTestId('commander-badge')).not.toBeInTheDocument();
+    rerender(
+      <ContextMenuProvider>
+        <Card card={{ ...bears, isCommander: true, commanderCasts: 0 }} />
+      </ContextMenuProvider>
+    );
+    expect(screen.getByTestId('commander-badge')).toHaveAttribute(
+      'title',
+      'Commander'
+    );
+  });
 });

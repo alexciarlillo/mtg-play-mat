@@ -1,4 +1,9 @@
-import type { PlayerAction, PrivateView, PublicView } from '../game';
+import type {
+  CommanderMove,
+  PlayerAction,
+  PrivateView,
+  PublicView,
+} from '../game';
 import type { NetCommand, NetReport, NetState, Profile } from '../net/lobby';
 import type { OpponentState } from '../net/remoteViews';
 import type { CardDataStatus } from '../types/cardData';
@@ -57,6 +62,10 @@ export const requests = {
   // Board and hand fetch their view on load, so a reload restores it.
   getBoardView: request<[], PublicView | null>(),
   getHandView: request<[], PrivateView | null>(),
+  // Commanders waiting for their owner to choose whether they return to
+  // the command zone; answering yes is a moveCard dispatch.
+  getCommanderPrompts: request<[], CommanderMove[]>(),
+  dismissCommanderPrompt: request<[instanceId: string]>(),
   getCardDataStatus: request<[], CardDataStatus>(),
   // Starts a check-and-download; progress arrives as cardDataStatus.
   updateCardData: request<[], CardDataStatus>(),
@@ -82,6 +91,7 @@ export const events = {
   netState: event<NetState>(),
   netCommand: event<NetCommand>(),
   opponentView: event<OpponentState>(),
+  commanderPrompts: event<CommanderMove[]>(),
 };
 
 type SpecType<S> = S extends Spec<infer T> ? T : never;

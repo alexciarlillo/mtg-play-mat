@@ -12,6 +12,7 @@ describe('ipc contract', () => {
       'onNetState',
       'onNetCommand',
       'onOpponentView',
+      'onCommanderPrompts',
     ]);
   });
 

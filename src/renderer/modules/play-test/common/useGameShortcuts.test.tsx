@@ -15,6 +15,8 @@ const view: PublicView = {
   zones: { battlefield: [], graveyard: [], exile: [], command: [] },
   handCount: 7,
   libraryCount: 53,
+  commanderDamage: [],
+  dummies: [],
 };
 
 const dispatch = vi.fn((_action: unknown) => Promise.resolve());

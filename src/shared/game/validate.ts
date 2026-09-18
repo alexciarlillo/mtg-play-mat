@@ -135,6 +135,42 @@ export const parsePlayerAction = (input: unknown): PlayerAction => {
         playerId: string(input, 'playerId'),
         bottom: strings(input, 'bottom', MAX_COUNT),
       };
+    case 'adjustCommanderCasts':
+      return {
+        type: 'adjustCommanderCasts',
+        instanceId: string(input, 'instanceId'),
+        delta: signed(input, 'delta', MAX_COUNT),
+      };
+    case 'adjustCommanderDamage':
+      return {
+        type: 'adjustCommanderDamage',
+        playerId: string(input, 'playerId'),
+        ...(input.dummyId !== undefined && {
+          dummyId: string(input, 'dummyId'),
+        }),
+        source: string(input, 'source'),
+        sourceName: string(input, 'sourceName'),
+        delta: signed(input, 'delta', MAX_LIFE),
+      };
+    case 'addDummy':
+      return {
+        type: 'addDummy',
+        playerId: string(input, 'playerId'),
+        name: string(input, 'name').slice(0, 32),
+      };
+    case 'removeDummy':
+      return {
+        type: 'removeDummy',
+        playerId: string(input, 'playerId'),
+        dummyId: string(input, 'dummyId'),
+      };
+    case 'adjustDummyLife':
+      return {
+        type: 'adjustDummyLife',
+        playerId: string(input, 'playerId'),
+        dummyId: string(input, 'dummyId'),
+        delta: signed(input, 'delta', MAX_LIFE),
+      };
     default:
       return fail(`unknown type ${JSON.stringify(input.type)}`);
   }

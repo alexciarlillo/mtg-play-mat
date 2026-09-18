@@ -3,6 +3,8 @@ import type {
   CardFace,
   CardRef,
   CardView,
+  CommanderDamage,
+  DummyOpponent,
   PlayerId,
   Position,
   PublicView,
@@ -168,6 +170,38 @@ const cardView = (value: unknown, zone: PublicZoneId): CardView => {
     faceIndex: faceDown ? 0 : int(fields, 'faceIndex', 0, 3),
     counters: counters(fields, 'counters'),
     isToken: bool(fields, 'isToken'),
+    ...(fields.isCommander !== undefined &&
+      bool(fields, 'isCommander') && {
+        isCommander: true,
+        commanderCasts: int(fields, 'commanderCasts', 0, MAX_COUNT),
+      }),
+  };
+};
+
+const MAX_DAMAGE_SOURCES = 50;
+const MAX_DUMMIES = 8;
+
+// Views from builds without commander support simply have none.
+const optionalList = (value: unknown, key: string, max: number) =>
+  value === undefined ? [] : list(value, key, max);
+
+const commanderDamage = (value: unknown): CommanderDamage[] =>
+  optionalList(value, 'commanderDamage', MAX_DAMAGE_SOURCES).map((item) => {
+    const fields = object(item, 'commanderDamage');
+    return {
+      source: text(fields, 'source'),
+      name: text(fields, 'name'),
+      damage: int(fields, 'damage', 0, MAX_LIFE),
+    };
+  });
+
+const dummy = (value: unknown): DummyOpponent => {
+  const fields = object(value, 'dummy');
+  return {
+    id: text(fields, 'id', { max: 64 }),
+    name: text(fields, 'name', { max: 64 }),
+    life: int(fields, 'life', -MAX_LIFE, MAX_LIFE),
+    commanderDamage: commanderDamage(fields.commanderDamage),
   };
 };
 
@@ -201,6 +235,8 @@ export const parsePublicView = (value: unknown): PublicView => {
     ) as Record<PublicZoneId, CardView[]>,
     handCount: int(fields, 'handCount', 0, MAX_COUNT),
     libraryCount: int(fields, 'libraryCount', 0, MAX_COUNT),
+    commanderDamage: commanderDamage(fields.commanderDamage),
+    dummies: optionalList(fields.dummies, 'dummies', MAX_DUMMIES).map(dummy),
   };
 };
 

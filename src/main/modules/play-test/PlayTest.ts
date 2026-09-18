@@ -3,6 +3,8 @@ import { randomInt } from 'node:crypto';
 import {
   actionPlayer,
   type CardRef,
+  type CommanderMove,
+  commanderMoves,
   emptyGame,
   type GameAction,
   type GameState,
@@ -14,7 +16,9 @@ import {
   publicView,
   type PublicView,
   reduce,
+  startingLife,
 } from '@shared/game';
+import type { DeckFormat } from '@shared/types/decks';
 import { BrowserWindow } from 'electron';
 
 import { type RequestHandlers, sendEvent } from '../../ipc';
@@ -27,6 +31,7 @@ import buildSampleDeck from './sampleDeck';
 export interface LoadedDeck {
   library: CardRef[];
   command: CardRef[];
+  format: DeckFormat;
 }
 
 interface Deps {
@@ -46,6 +51,8 @@ type PlayTestHandlers = Pick<
   | 'dispatch'
   | 'getBoardView'
   | 'getHandView'
+  | 'getCommanderPrompts'
+  | 'dismissCommanderPrompt'
 >;
 
 // Owns the authoritative game state and the board and hand windows, which
@@ -62,7 +69,12 @@ export default class PlayTest {
 
   private state: GameState = emptyGame();
 
-  private deck: LoadedDeck = { library: [], command: [] };
+  private deck: LoadedDeck = { library: [], command: [], format: 'other' };
+
+  // The owner decides whether a commander that left for one of these
+  // zones goes to the command zone instead. This is a rules prompt, not
+  // game state, so it lives here rather than in the engine.
+  private commanderPrompts: CommanderMove[] = [];
 
   private readonly playerId: PlayerId;
 
@@ -108,15 +120,27 @@ export default class PlayTest {
     dispatch: (action: unknown) => this.dispatch(parsePlayerAction(action)),
     getBoardView: () => publicView(this.state, this.playerId),
     getHandView: () => privateView(this.state, this.playerId),
+    getCommanderPrompts: () => this.commanderPrompts,
+    dismissCommanderPrompt: (instanceId: unknown) => {
+      const rest = this.commanderPrompts.filter(
+        (prompt) => prompt.instanceId !== instanceId
+      );
+      if (rest.length === this.commanderPrompts.length) return;
+      this.commanderPrompts = rest;
+      sendEvent(this.board, 'commanderPrompts', rest);
+    },
   };
 
-  // A fixed seed is only passed by end-to-end tests.
-  openSampleDeck = (seed?: number) =>
-    this.start({ library: buildSampleDeck(), command: [] }, seed).catch(
-      (err) => {
-        console.error('[PlayTest] failed to open sample deck', err);
-      }
-    );
+  // A fixed seed is only passed by end-to-end tests, which may also ask
+  // for a Commander game led by one of the sample creatures.
+  openSampleDeck = (seed?: number, format: DeckFormat = 'constructed') => {
+    const library = buildSampleDeck();
+    const leader = library.find((ref) => ref.name === 'Colossal Dreadmaw');
+    const command = format === 'commander' && leader ? [leader] : [];
+    return this.start({ library, command, format }, seed).catch((err) => {
+      console.error('[PlayTest] failed to open sample deck', err);
+    });
+  };
 
   // The sideboard stays out of the game; commanders start in the
   // command zone.
@@ -130,7 +154,11 @@ export default class PlayTest {
           if (!printing) return [];
           return Array.from({ length: card.qty }, () => toCardRef(printing));
         });
-    return { library: refs('main'), command: refs('commander') };
+    return {
+      library: refs('main'),
+      command: refs('commander'),
+      format: this.deckDb.getDeck(deckId)?.format ?? 'other',
+    };
   };
 
   // Windows may only act on the local player's cards; stale actions on
@@ -139,8 +167,29 @@ export default class PlayTest {
     if (actionPlayer(this.state, action) !== this.playerId) return;
     const next = reduce(this.state, action);
     if (next === this.state) return;
+    const before = this.state;
     this.state = next;
+    this.updateCommanderPrompts(before);
     this.pushViews();
+  };
+
+  // A prompt lasts until answered or until its commander moves again; a
+  // move into another such zone replaces it.
+  private updateCommanderPrompts = (before: GameState) => {
+    const moves = commanderMoves(before, this.state, this.playerId);
+    const moved = new Set(moves.map((move) => move.instanceId));
+    const kept = this.commanderPrompts.filter(
+      (prompt) =>
+        !moved.has(prompt.instanceId) &&
+        this.state.cards[prompt.instanceId]?.zone === prompt.zone
+    );
+    const prompts = [...kept, ...moves];
+    const same =
+      prompts.length === this.commanderPrompts.length &&
+      prompts.every((prompt, i) => prompt === this.commanderPrompts[i]);
+    if (same) return;
+    this.commanderPrompts = prompts;
+    sendEvent(this.board, 'commanderPrompts', prompts);
   };
 
   private pushViews = () => {
@@ -162,6 +211,7 @@ export default class PlayTest {
             name: this.playerName(),
             deck: deck.library,
             command: deck.command,
+            life: startingLife(deck.format),
           },
         ],
       },
@@ -170,6 +220,8 @@ export default class PlayTest {
     ];
     this.deck = deck;
     this.state = actions.reduce(reduce, this.state);
+    this.commanderPrompts = [];
+    sendEvent(this.board, 'commanderPrompts', []);
   };
 
   private restart = () => {

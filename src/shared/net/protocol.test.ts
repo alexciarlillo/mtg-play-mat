@@ -164,6 +164,44 @@ describe('public view validation', () => {
       },
     ],
     [
+      'a negative commander tax',
+      (v: PublicView) => {
+        Object.assign(v.zones.battlefield[0], {
+          isCommander: true,
+          commanderCasts: -1,
+        });
+      },
+    ],
+    [
+      'a non-boolean commander flag',
+      (v: PublicView) => {
+        Object.assign(v.zones.battlefield[0], { isCommander: 'yes' });
+      },
+    ],
+    [
+      'negative commander damage',
+      (v: PublicView) => {
+        v.commanderDamage = [{ source: 's', name: 'S', damage: -1 }];
+      },
+    ],
+    [
+      'a commander damage entry without a name',
+      (v: PublicView) => {
+        v.commanderDamage = [{ source: 's', name: '', damage: 1 }];
+      },
+    ],
+    [
+      'too many dummies',
+      (v: PublicView) => {
+        v.dummies = Array.from({ length: 9 }, (_, i) => ({
+          id: `d${i}`,
+          name: 'D',
+          life: 20,
+          commanderDamage: [],
+        }));
+      },
+    ],
+    [
       'too many cards',
       (v: PublicView) => {
         v.zones.exile = Array.from({ length: 501 }, () => v.zones.graveyard[0]);
@@ -176,6 +214,64 @@ describe('public view validation', () => {
     expect(() => parsePublicView(JSON.parse(JSON.stringify(v)))).toThrow(
       /bad message/
     );
+  });
+
+  it('keeps commander flags, tax, damage, and dummies', () => {
+    const commander = { ...deck[0], id: uuid(99), name: 'Atraxa' };
+    let state = startGame(
+      [{ id: 'alice', name: 'Alice', deck, command: [commander] }],
+      3
+    );
+    const [id] = zone(state, 'alice', 'command');
+    state = applyAll(state, [
+      { type: 'moveCard', instanceId: id, to: 'battlefield' },
+      { type: 'addDummy', playerId: 'alice', name: 'Dummy' },
+      {
+        type: 'adjustCommanderDamage',
+        playerId: 'alice',
+        source: 'bob/bob:0',
+        sourceName: 'Tymna',
+        delta: 4,
+      },
+      {
+        type: 'adjustCommanderDamage',
+        playerId: 'alice',
+        dummyId: 'dummy-1',
+        source: id,
+        sourceName: 'Atraxa',
+        delta: 6,
+      },
+    ]);
+    const v = publicView(state, 'alice')!;
+    expect(v.zones.battlefield[0]).toMatchObject({
+      isCommander: true,
+      commanderCasts: 1,
+    });
+    const parsed = parseNetMessage(
+      encodeNetMessage({ v: 1, seq: 1, from: 'alice', kind: 'public', view: v })
+    );
+    expect(parsed).toMatchObject({ view: v });
+    if (parsed.kind === 'public') expect(parsed.view).toEqual(v);
+  });
+
+  it('accepts views without commander fields', () => {
+    const v: Partial<PublicView> = structuredClone(view());
+    delete v.commanderDamage;
+    delete v.dummies;
+    expect(parsePublicView(v)).toMatchObject({
+      commanderDamage: [],
+      dummies: [],
+    });
+  });
+
+  it('drops a false commander flag', () => {
+    const v = view();
+    const card = { ...v.zones.battlefield[0], isCommander: false };
+    const parsed = parsePublicView({
+      ...v,
+      zones: { ...v.zones, battlefield: [card] },
+    });
+    expect('isCommander' in parsed.zones.battlefield[0]).toBe(false);
   });
 
   it('namespaces instance ids by peer', () => {

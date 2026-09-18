@@ -69,7 +69,9 @@ describe('publicView', () => {
     expect(view?.zones.command[0].ref?.name).toBe('Public Commander');
     expect(Object.keys(view ?? {}).sort()).toEqual(
       [
+        'commanderDamage',
         'counters',
+        'dummies',
         'handCount',
         'keptHand',
         'libraryCount',

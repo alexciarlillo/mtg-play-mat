@@ -6,18 +6,22 @@ import { useState } from 'react';
 import Card from '../../../ui/Card';
 import { cardWidths } from '../../../ui/cardSizes';
 import CardImg from '../../../ui/CardImg';
+import { hasCommanders } from './commanders';
+import { CommanderDamageTaken } from './CommanderTracker';
+import CommandZone from './CommandZone';
 import { SIDE_PANEL_WIDTH } from './layout';
 import ScaledField from './ScaledField';
 import ZoneBrowser from './ZoneBrowser';
 import ZonePile from './ZonePile';
 
-type Pile = 'graveyard' | 'exile' | 'command';
+type Pile = 'graveyard' | 'exile';
 
 const pileTitles: Record<Pile, string> = {
   graveyard: 'Graveyard',
   exile: 'Exile',
-  command: 'Command zone',
 };
+
+const piles: Pile[] = ['graveyard', 'exile'];
 
 const OpponentCard = ({ card }: { card: CardView }) => {
   const { x, y } = card.position ?? { x: 0, y: 0 };
@@ -75,9 +79,6 @@ const OpponentSide = ({
   view: PublicView | null;
 }) => {
   const [open, setOpen] = useState<Pile | null>(null);
-  const piles: Pile[] = view?.zones.command.length
-    ? ['graveyard', 'exile', 'command']
-    : ['graveyard', 'exile'];
 
   return (
     <div
@@ -158,7 +159,23 @@ const OpponentSide = ({
                 testId={`opponent-${zone}`}
               />
             ))}
+            {hasCommanders(view) && (
+              <CommandZone
+                view={view}
+                size="xs"
+                readOnly
+                testId="opponent-command"
+              />
+            )}
           </div>
+        )}
+        {view && (
+          <CommanderDamageTaken
+            playerId={null}
+            sources={[]}
+            taken={view.commanderDamage}
+            testId="opponent-commander-damage"
+          />
         )}
       </aside>
 

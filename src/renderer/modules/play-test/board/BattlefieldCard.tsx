@@ -61,7 +61,9 @@ const BattlefieldCard = ({ card, scale = 1 }: Props) => {
     }
 
     const pointer = pointOf(event);
-    const zone = dropZoneAt(pointer.x, pointer.y);
+    const target = dropZoneAt(pointer.x, pointer.y);
+    // Only commanders belong in the command zone.
+    const zone = target === 'command' && !card.isCommander ? null : target;
     if (zone) {
       setDrop({ from: card, at });
       moveTo(card, zone, zone === 'library' ? 0 : undefined);

@@ -130,6 +130,8 @@ const start = (onDeepLink: ReturnType<typeof watchDeepLinks>) => {
     Object.assign(globalThis, {
       testHooks: {
         openSamplePlayTest: playTest.openSampleDeck,
+        openSampleCommanderPlayTest: (seed?: number) =>
+          playTest.openSampleDeck(seed, 'commander'),
         gameState: () => playTest.gameState,
         profile: () => profile.profile,
       },

@@ -34,6 +34,8 @@ const view = (life: number): PublicView => ({
   },
   handCount: 7,
   libraryCount: 53,
+  commanderDamage: [],
+  dummies: [],
 });
 
 const hello = (seq: number, from = 'bob'): NetMessage => ({

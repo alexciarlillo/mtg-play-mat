@@ -1,6 +1,8 @@
 import { getPlayer } from './core';
 import type {
   CardInstance,
+  CommanderDamage,
+  DummyOpponent,
   CardRef,
   GameState,
   InstanceId,
@@ -29,6 +31,9 @@ export interface PublicView {
   zones: Record<PublicZoneId, CardView[]>;
   handCount: number;
   libraryCount: number;
+  // Commander damage taken, and any stand-in opponents; both public.
+  commanderDamage: CommanderDamage[];
+  dummies: DummyOpponent[];
 }
 
 // What the player themselves may see: the public view plus their hand.
@@ -55,7 +60,14 @@ const toView = (card: CardInstance, hideFaceDown: boolean): CardView => ({
   faceIndex: hideFaceDown && card.faceDown ? 0 : card.faceIndex,
   counters: { ...card.counters },
   isToken: card.isToken,
+  ...(card.isCommander && {
+    isCommander: true,
+    commanderCasts: card.commanderCasts ?? 0,
+  }),
 });
+
+const copyDamage = (entries: CommanderDamage[] = []) =>
+  entries.map((entry) => ({ ...entry }));
 
 const viewCards = (
   state: GameState,
@@ -97,6 +109,11 @@ export const publicView = (
     zones: zoneViews(state, player, true),
     handCount: player.zones.hand.length,
     libraryCount: player.zones.library.length,
+    commanderDamage: copyDamage(player.commanderDamage),
+    dummies: (player.dummies ?? []).map((dummy) => ({
+      ...dummy,
+      commanderDamage: copyDamage(dummy.commanderDamage),
+    })),
   };
 };
 

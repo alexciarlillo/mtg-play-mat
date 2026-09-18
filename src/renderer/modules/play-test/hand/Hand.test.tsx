@@ -36,6 +36,8 @@ const viewOf = (patch: Partial<PrivateView> = {}): PrivateView => ({
   zones: { battlefield: [], graveyard: [], exile: [], command: [] },
   handCount: 7,
   libraryCount: 53,
+  commanderDamage: [],
+  dummies: [],
   hand: Array.from({ length: 7 }, (_, i) => handCard(i)),
   ...patch,
 });
