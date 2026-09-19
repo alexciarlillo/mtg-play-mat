@@ -124,10 +124,11 @@ test.afterAll(async () => {
   rmSync(userDataDir, { recursive: true, force: true });
 });
 
-test('a solo board shows the panel once something is rolled', async () => {
-  await expect(panel()).toHaveCount(0);
-  // Solo, the panel only appears with a log, so roll straight through
-  // the bridge the way its buttons would.
+test('a solo board shows the table panel with its log and dice', async () => {
+  await expect(panel()).toBeVisible();
+  await expect(board.getByTestId('log-entry').first()).toContainText(
+    'started a new game'
+  );
   await board.evaluate(() =>
     (
       window as unknown as {
@@ -135,7 +136,6 @@ test('a solo board shows the panel once something is rolled', async () => {
       }
     ).api.netRoll({ type: 'die', sides: 6 })
   );
-  await expect(panel()).toBeVisible();
   await expect(board.getByTestId('table-event')).toHaveCount(1);
 
   // It starts in the bottom-right corner of the field.
@@ -189,7 +189,7 @@ test('the old bottom-right spot is battlefield again', async () => {
 
 test('collapsing folds it to a chip that survives a reload', async () => {
   const room = await roomOf();
-  await board.getByRole('button', { name: 'Collapse Dice & coins' }).click();
+  await board.getByRole('button', { name: 'Collapse Table' }).click();
   await expect(board.getByTestId('table-log')).toHaveCount(0);
   await expect(panel()).toHaveAttribute('data-collapsed', 'true');
   const chip = await boxOf(panel());
@@ -199,7 +199,7 @@ test('collapsing folds it to a chip that survives a reload', async () => {
 
   await reloadBoard();
   await expect(panel()).toHaveAttribute('data-collapsed', 'true');
-  await board.getByRole('button', { name: 'Expand Dice & coins' }).click();
+  await board.getByRole('button', { name: 'Expand Table' }).click();
   await expect(board.getByTestId('table-log')).toBeVisible();
   await expect.poll(() => savedPanel()?.collapsed).toBe(false);
 });

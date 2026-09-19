@@ -5,6 +5,7 @@ import {
   type CardRef,
   type CommanderMove,
   commanderMoves,
+  describeStep,
   emptyGame,
   type GameAction,
   type GameState,
@@ -51,6 +52,8 @@ interface Deps {
 type PublicListener = (view: PublicView | null) => void;
 
 type StatusListener = (status: PlayTestStatus) => void;
+
+type LogListener = (text: string) => void;
 
 type PlayTestHandlers = Pick<
   RequestHandlers,
@@ -111,6 +114,8 @@ export default class PlayTest {
 
   private readonly statusListeners = new Set<StatusListener>();
 
+  private readonly logListeners = new Set<LogListener>();
+
   constructor({ cardDb, deckDb, playerId, playerName }: Deps) {
     this.cardDb = cardDb;
     this.deckDb = deckDb;
@@ -163,6 +168,22 @@ export default class PlayTest {
     return () => {
       this.publicListeners.delete(listener);
     };
+  };
+
+  // Lines for the table's action log, e.g. "drew 2 cards". The player's
+  // name is added by whoever shows them.
+  onLogEntry = (listener: LogListener) => {
+    this.logListeners.add(listener);
+    return () => {
+      this.logListeners.delete(listener);
+    };
+  };
+
+  // Everything logged must be public: it's shown on the board, which may
+  // be screenshared, and sent to every peer.
+  addLogEntry = (text: string) => {
+    if (!this.isOpen) return;
+    this.logListeners.forEach((listener) => listener(text));
   };
 
   private notifyPublic = () => {
@@ -249,9 +270,18 @@ export default class PlayTest {
     if (actionPlayer(this.state, action) !== this.playerId) return;
     const next = reduce(this.state, action);
     if (next === this.state) return;
+    const text = this.describe(this.state, action, next);
     this.redoStack = [];
     this.apply(next);
+    if (text) this.addLogEntry(text);
   };
+
+  // Built from public views of the two states, never the states.
+  private describe = (
+    before: GameState,
+    action: PlayerAction,
+    after: GameState
+  ) => describeStep(before, action, after, this.playerId);
 
   // Prompts follow the change whichever way it goes, so undoing a "Yes"
   // asks again and undoing the move that caused a prompt drops it.
@@ -265,8 +295,12 @@ export default class PlayTest {
   private undo = () => {
     const undone = undoLast(this.state, this.playerId, this.undoFloor);
     if (!undone) return;
+    // Told as if the action were applied again to the state without it.
+    const redone = reduce(undone.state, undone.action);
+    const text = this.describe(undone.state, undone.action, redone);
     this.redoStack.push(undone.action);
     this.apply(undone.state);
+    this.addLogEntry(text ? `undid: ${text}` : 'undid an action');
   };
 
   private redo = () => {
@@ -274,7 +308,9 @@ export default class PlayTest {
     if (!action) return;
     const next = redoAction(this.state, action);
     if (next) {
+      const text = this.describe(this.state, action, next);
       this.apply(next);
+      this.addLogEntry(text ? `redid: ${text}` : 'redid an action');
     } else {
       this.redoStack = [];
       this.pushUndoState();
@@ -350,6 +386,7 @@ export default class PlayTest {
     if (!this.board && !this.hand) return;
     this.newGame(this.deck);
     this.pushViews();
+    this.addLogEntry('restarted the game');
   };
 
   private status = (): PlayTestStatus => {
@@ -380,6 +417,7 @@ export default class PlayTest {
 
     const { board, hand } = this.ensureWindows();
     this.pushStatus();
+    this.addLogEntry('started a new game');
     const loaded = await Promise.all([whenLoaded(board), whenLoaded(hand)]);
     if (!loaded.every(Boolean)) return;
 

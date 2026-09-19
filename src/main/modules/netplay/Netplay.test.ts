@@ -380,6 +380,43 @@ describe('Netplay host', () => {
     );
   });
 
+  it('logs its own actions and relays each guest’s log lines', async () => {
+    const t = await hostWith({ 2: 'bob', 3: 'carol' });
+    t.netplay.localLogEntry('drew a card');
+    expect(t.sends().at(-1)?.seats).toEqual([2, 3]);
+    expect(t.sentTo(2).at(-1)).toMatchObject({
+      from: 'alice',
+      kind: 'log',
+      text: 'drew a card',
+    });
+
+    const line = raw('bob', 2, { kind: 'log', text: 'played Forest' });
+    say(t, 2, line);
+    expect(t.sends().at(-1)).toEqual({ op: 'send', seats: [3], data: line });
+    // A replayed (stale) line is neither shown nor relayed again.
+    const count = t.sends().length;
+    say(t, 2, line);
+    expect(t.sends()).toHaveLength(count);
+
+    expect(
+      t.opponent()?.log.map((e) => e.kind === 'action' && e.playerName)
+    ).toEqual(['Alice', 'Bob']);
+    expect(t.opponent()?.log.at(-1)).toMatchObject({
+      playerId: 'bob',
+      text: 'played Forest',
+    });
+  });
+
+  it('keeps log lines to one short line', async () => {
+    const t = await hostWith({ 2: 'bob' });
+    t.netplay.localLogEntry(`a\nb${'x'.repeat(400)}`);
+    const sent = t.sentTo(2).at(-1) as { text: string };
+    expect(sent.text.startsWith('a b')).toBe(true);
+    expect(sent.text).toHaveLength(300);
+    t.netplay.localLogEntry(' \n ');
+    expect(t.sentTo(2).at(-1)).toEqual(sent);
+  });
+
   it('rolls for a guest and tells everyone', async () => {
     const t = await hostWith({ 2: 'bob', 3: 'carol' });
     say(
@@ -400,15 +437,18 @@ describe('Netplay host', () => {
       kind: 'event',
       ...event,
     });
-    expect(t.opponent()?.log).toEqual([event]);
+    expect(t.opponent()?.log).toMatchObject([{ kind: 'roll', event }]);
 
     // The host rolls for itself too; a bad request is ignored.
     t.netplay.roll({ type: 'coin' });
     t.netplay.roll({ type: 'die', sides: 1 });
     expect(t.opponent()?.log.at(-1)).toMatchObject({
-      id: 2,
-      byName: 'Alice',
-      roll: { type: 'coin', result: 'tails' },
+      kind: 'roll',
+      event: {
+        id: 2,
+        byName: 'Alice',
+        roll: { type: 'coin', result: 'tails' },
+      },
     });
     expect(t.opponent()?.log).toHaveLength(2);
   });
@@ -586,6 +626,34 @@ describe('Netplay guest', () => {
     expect(t.state().players).toHaveLength(3);
   });
 
+  it('shows log lines the host relays, and sends its own', async () => {
+    const t = await guestIn([
+      ['alice', 1],
+      ['bob', 2],
+      ['carol', 3],
+    ]);
+    say(t, 1, hello('carol'));
+    say(t, 1, raw('carol', 2, { kind: 'log', text: 'drew 2 cards' }));
+    say(t, 1, raw('alice', 3, { kind: 'log', text: 'shuffled' }));
+    t.netplay.localLogEntry('milled a card: Forest');
+    expect(t.sentTo(1).at(-1)).toMatchObject({
+      from: 'bob',
+      kind: 'log',
+      text: 'milled a card: Forest',
+    });
+    expect(
+      t
+        .opponent()
+        ?.log.map((e) =>
+          e.kind === 'action' ? `${e.playerName} ${e.text}` : ''
+        )
+    ).toEqual([
+      'Carol drew 2 cards',
+      'Alice shuffled',
+      'Bob milled a card: Forest',
+    ]);
+  });
+
   it('asks the host to roll and logs the result it sends', async () => {
     const t = await guestIn([
       ['alice', 1],
@@ -604,7 +672,7 @@ describe('Netplay guest', () => {
       roll: { type: 'die', sides: 6, result: 4 },
     };
     say(t, 1, raw('alice', 3, { kind: 'event', ...event }));
-    expect(t.opponent()?.log).toEqual([event]);
+    expect(t.opponent()?.log).toMatchObject([{ kind: 'roll', event }]);
   });
 
   it('removes a player who says goodbye but stays in the pod', async () => {
@@ -688,6 +756,17 @@ describe('Netplay guest', () => {
     expect(t.sentTo(1).slice(-2)).toMatchObject([
       { kind: 'hello' },
       { kind: 'public', view: { life: 5 } },
+    ]);
+  });
+});
+
+describe('Netplay solo', () => {
+  it('keeps the local log without anyone to send it to', () => {
+    const t = setup();
+    t.netplay.localLogEntry('drew a card');
+    expect(t.sends()).toHaveLength(0);
+    expect(t.opponent()?.log).toMatchObject([
+      { kind: 'action', playerName: 'Alice', text: 'drew a card' },
     ]);
   });
 });

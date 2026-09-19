@@ -275,6 +275,69 @@ test('each board shows the other side live, read-only', async () => {
   await guestBoard.mouse.move(2, 2);
 });
 
+test('each player’s actions show in the log on both boards', async () => {
+  const [hostBoard, hostHand, guestBoard] = await Promise.all([
+    page(host, 'board.html'),
+    page(host, 'hand.html'),
+    page(guest, 'board.html'),
+  ]);
+  const entries = (board: Page, by: string) =>
+    board
+      .getByTestId('table-log')
+      .locator(`[data-testid="log-entry"][data-by="${by}"]`);
+  const texts = (board: Page, by: string) =>
+    entries(board, by).allTextContents();
+
+  // What already happened: each board has both players' lines.
+  for (const board of [hostBoard, guestBoard]) {
+    await expect(entries(board, 'Alice').last()).toBeVisible();
+    await expect(entries(board, 'Bob').last()).toBeVisible();
+    await expect
+      .poll(() => texts(board, 'Alice'))
+      .toEqual(
+        expect.arrayContaining([
+          expect.stringContaining('Alice kept their hand of 7'),
+          expect.stringMatching(/Alice played \S/),
+          expect.stringContaining('Alice lost 1 life (20 → 19)'),
+        ])
+      );
+    await expect
+      .poll(() => texts(board, 'Bob'))
+      .toEqual(
+        expect.arrayContaining([
+          expect.stringContaining('Bob kept their hand of 7'),
+          expect.stringMatching(/Bob played \S/),
+        ])
+      );
+  }
+
+  // New actions reach the other board, undo included.
+  await hostBoard.getByRole('button', { name: 'Draw a card' }).click();
+  for (const board of [hostBoard, guestBoard]) {
+    await expect(entries(board, 'Alice').last()).toHaveText(
+      /Alice drew a card$/
+    );
+  }
+  await hostHand.getByRole('button', { name: 'Undo' }).click();
+  for (const board of [hostBoard, guestBoard]) {
+    await expect(entries(board, 'Alice').last()).toHaveText(
+      /Alice undid: drew a card$/
+    );
+  }
+  await guestBoard.getByRole('button', { name: 'Draw a card' }).click();
+  for (const board of [hostBoard, guestBoard]) {
+    await expect(entries(board, 'Bob').last()).toHaveText(/Bob drew a card$/);
+  }
+
+  // Newest at the bottom, and the Dice tab hides actions.
+  await hostBoard.getByRole('tab', { name: 'Dice' }).click();
+  await expect(hostBoard.getByTestId('log-entry')).toHaveCount(0);
+  await hostBoard.getByRole('tab', { name: 'Log' }).click();
+  await expect(
+    hostBoard.getByTestId('table-log-list').locator('li').last()
+  ).toHaveText(/Bob drew a card$/);
+});
+
 test('the wire never carries the sender’s hidden cards', async () => {
   const net = await page(host, 'net.html');
   const wire = await net.evaluate(
@@ -297,6 +360,14 @@ test('the wire never carries the sender’s hidden cards', async () => {
     'exile',
     'command',
   ];
+  const shownNames = new Set(
+    publicZones.flatMap((zone) =>
+      me.zones[zone].map((id) => state.cards[id].ref.name)
+    )
+  );
+  const hiddenOnly = [...deckNames].filter((name) => !shownNames.has(name));
+  expect(hiddenOnly.length).toBeGreaterThan(0);
+  let logLines = 0;
 
   for (const raw of wire) {
     // Nothing ever names a card that is in the hand or library now; none
@@ -313,6 +384,12 @@ test('the wire never carries the sender’s hidden cards', async () => {
       } | null;
     };
     expect(message.from).toBe(playerId);
+    if (message.kind === 'log') {
+      // Log lines may name only cards that have been public.
+      for (const name of hiddenOnly) expect(raw).not.toContain(name);
+      logLines += 1;
+      continue;
+    }
     if (message.kind !== 'public' || !message.view) {
       for (const name of deckNames) expect(raw).not.toContain(name);
       continue;
@@ -334,6 +411,7 @@ test('the wire never carries the sender’s hidden cards', async () => {
       expect(rest).not.toContain(text);
     }
   }
+  expect(logLines).toBeGreaterThan(3);
 });
 
 test('leaving clears the opponent side on both boards', async () => {

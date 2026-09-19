@@ -290,14 +290,15 @@ test('a guest’s dice roll shows up on all four boards', async () => {
   await boards[CAROL].getByRole('button', { name: 'Roll a d20' }).click();
 
   const latest = (board: Page) =>
-    board.getByTestId('table-log').getByTestId('table-event').first();
+    board.getByTestId('table-log').getByTestId('table-event').last();
   await expect(latest(boards[CAROL])).toHaveAttribute('data-by', 'Carol');
   const result = await latest(boards[CAROL]).getAttribute('data-result');
   expect(Number(result)).toBeGreaterThanOrEqual(1);
   expect(Number(result)).toBeLessThanOrEqual(20);
   for (const board of boards) {
+    // After the entry's time stamp.
     await expect(latest(board)).toHaveText(
-      `Carol rolled a d20: ${result ?? ''}`
+      new RegExp(` Carol rolled a d20: ${result ?? ''}$`)
     );
   }
 
@@ -307,7 +308,7 @@ test('a guest’s dice roll shows up on all four boards', async () => {
   const side = await latest(boards[ALICE]).getAttribute('data-result');
   for (const board of boards) {
     await expect(latest(board)).toHaveText(
-      `Alice flipped a coin: ${side ?? ''}`
+      new RegExp(` Alice flipped a coin: ${side ?? ''}$`)
     );
   }
 });

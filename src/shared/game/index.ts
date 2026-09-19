@@ -34,3 +34,4 @@ export {
   parsePlayerAction,
 } from './validate';
 export * from './views';
+export { describeAction, describeStep } from './describe';

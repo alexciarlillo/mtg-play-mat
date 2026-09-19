@@ -16,13 +16,27 @@ export interface RemotePeer {
 
 // What the board shows of the other players. seq increases with every
 // change so a window can order a fetched snapshot against pushed ones.
+export type TableEntry =
+  | {
+      kind: 'action';
+      // Unique within this table's history, for keys.
+      id: number;
+      // When this machine learned of it; peers' clocks aren't trusted.
+      at: number;
+      playerId: PlayerId;
+      playerName: string;
+      text: string;
+    }
+  | { kind: 'roll'; id: number; at: number; event: TableEvent };
+
 export interface OpponentState {
   seq: number;
   selfSeat: number | null;
   // In seat order.
   peers: RemotePeer[];
-  // Newest last.
-  log: TableEvent[];
+  // Every player's actions and every roll, in the order they arrived
+  // here; newest last.
+  log: TableEntry[];
 }
 
 interface Peer {
@@ -31,7 +45,7 @@ interface Peer {
   view: PublicView | null;
 }
 
-export const MAX_LOG = 20;
+export const MAX_LOG = 500;
 
 const bySeat = (a: RemotePeer, b: RemotePeer) =>
   (a.seat ?? Infinity) - (b.seat ?? Infinity) ||
@@ -44,11 +58,16 @@ export class RemoteViews {
 
   private seats = new Map<PlayerId, number>();
 
-  private log: TableEvent[] = [];
+  private log: TableEntry[] = [];
+
+  private entryId = 0;
 
   private rev = 0;
 
-  constructor(private readonly selfId: () => PlayerId) {}
+  constructor(
+    private readonly selfId: () => PlayerId,
+    private readonly now: () => number = Date.now
+  ) {}
 
   // Returns whether the opponent state changed. Each sender is checked on
   // its own: a relayed message is judged exactly like a direct one.
@@ -65,7 +84,13 @@ export class RemoteViews {
       });
       return this.changed();
     }
-    if (message.kind !== 'public' && message.kind !== 'bye') return false;
+    if (
+      message.kind !== 'public' &&
+      message.kind !== 'bye' &&
+      message.kind !== 'log'
+    ) {
+      return false;
+    }
 
     const peer = this.peers.get(message.from);
     if (!peer || message.seq <= peer.lastSeq) return false;
@@ -74,6 +99,10 @@ export class RemoteViews {
     if (message.kind === 'bye') {
       this.peers.delete(message.from);
       return this.changed();
+    }
+    if (message.kind === 'log') {
+      this.addAction(peer.info.playerId, peer.info.name, message.text);
+      return true;
     }
     peer.view = message.view && namespaceView(message.view, message.from);
     return this.changed();
@@ -96,15 +125,27 @@ export class RemoteViews {
     this.peers.delete(playerId) && this.changed();
 
   addEvent = (event: TableEvent) => {
-    this.log = [...this.log, event].slice(-MAX_LOG);
-    this.changed();
+    this.append({ kind: 'roll', id: this.nextId(), at: this.now(), event });
   };
 
+  // A line of the local player's log, or one a peer sent.
+  addAction = (playerId: PlayerId, playerName: string, text: string) => {
+    this.append({
+      kind: 'action',
+      id: this.nextId(),
+      at: this.now(),
+      playerId,
+      playerName,
+      text,
+    });
+  };
+
+  // The log is the table's history, so it outlasts the players: leaving
+  // or starting a new session keeps it.
   clear = (): boolean => {
-    if (this.peers.size === 0 && this.log.length === 0) return false;
+    if (this.peers.size === 0 && this.seats.size === 0) return false;
     this.peers.clear();
     this.seats.clear();
-    this.log = [];
     return this.changed();
   };
 
@@ -127,6 +168,16 @@ export class RemoteViews {
       .sort(bySeat),
     log: this.log,
   });
+
+  private nextId = () => {
+    this.entryId += 1;
+    return this.entryId;
+  };
+
+  private append = (entry: TableEntry) => {
+    this.log = [...this.log, entry].slice(-MAX_LOG);
+    this.changed();
+  };
 
   private changed = () => {
     this.rev += 1;

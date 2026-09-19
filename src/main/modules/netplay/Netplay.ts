@@ -20,6 +20,7 @@ import {
   type SeatState,
 } from '@shared/net/lobby';
 import {
+  cleanLogText,
   encodeNetMessage,
   HOST_SEAT,
   MAX_MESSAGE_BYTES,
@@ -213,6 +214,17 @@ export default class Netplay {
 
   localViewChanged = (view: PublicView | null) => {
     this.send({ kind: 'public', view });
+  };
+
+  // A line of the local player's action log: onto the local table log,
+  // and to everyone in the pod.
+  localLogEntry = (input: string) => {
+    const text = cleanLogText(input);
+    if (!text) return;
+    const { playerId, displayName } = this.deps.profile();
+    this.remote.addAction(playerId, displayName, text);
+    this.pushOpponent();
+    this.send({ kind: 'log', text });
   };
 
   host = async () => {
@@ -475,6 +487,11 @@ export default class Netplay {
         this.relay(raw, seat);
         this.pushOpponent();
         return;
+      case 'log':
+        if (!this.remote.receive(message)) return;
+        this.relay(raw, seat);
+        this.pushOpponent();
+        return;
       case 'bye':
         this.relay(raw, seat);
         this.dropSeat(seat, 'left the game.');
@@ -522,6 +539,9 @@ export default class Netplay {
           roll: message.roll,
         });
         this.pushOpponent();
+        return;
+      case 'log':
+        if (this.remote.receive(message)) this.pushOpponent();
         return;
       case 'hello':
       case 'public':

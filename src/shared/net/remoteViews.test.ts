@@ -200,10 +200,14 @@ describe('RemoteViews', () => {
     for (let id = 1; id <= MAX_LOG + 5; id += 1) remote.addEvent(event(id));
     const { log } = remote.snapshot();
     expect(log).toHaveLength(MAX_LOG);
-    expect(log.at(-1)?.id).toBe(MAX_LOG + 5);
+    expect(log.at(-1)).toMatchObject({
+      kind: 'roll',
+      id: MAX_LOG + 5,
+      event: { id: MAX_LOG + 5 },
+    });
   });
 
-  it('clear drops everyone and the log', () => {
+  it('clear drops everyone but keeps the log', () => {
     const remote = store();
     remote.receive(hello(1));
     remote.addEvent({
@@ -214,6 +218,54 @@ describe('RemoteViews', () => {
     });
     expect(remote.clear()).toBe(true);
     expect(remote.clear()).toBe(false);
-    expect(remote.snapshot()).toMatchObject({ peers: [], log: [] });
+    expect(remote.snapshot()).toMatchObject({
+      peers: [],
+      log: [{ kind: 'roll' }],
+    });
+  });
+
+  it('merges peer log lines and rolls into one timeline', () => {
+    let now = 100;
+    const remote = new RemoteViews(
+      () => 'alice',
+      () => (now += 1)
+    );
+    remote.receive(hello(1));
+    remote.addAction('alice', 'Alice', 'drew a card');
+    expect(
+      remote.receive({ v: 2, seq: 2, from: 'bob', kind: 'log', text: 'x' })
+    ).toBe(true);
+    remote.addEvent({
+      id: 1,
+      by: 'bob',
+      byName: 'Bob',
+      roll: { type: 'coin', result: 'heads' },
+    });
+    // Stale, before hello, or from ourselves: dropped.
+    const stale = { v: 2, seq: 2, from: 'bob', kind: 'log', text: 'y' };
+    const stranger = { ...stale, seq: 9, from: 'carol' };
+    const self = { ...stale, seq: 9, from: 'alice' };
+    for (const message of [stale, stranger, self]) {
+      expect(remote.receive(message as NetMessage)).toBe(false);
+    }
+    expect(remote.snapshot().log).toEqual([
+      {
+        kind: 'action',
+        id: 1,
+        at: 101,
+        playerId: 'alice',
+        playerName: 'Alice',
+        text: 'drew a card',
+      },
+      {
+        kind: 'action',
+        id: 2,
+        at: 102,
+        playerId: 'bob',
+        playerName: 'Bob',
+        text: 'x',
+      },
+      expect.objectContaining({ kind: 'roll', id: 3, at: 103 }),
+    ]);
   });
 });

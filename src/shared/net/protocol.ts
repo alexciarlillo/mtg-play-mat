@@ -22,6 +22,8 @@ export const HOST_SEAT = 1;
 
 export const MAX_DIE_SIDES = 1000;
 
+export const MAX_LOG_TEXT = 300;
+
 // A 60-card battlefield is about 20 KB; this leaves room for big boards
 // and stays under the datachannel's own message limit.
 export const MAX_MESSAGE_BYTES = 256 * 1024;
@@ -69,7 +71,10 @@ export type NetPayload =
   // To the host only; never relayed.
   | { kind: 'roll'; request: RollRequest }
   // Host only: the outcome of a roll, for everyone.
-  | ({ kind: 'event' } & TableEvent);
+  | ({ kind: 'event' } & TableEvent)
+  // One line of the sender's action log, built from public information.
+  // Added within v2: older v2 builds drop it as an unknown kind.
+  | { kind: 'log'; text: string };
 
 export type NetMessage = Envelope & NetPayload;
 
@@ -340,6 +345,15 @@ const rollResult = (value: unknown): RollResult => {
   }
 };
 
+// Log lines are shown as plain text on every board; keep them one short
+// line whatever the sender put in.
+export const cleanLogText = (value: string): string => {
+  const line = value.replace(/\p{Cc}+/gu, ' ').trim();
+  return line.length > MAX_LOG_TEXT
+    ? `${line.slice(0, MAX_LOG_TEXT - 1)}…`
+    : line;
+};
+
 const byteLength = (raw: string) => new TextEncoder().encode(raw).length;
 
 export const parseNetMessage = (raw: unknown): NetMessage => {
@@ -400,6 +414,11 @@ export const parseNetMessage = (raw: unknown): NetMessage => {
         byName: text(fields, 'byName', { max: 64 }),
         roll: rollResult(fields.roll),
       };
+    case 'log': {
+      const line = cleanLogText(text(fields, 'text', { max: MAX_LOG_TEXT }));
+      if (line.length === 0) fail('log text is empty');
+      return { ...envelope, kind: 'log', text: line };
+    }
     default:
       return fail(`unknown kind ${JSON.stringify(fields.kind)}`);
   }

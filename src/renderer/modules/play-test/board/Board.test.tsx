@@ -194,7 +194,7 @@ describe('Board tools', () => {
 });
 
 describe('Board table panel', () => {
-  it('shows the dice panel in a duel and saves its placement', async () => {
+  it('shows the table panel and saves its placement', async () => {
     const user = userEvent.setup();
     const tablePanel = { x: 0.3, y: 0.6, collapsed: false };
     renderBoard({ ...defaultSettings, tablePanel });
@@ -207,9 +207,7 @@ describe('Board table panel', () => {
 
     const panel = screen.getByTestId('table-panel');
     expect(panel).toContainElement(screen.getByTestId('table-log'));
-    await user.click(
-      screen.getByRole('button', { name: 'Collapse Dice & coins' })
-    );
+    await user.click(screen.getByRole('button', { name: 'Collapse Table' }));
     expect(updateSettings).toHaveBeenCalledWith({
       tablePanel: { ...tablePanel, collapsed: true },
     });

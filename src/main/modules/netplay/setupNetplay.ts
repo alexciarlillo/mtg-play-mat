@@ -116,6 +116,8 @@ export const setupNetplay = ({
     growForTable(playTest.boardWindow, netplay.opponentCount);
   });
 
+  playTest.onLogEntry(netplay.localLogEntry);
+
   // Peers learn a new name without waiting for a reconnect, whichever
   // window changed it.
   settings.onChange((next, previous) => {

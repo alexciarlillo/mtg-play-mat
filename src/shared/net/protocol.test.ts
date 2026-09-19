@@ -5,6 +5,7 @@ import { publicView, type PublicView } from '../game';
 import { applyAll, startGame, zone } from '../game/testFixtures';
 import type { CardRef, GameAction, GameState } from '../game/types';
 import {
+  cleanLogText,
   encodeNetMessage,
   MAX_MESSAGE_BYTES,
   namespaceView,
@@ -15,6 +16,7 @@ import {
   type RosterEntry,
   VersionError,
   MAX_DIE_SIDES,
+  MAX_LOG_TEXT,
 } from './protocol';
 
 const uuid = (n: number) =>
@@ -257,6 +259,50 @@ describe('pod messages', () => {
     ],
   ])('rejects %s', (_label, raw) => {
     expect(() => parseNetMessage(raw)).toThrow(/bad message/);
+  });
+
+  it('round-trips a log line and keeps only its text', () => {
+    const line: NetMessage = {
+      v: 2,
+      seq: 3,
+      from: 'alice',
+      kind: 'log',
+      text: 'milled 2 cards: Forest, Forest',
+    };
+    expect(parseNetMessage(encodeNetMessage(line))).toEqual(line);
+    expect(
+      parseNetMessage(message({ kind: 'log', text: ' a\u0007\nb ', x: 1 }))
+    ).toEqual({ v: 2, seq: 1, from: 'alice', kind: 'log', text: 'a b' });
+  });
+
+  it.each([
+    ['a missing log text', message({ kind: 'log' })],
+    ['a non-string log text', message({ kind: 'log', text: 7 })],
+    ['an empty log text', message({ kind: 'log', text: '' })],
+    ['a blank log text', message({ kind: 'log', text: '\n\t' })],
+    [
+      'an overlong log text',
+      message({ kind: 'log', text: 'x'.repeat(MAX_LOG_TEXT + 1) }),
+    ],
+  ])('rejects %s', (_label, raw) => {
+    expect(() => parseNetMessage(raw)).toThrow(/bad message/);
+  });
+
+  it('rejects unknown kinds as a plain protocol error', () => {
+    // Older builds rely on this to drop kinds added later.
+    expect(() => parseNetMessage(message({ kind: 'later' }))).toThrow(
+      /unknown kind/
+    );
+    expect(() => parseNetMessage(message({ kind: 'later' }))).not.toThrow(
+      VersionError
+    );
+  });
+
+  it('cleans log text to one short line', () => {
+    expect(cleanLogText('x\r\ny')).toBe('x y');
+    const long = cleanLogText('y'.repeat(MAX_LOG_TEXT + 50));
+    expect(long).toHaveLength(MAX_LOG_TEXT);
+    expect(long.endsWith('…')).toBe(true);
   });
 
   it('keeps only known roll fields', () => {

@@ -192,8 +192,12 @@ turn order, each scaled to fit. Each player sends only their own public view, so
 hand contents and library order never leave the machine. In a Commander game you can
 record commander damage from every opponent's commander.
 
-**Dice & coins** on the board (d6, d20, coin, any dN) asks the host to roll; the
-result and who asked for it appear in the log on every board. **Resend state** re-sends
+The **Table** panel on the board (drag it by its title, or fold it away) holds the
+action log and the dice. Every player's actions ("Bob drew 2 cards", "Alice played
+Forest") show up on every board, built only from public information: cards drawn,
+searched for, or put into a hand or library are counted, never named. Its **Dice**
+tab shows just the rolls. **d6, d20, Coin, dN** ask the host to roll; the result and
+who asked for it appear on every board. **Resend state** re-sends
 yours. **Leave** disconnects: when a guest leaves, only their seat is removed and the
 host can invite that seat again. When the host leaves, the pod ends for everyone.
 Players on a different protocol version get a "version mismatch" message.

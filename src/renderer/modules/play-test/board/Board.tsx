@@ -224,9 +224,9 @@ const Board = ({ store, opponent }: Props) => {
           )}
           {/* Over the field, not in the side panel, which is full in a
               commander pod; it waits for settings so it doesn't jump. */}
-          {settingsLoaded && (duel || log.length > 0) && (
+          {settingsLoaded && (
             <FloatingPanel
-              title="Dice & coins"
+              title="Table"
               testId="table-panel"
               className="w-72"
               placement={settings.tablePanel}
