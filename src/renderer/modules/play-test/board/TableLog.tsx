@@ -17,9 +17,6 @@ const TableLog = ({
   onCustomDie(): void;
 }) => (
   <section data-testid="table-log" className="flex flex-col gap-1">
-    <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
-      Dice &amp; coins
-    </h3>
     <div className="flex gap-1">
       <button
         type="button"

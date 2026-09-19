@@ -14,6 +14,7 @@ import {
 import useSettings from '../../../hooks/useSettings';
 import { cardWidths } from '../../../ui/cardSizes';
 import { useContextMenu } from '../../../ui/ContextMenuProvider';
+import FloatingPanel from '../../../ui/FloatingPanel';
 import { ConfirmDialog, NumberPrompt } from '../common/Dialogs';
 import ShortcutHelp from '../common/ShortcutHelp';
 import { useGameShortcuts } from '../common/useGameShortcuts';
@@ -98,7 +99,12 @@ const Board = ({ store, opponent }: Props) => {
   );
 
   const prompts = useCommanderPrompts();
-  const { turnTracking } = useSettings().settings;
+  const {
+    settings,
+    loaded: settingsLoaded,
+    update: updateSettings,
+  } = useSettings();
+  const { turnTracking } = settings;
   const { canUndo, canRedo } = useUndoState();
 
   useGameShortcuts(view, {
@@ -216,12 +222,22 @@ const Board = ({ store, opponent }: Props) => {
               }
             />
           )}
-          {(duel || log.length > 0) && (
-            // A corner of the field, not the side panel, which is full in
-            // a commander pod; it stays in view for screensharing.
-            <div className="absolute bottom-3 right-3 z-10 w-72 rounded-lg bg-slate-900/85 p-2 text-slate-100 shadow-lg">
+          {/* Over the field, not in the side panel, which is full in a
+              commander pod; it waits for settings so it doesn't jump. */}
+          {settingsLoaded && (duel || log.length > 0) && (
+            <FloatingPanel
+              title="Dice & coins"
+              testId="table-panel"
+              className="w-72"
+              placement={settings.tablePanel}
+              onPlacementChange={(tablePanel) => {
+                updateSettings({ tablePanel }).catch((err: unknown) =>
+                  console.error('[play-test] could not save panel', err)
+                );
+              }}
+            >
               <TableLog log={log} onCustomDie={() => setDialog('rollDie')} />
-            </div>
+            </FloatingPanel>
           )}
           {/* Positions are relative to this box, in logical field units. */}
           <ScaledField testId="battlefield">

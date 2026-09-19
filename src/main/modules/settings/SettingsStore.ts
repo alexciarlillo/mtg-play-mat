@@ -29,8 +29,10 @@ export default class SettingsStore {
     const patch = parseSettingsPatch(input);
     const previous = this.current;
     const next = { ...previous, ...patch };
+    // Compared as JSON because some values are objects, rebuilt by
+    // every parse even when nothing in them changed.
     const changed = (Object.keys(patch) as (keyof Settings)[]).some(
-      (key) => next[key] !== previous[key]
+      (key) => JSON.stringify(next[key]) !== JSON.stringify(previous[key])
     );
     if (!changed) return previous;
     this.current = next;

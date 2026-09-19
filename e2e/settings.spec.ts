@@ -104,7 +104,7 @@ test('toggling the setting shows and hides turn tracking live', async () => {
   await expect(board.getByTestId('turn-panel')).toBeVisible();
   await expect
     .poll(() => JSON.parse(readFileSync(settingsFile, 'utf8')) as unknown)
-    .toEqual({ displayName: 'Legacy', turnTracking: true });
+    .toMatchObject({ displayName: 'Legacy', turnTracking: true });
 });
 
 test('no renderer console errors', () => {

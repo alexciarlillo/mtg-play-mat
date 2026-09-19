@@ -17,6 +17,9 @@ const field = <T>(defaultValue: T, parse: Parse<T>): Field<T> => ({
   parse,
 });
 
+const isRecord = (input: unknown): input is Record<string, unknown> =>
+  typeof input === 'object' && input !== null && !Array.isArray(input);
+
 const boolean: Parse<boolean> = (input) =>
   typeof input === 'boolean' ? input : undefined;
 
@@ -33,10 +36,40 @@ export const cleanDisplayName = (input: unknown): string => {
 const displayName: Parse<string> = (input) =>
   typeof input === 'string' ? cleanDisplayName(input) : undefined;
 
+// Where a floating panel sits, as a fraction of the room it can move in
+// (0 is the left or top edge, 1 the right or bottom), so it keeps its
+// corner when the window is resized.
+export interface PanelPlacement {
+  x: number;
+  y: number;
+  collapsed: boolean;
+}
+
+const fraction = (input: unknown): number | undefined =>
+  typeof input === 'number' && Number.isFinite(input)
+    ? Math.min(1, Math.max(0, input))
+    : undefined;
+
+const panelPlacement: Parse<PanelPlacement> = (input) => {
+  if (!isRecord(input)) return undefined;
+  const x = fraction(input.x);
+  const y = fraction(input.y);
+  const collapsed = boolean(input.collapsed);
+  if (x === undefined || y === undefined || collapsed === undefined) {
+    return undefined;
+  }
+  return { x, y, collapsed };
+};
+
 const fields = {
   displayName: field(DEFAULT_DISPLAY_NAME, displayName),
   // Turn and phase tracking clutters the board, so it is opt-in.
   turnTracking: field(false, boolean),
+  // The board's dice and log panel starts in the field's bottom-right.
+  tablePanel: field<PanelPlacement>(
+    { x: 1, y: 1, collapsed: false },
+    panelPlacement
+  ),
 };
 
 type Fields = typeof fields;
@@ -52,9 +85,6 @@ const keys = Object.keys(fields) as (keyof Settings)[];
 export const defaultSettings = Object.fromEntries(
   keys.map((key) => [key, fields[key].default])
 ) as Settings;
-
-const isRecord = (input: unknown): input is Record<string, unknown> =>
-  typeof input === 'object' && input !== null && !Array.isArray(input);
 
 // Only known keys with valid values survive; everything else is dropped.
 export const parseSettingsPatch = (input: unknown): SettingsPatch => {

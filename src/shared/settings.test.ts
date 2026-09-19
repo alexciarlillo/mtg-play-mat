@@ -18,6 +18,7 @@ describe('parseSettings', () => {
     expect(defaultSettings).toEqual({
       displayName: DEFAULT_DISPLAY_NAME,
       turnTracking: false,
+      tablePanel: { x: 1, y: 1, collapsed: false },
     });
   });
 
@@ -63,5 +64,32 @@ describe('cleanDisplayName', () => {
     expect(cleanDisplayName(' Al\nice ')).toBe('Alice');
     expect(cleanDisplayName('x'.repeat(40))).toHaveLength(32);
     expect(cleanDisplayName(undefined)).toBe(DEFAULT_DISPLAY_NAME);
+  });
+});
+
+describe('tablePanel', () => {
+  it('keeps a valid placement and clamps it to the field', () => {
+    expect(
+      parseSettingsPatch({ tablePanel: { x: 0.2, y: 0, collapsed: true } })
+    ).toEqual({ tablePanel: { x: 0.2, y: 0, collapsed: true } });
+    expect(
+      parseSettingsPatch({ tablePanel: { x: -3, y: 9, collapsed: false } })
+    ).toEqual({ tablePanel: { x: 0, y: 1, collapsed: false } });
+  });
+
+  it('drops a malformed placement', () => {
+    [
+      null,
+      'corner',
+      { x: 0.5, y: 0.5 },
+      { x: '0.5', y: 0.5, collapsed: false },
+      { x: Number.NaN, y: 0.5, collapsed: false },
+      { x: 0.5, y: Infinity, collapsed: false },
+    ].forEach((tablePanel) => {
+      expect(parseSettingsPatch({ tablePanel })).toEqual({});
+    });
+    expect(parseSettings({ tablePanel: [1, 1] }).tablePanel).toEqual(
+      defaultSettings.tablePanel
+    );
   });
 });

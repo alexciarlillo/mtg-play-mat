@@ -192,3 +192,35 @@ describe('Board tools', () => {
     ).toBeInTheDocument();
   });
 });
+
+describe('Board table panel', () => {
+  it('shows the dice panel in a duel and saves its placement', async () => {
+    const user = userEvent.setup();
+    const tablePanel = { x: 0.3, y: 0.6, collapsed: false };
+    renderBoard({ ...defaultSettings, tablePanel });
+    const updateSettings = vi.fn(async (patch: Partial<Settings>) => ({
+      ...defaultSettings,
+      ...patch,
+    }));
+    Object.assign(window.api, { updateSettings });
+    await act(async () => {});
+
+    const panel = screen.getByTestId('table-panel');
+    expect(panel).toContainElement(screen.getByTestId('table-log'));
+    await user.click(
+      screen.getByRole('button', { name: 'Collapse Dice & coins' })
+    );
+    expect(updateSettings).toHaveBeenCalledWith({
+      tablePanel: { ...tablePanel, collapsed: true },
+    });
+    expect(screen.queryByTestId('table-log')).toBeNull();
+
+    act(() =>
+      pushSettings({
+        ...defaultSettings,
+        tablePanel: { ...tablePanel, collapsed: false },
+      })
+    );
+    expect(screen.getByTestId('table-log')).toBeInTheDocument();
+  });
+});

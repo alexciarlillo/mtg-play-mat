@@ -41,8 +41,13 @@ describe('SettingsStore', () => {
     });
 
     store.update({ turnTracking: true });
-    expect(saved()).toEqual({ displayName: 'Alice', turnTracking: true });
+    expect(saved()).toEqual({
+      ...defaultSettings,
+      displayName: 'Alice',
+      turnTracking: true,
+    });
     expect(new SettingsStore(file).settings).toEqual({
+      ...defaultSettings,
       displayName: 'Alice',
       turnTracking: true,
     });
@@ -63,6 +68,20 @@ describe('SettingsStore', () => {
     expect(next.turnTracking).toBe(true);
     expect(listener).toHaveBeenCalledTimes(1);
     expect(listener).toHaveBeenCalledWith(next, defaultSettings);
+  });
+
+  it('treats an equal object value as no change', () => {
+    const store = new SettingsStore(file);
+    const listener = vi.fn();
+    store.onChange(listener);
+
+    store.update({ tablePanel: { ...defaultSettings.tablePanel } });
+    expect(listener).not.toHaveBeenCalled();
+
+    const moved = { x: 0.25, y: 0.5, collapsed: true };
+    expect(store.update({ tablePanel: moved }).tablePanel).toEqual(moved);
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(new SettingsStore(file).settings.tablePanel).toEqual(moved);
   });
 
   it('backs the profile display name', () => {
