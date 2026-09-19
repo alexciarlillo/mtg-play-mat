@@ -6,3 +6,11 @@ export interface PlayTestStatus {
   // Unpackaged builds can also start the built-in sample deck.
   sampleDeck: boolean;
 }
+
+// Game menu items the board window carries out, mostly by opening one of
+// its dialogs; the rest of the Game menu acts in main directly.
+export type BoardMenuCommand =
+  'drawMany' | 'mill' | 'token' | 'restart' | 'help' | 'addDummy';
+
+// App window pages main may ask it to show.
+export type AppRoute = 'settings';

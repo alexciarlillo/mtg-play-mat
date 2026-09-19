@@ -13,6 +13,7 @@ import {
 
 import type { GameState, PlayerAction, Position } from '../src/shared/game';
 import { type FakeScryfall, startFakeScryfall } from './fakeScryfall';
+import { battlefieldMenuItem } from './gameMenu';
 
 interface TestHooks {
   openSamplePlayTest(seed?: number): Promise<void>;
@@ -314,7 +315,7 @@ test('destroying a token removes it from the game', async () => {
 });
 
 test('custom tokens, copies, and player counters', async () => {
-  await board.getByRole('button', { name: 'Token…' }).click();
+  await (await battlefieldMenuItem(board, 'Create token…')).click();
   const dialog = board.getByRole('dialog', { name: 'Create token' });
   await dialog.getByRole('tab', { name: 'Custom token' }).click();
   await dialog.getByLabel('Name').fill('Zombie Army');

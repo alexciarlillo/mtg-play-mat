@@ -7,6 +7,7 @@ import { Bars3Icon, XMarkIcon } from '@heroicons/react/24/outline';
 import { NavLink, Outlet } from 'react-router';
 
 import { RootStoreProvider } from './core/rootContext';
+import useMainNavigation from './hooks/useMainNavigation';
 import CardDataPanel from './modules/card-data/CardDataPanel';
 import DeckStore from './modules/deck-builder/DeckStore';
 import { DeckStoreProvider } from './modules/deck-builder/DeckStoreContext';
@@ -29,6 +30,7 @@ const deckStore = new DeckStore();
 
 const Start = () => {
   useInviteNavigation();
+  useMainNavigation();
 
   return (
     <ContextMenuProvider>

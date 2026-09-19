@@ -11,7 +11,11 @@ import type { RollRequest } from '../net/protocol';
 import type { OpponentState } from '../net/remoteViews';
 import type { Settings, SettingsPatch } from '../settings';
 import type { CardDataStatus } from '../types/cardData';
-import type { PlayTestStatus } from '../types/playTest';
+import type {
+  AppRoute,
+  BoardMenuCommand,
+  PlayTestStatus,
+} from '../types/playTest';
 import type {
   CurrentSetListReturn,
   SearchCardsByNameOptions,
@@ -121,6 +125,10 @@ export const events = {
   undoState: event<UndoState>(),
   settingsChanged: event<Settings>(),
   playTestStatus: event<PlayTestStatus>(),
+  // From the Game menu, to the board window.
+  boardMenuCommand: event<BoardMenuCommand>(),
+  // To the app window.
+  navigate: event<AppRoute>(),
 };
 
 type SpecType<S> = S extends Spec<infer T> ? T : never;

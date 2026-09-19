@@ -26,6 +26,7 @@ import type { DeckFormat } from '@shared/types/decks';
 import type { PlayTestStatus } from '@shared/types/playTest';
 import { app, BrowserWindow } from 'electron';
 
+import { type GameMenuCommand, runGameMenuCommand } from '../../gameMenu';
 import { type RequestHandlers, type SenderGuards, sendEvent } from '../../ipc';
 import type CardDB from '../../shared/db/CardDB';
 import type DeckDB from '../../shared/db/DeckDB';
@@ -48,6 +49,8 @@ interface Deps {
 }
 
 type PublicListener = (view: PublicView | null) => void;
+
+type StatusListener = (status: PlayTestStatus) => void;
 
 type PlayTestHandlers = Pick<
   RequestHandlers,
@@ -106,6 +109,8 @@ export default class PlayTest {
 
   private readonly publicListeners = new Set<PublicListener>();
 
+  private readonly statusListeners = new Set<StatusListener>();
+
   constructor({ cardDb, deckDb, playerId, playerName }: Deps) {
     this.cardDb = cardDb;
     this.deckDb = deckDb;
@@ -121,9 +126,37 @@ export default class PlayTest {
     return this.board;
   }
 
+  get isOpen(): boolean {
+    return this.board !== null || this.hand !== null;
+  }
+
+  onStatusChange = (listener: StatusListener) => {
+    this.statusListeners.add(listener);
+    return () => {
+      this.statusListeners.delete(listener);
+    };
+  };
+
+  // Dialog items bring the board forward, since that is where they open.
+  runMenuCommand = (command: GameMenuCommand) => {
+    if (!this.isOpen) return;
+    runGameMenuCommand(command, {
+      playerId: this.playerId,
+      dispatch: this.dispatch,
+      undo: this.undo,
+      redo: this.redo,
+      toBoard: (boardCommand) => {
+        if (!this.board) return;
+        this.board.show();
+        this.board.focus();
+        sendEvent(this.board, 'boardMenuCommand', boardCommand);
+      },
+    });
+  };
+
   // What peers may see: the public view while a play test is open.
   currentPublicView = (): PublicView | null =>
-    this.board || this.hand ? publicView(this.state, this.playerId) : null;
+    this.isOpen ? publicView(this.state, this.playerId) : null;
 
   onPublicChange = (listener: PublicListener) => {
     this.publicListeners.add(listener);
@@ -320,7 +353,7 @@ export default class PlayTest {
   };
 
   private status = (): PlayTestStatus => {
-    const open = this.board !== null || this.hand !== null;
+    const open = this.isOpen;
     return {
       open,
       deck: open ? this.deckLabel : null,
@@ -334,6 +367,7 @@ export default class PlayTest {
     BrowserWindow.getAllWindows().forEach((window) => {
       sendEvent(window, 'playTestStatus', status);
     });
+    this.statusListeners.forEach((listener) => listener(status));
   };
 
   private start = async (

@@ -16,6 +16,8 @@ describe('ipc contract', () => {
       'onUndoState',
       'onSettingsChanged',
       'onPlayTestStatus',
+      'onBoardMenuCommand',
+      'onNavigate',
     ]);
   });
 

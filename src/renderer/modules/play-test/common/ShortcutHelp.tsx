@@ -15,6 +15,9 @@ const ShortcutHelp = ({ onClose }: { onClose(): void }) => (
         </div>
       ))}
     </dl>
+    <p className="mt-3 text-sm text-slate-600">
+      Right-click the battlefield or use the Game menu for everything else.
+    </p>
   </Modal>
 );
 

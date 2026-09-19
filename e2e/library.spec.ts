@@ -11,6 +11,7 @@ import {
 } from '@playwright/test';
 
 import type { GameState } from '../src/shared/game';
+import { battlefieldMenuItem } from './gameMenu';
 
 interface TestHooks {
   openSamplePlayTest(seed?: number): Promise<void>;
@@ -156,7 +157,7 @@ test('look at the top 3, reorder, and send one to the bottom', async () => {
 
 test('mill 2 puts the top two in the graveyard', async () => {
   const [a, b] = me(await gameState()).zones.library;
-  await board.getByRole('button', { name: 'Mill N…' }).click();
+  await (await battlefieldMenuItem(board, 'Mill N…')).click();
   await board.getByLabel('How many from the top?').fill('2');
   await board.getByRole('button', { name: 'OK', exact: true }).click();
 
@@ -269,7 +270,7 @@ test('Cmd/Ctrl+Z untaps a tapped card and Shift redoes it', async () => {
 
   await board.keyboard.press('ControlOrMeta+z');
   await expect(land).not.toHaveClass(/rotate-90/);
-  const redo = board.getByRole('button', { name: 'Redo' });
+  const redo = hand.getByRole('button', { name: 'Redo' });
   await expect(redo).toBeEnabled();
 
   await board.keyboard.press('ControlOrMeta+Shift+z');
@@ -305,8 +306,8 @@ test('a text field keeps its own undo', async () => {
 test('undoing a commander prompt answer keeps the prompt consistent', async () => {
   await openCommanderSample(9);
   // A new game starts with no history.
-  await expect(board.getByRole('button', { name: 'Undo' })).toBeDisabled();
-  await expect(board.getByRole('button', { name: 'Redo' })).toBeDisabled();
+  await expect(hand.getByRole('button', { name: 'Undo' })).toBeDisabled();
+  await expect(hand.getByRole('button', { name: 'Redo' })).toBeDisabled();
   await keep();
 
   const commander = board
@@ -363,13 +364,15 @@ test('undoing a commander prompt answer keeps the prompt consistent', async () =
 });
 
 test('restarting clears the history', async () => {
-  await board.getByRole('button', { name: 'Restart' }).click();
+  await (await battlefieldMenuItem(board, 'Restart game…')).click();
   await board
     .getByRole('dialog', { name: 'Restart game?' })
     .getByRole('button', { name: 'Restart' })
     .click();
   await expect(board.getByTestId('turn')).toHaveText('1');
-  await expect(board.getByRole('button', { name: 'Undo' })).toBeDisabled();
+  await expect(hand.getByRole('button', { name: 'Undo' })).toBeDisabled();
+  await expect(await battlefieldMenuItem(board, 'Undo')).toBeDisabled();
+  await board.keyboard.press('Escape');
   await board.keyboard.press('ControlOrMeta+z');
   await expect(hand.getByTestId('mulligan-bar')).toBeVisible();
   await expect(handCards()).toHaveCount(7);

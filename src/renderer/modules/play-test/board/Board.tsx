@@ -1,8 +1,15 @@
 import { type CardView, MAX_DUMMIES, type PublicView } from '@shared/game';
 import { MAX_DIE_SIDES } from '@shared/net/protocol';
 import type { OpponentState } from '@shared/net/remoteViews';
+import type { BoardMenuCommand } from '@shared/types/playTest';
 import classNames from 'classnames';
-import { type MouseEvent, type ReactNode, useCallback, useState } from 'react';
+import {
+  type MouseEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 
 import useSettings from '../../../hooks/useSettings';
 import { cardWidths } from '../../../ui/cardSizes';
@@ -10,8 +17,8 @@ import { useContextMenu } from '../../../ui/ContextMenuProvider';
 import { ConfirmDialog, NumberPrompt } from '../common/Dialogs';
 import ShortcutHelp from '../common/ShortcutHelp';
 import { useGameShortcuts } from '../common/useGameShortcuts';
-import UndoButtons from '../common/UndoButtons';
-import { dispatch, useView, type ViewStore } from '../viewStore';
+import { useUndoState } from '../common/useUndoState';
+import { dispatch, redo, undo, useView, type ViewStore } from '../viewStore';
 import AttachDialog from './AttachDialog';
 import BattlefieldCard from './BattlefieldCard';
 import CommanderPrompt from './CommanderPrompt';
@@ -57,28 +64,6 @@ type Dialog =
 // Dialogs about one permanent, opened from its menu.
 type CardDialog = { kind: 'counter' | 'attach'; card: CardView };
 
-const toolButtonClass =
-  'rounded bg-slate-700 px-2 py-1 text-sm font-medium text-white hover:bg-slate-600 disabled:opacity-40';
-
-const ToolButton = ({
-  onClick,
-  children,
-  label,
-}: {
-  onClick(): void;
-  children: ReactNode;
-  label?: string;
-}) => (
-  <button
-    type="button"
-    aria-label={label}
-    className={toolButtonClass}
-    onClick={onClick}
-  >
-    {children}
-  </button>
-);
-
 const dummyName = (view: PublicView) => {
   const names = new Set(view.dummies.map((d) => d.name));
   let n = 1;
@@ -114,6 +99,7 @@ const Board = ({ store, opponent }: Props) => {
 
   const prompts = useCommanderPrompts();
   const { turnTracking } = useSettings().settings;
+  const { canUndo, canRedo } = useUndoState();
 
   useGameShortcuts(view, {
     enabled: dialog === null && cardDialog === null && prompts.length === 0,
@@ -131,6 +117,22 @@ const Board = ({ store, opponent }: Props) => {
       });
     }
   };
+
+  // Subscribed once; each command runs against the latest render.
+  const onMenuCommand = useRef((_command: BoardMenuCommand) => {});
+  useEffect(() => {
+    onMenuCommand.current = (command) => {
+      if (command === 'addDummy') addDummy();
+      else setDialog(command);
+    };
+  });
+  useEffect(
+    () =>
+      window.api.onBoardMenuCommand((command) => {
+        onMenuCommand.current(command);
+      }),
+    []
+  );
 
   const handleContextMenu = (e: MouseEvent) => {
     e.preventDefault();
@@ -156,6 +158,9 @@ const Board = ({ store, opponent }: Props) => {
         ...(canAddDummy
           ? [{ title: 'Add placeholder opponent', action: addDummy }]
           : []),
+        { title: 'Undo', action: canUndo ? undo : null },
+        { title: 'Redo', action: canRedo ? redo : null },
+        { title: 'Restart game…', action: () => setDialog('restart') },
         { title: 'Keyboard shortcuts', action: () => setDialog('help') },
       ],
       x: e.pageX,
@@ -263,46 +268,6 @@ const Board = ({ store, opponent }: Props) => {
                   Choosing opening hand · Mulligans {view.mulligans}
                 </div>
               )}
-              <div className="flex flex-wrap gap-1">
-                <ToolButton
-                  onClick={() =>
-                    dispatch({ type: 'untapAll', playerId: view.playerId })
-                  }
-                >
-                  Untap all
-                </ToolButton>
-                <ToolButton onClick={() => setDialog('drawMany')}>
-                  Draw N…
-                </ToolButton>
-                <ToolButton onClick={() => setDialog('mill')}>
-                  Mill N…
-                </ToolButton>
-                <ToolButton
-                  onClick={() =>
-                    dispatch({ type: 'shuffle', playerId: view.playerId })
-                  }
-                >
-                  Shuffle
-                </ToolButton>
-                <ToolButton onClick={() => setDialog('token')}>
-                  Token…
-                </ToolButton>
-                <UndoButtons className={toolButtonClass} />
-                <ToolButton onClick={() => setDialog('restart')}>
-                  Restart
-                </ToolButton>
-                {commanderGame && canAddDummy && !duel && (
-                  <ToolButton
-                    label="Add placeholder opponent"
-                    onClick={addDummy}
-                  >
-                    + Opponent
-                  </ToolButton>
-                )}
-                <ToolButton label="Keyboard shortcuts" onClick={toggleHelp}>
-                  ?
-                </ToolButton>
-              </div>
               <div
                 className={classNames(
                   'grid gap-x-2',

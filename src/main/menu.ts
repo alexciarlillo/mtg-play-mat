@@ -6,6 +6,8 @@ import {
   MenuItemConstructorOptions,
 } from 'electron';
 
+import { type GameMenuCommand, gameMenuTemplate } from './gameMenu';
+
 interface DarwinMenuItemConstructorOptions extends MenuItemConstructorOptions {
   selector?: string;
   submenu?: DarwinMenuItemConstructorOptions[] | Menu;
@@ -13,6 +15,9 @@ interface DarwinMenuItemConstructorOptions extends MenuItemConstructorOptions {
 
 export interface MenuActions {
   openSamplePlayTest(): void;
+  openSettings(): void;
+  playTestOpen(): boolean;
+  runGameCommand(command: GameMenuCommand): void;
 }
 
 const isDebug = !app.isPackaged || process.env.DEBUG_PROD === 'true';
@@ -33,7 +38,12 @@ export default class MenuBuilder {
     if (isDebug) {
       this.setupDevelopmentEnvironment();
     }
+    return this.refresh();
+  }
 
+  // Rebuilds the menu so items follow app state (the Game menu is enabled
+  // only while a play test is open).
+  refresh(): Menu {
     const template =
       process.platform === 'darwin'
         ? this.buildDarwinTemplate()
@@ -68,6 +78,8 @@ export default class MenuBuilder {
           label: `About ${app.name}`,
           selector: 'orderFrontStandardAboutPanel:',
         },
+        { type: 'separator' },
+        this.settingsItem('Command+,'),
         { type: 'separator' },
         { label: 'Services', submenu: [] },
         { type: 'separator' },
@@ -168,7 +180,14 @@ export default class MenuBuilder {
 
     const subMenuView = isDebug ? subMenuViewDev : subMenuViewProd;
 
-    return [subMenuAbout, subMenuEdit, subMenuView, subMenuWindow, subMenuHelp];
+    return [
+      subMenuAbout,
+      subMenuEdit,
+      subMenuView,
+      this.gameMenu(),
+      subMenuWindow,
+      subMenuHelp,
+    ];
   }
 
   buildDefaultTemplate(): MenuItemConstructorOptions[] {
@@ -187,6 +206,8 @@ export default class MenuBuilder {
               this.mainWindow.close();
             },
           },
+          { type: 'separator' },
+          this.settingsItem('Ctrl+,'),
         ],
       },
       {
@@ -231,6 +252,7 @@ export default class MenuBuilder {
               },
             ],
       },
+      this.gameMenu(),
       {
         label: 'Help',
         submenu: [this.projectPageItem()],
@@ -249,6 +271,22 @@ export default class MenuBuilder {
       click: () => {
         this.actions.openSamplePlayTest();
       },
+    };
+  }
+
+  gameMenu(): MenuItemConstructorOptions {
+    return gameMenuTemplate({
+      playTestOpen: this.actions.playTestOpen(),
+      run: (command) => this.actions.runGameCommand(command),
+      openSettings: () => this.actions.openSettings(),
+    });
+  }
+
+  settingsItem(accelerator: string): MenuItemConstructorOptions {
+    return {
+      label: 'Settings…',
+      accelerator,
+      click: () => this.actions.openSettings(),
     };
   }
 

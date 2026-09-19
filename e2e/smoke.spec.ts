@@ -11,6 +11,8 @@ import {
   test,
 } from '@playwright/test';
 
+import { clickGameMenu, gameMenuEnabled } from './gameMenu';
+
 interface TestHooks {
   openSamplePlayTest(seed?: number): Promise<void>;
 }
@@ -196,6 +198,8 @@ test('window.api is a narrow typed bridge', async () => {
       'startSamplePlayTest',
       'closePlayTest',
       'onPlayTestStatus',
+      'onBoardMenuCommand',
+      'onNavigate',
     ].sort()
   );
   expect(surface.allFunctions).toBe(true);
@@ -449,8 +453,8 @@ test('goldfish: mulligan, keep, play, move, drag, life, untap, restart', async (
   const boardIds = await instanceIds(cards(board));
   expect(handIds.filter((id) => boardIds.includes(id))).toEqual([]);
 
-  // Restart after confirming: a fresh game from the same deck.
-  await board.getByRole('button', { name: 'Restart' }).click();
+  // Restart from the Game menu after confirming: a fresh game.
+  expect(await clickGameMenu(app, 'restart')).toBe(true);
   await board
     .getByRole('dialog', { name: 'Restart game?' })
     .getByRole('button', { name: 'Restart' })
@@ -465,6 +469,63 @@ test('goldfish: mulligan, keep, play, move, drag, life, untap, restart', async (
 
   await closeWindow('board.html');
   await expect.poll(windowUrls).toHaveLength(1);
+});
+
+test('the Game menu follows the play test and drives the board', async () => {
+  expect(await windowUrls()).toHaveLength(1);
+  expect(await gameMenuEnabled(app, 'draw')).toBe(false);
+  expect(await clickGameMenu(app, 'draw')).toBe(false);
+  expect(await gameMenuEnabled(app, 'settings')).toBe(true);
+
+  await openSamplePlayTest(7);
+  await expect.poll(() => gameMenuEnabled(app, 'draw')).toBe(true);
+  const board = await windowByPage('board.html');
+  const hand = await windowByPage('hand.html');
+  await hand.getByRole('button', { name: 'Keep' }).click();
+
+  // The side panel has no tool buttons left.
+  for (const name of ['Untap all', 'Shuffle', 'Token…', 'Restart', 'Undo']) {
+    await expect(board.getByRole('button', { name })).toHaveCount(0);
+  }
+
+  await clickGameMenu(app, 'draw');
+  await expect(library(board)).toHaveAttribute('data-count', '52');
+  await clickGameMenu(app, 'drawMany');
+  const drawMany = board.getByRole('dialog', { name: 'Draw cards' });
+  await drawMany.getByLabel('How many?').fill('2');
+  await drawMany.getByRole('button', { name: 'OK', exact: true }).click();
+  await expect(library(board)).toHaveAttribute('data-count', '50');
+  await clickGameMenu(app, 'undo');
+  await expect(library(board)).toHaveAttribute('data-count', '52');
+  await clickGameMenu(app, 'redo');
+  await expect(library(board)).toHaveAttribute('data-count', '50');
+
+  await handCards(hand).first().click();
+  await expect(battlefield(board)).toHaveCount(1);
+  await battlefield(board).first().click();
+  await expect(battlefield(board).first()).toHaveClass(/rotate-90/);
+  await clickGameMenu(app, 'untapAll');
+  await expect(battlefield(board).first()).not.toHaveClass(/rotate-90/);
+
+  for (const [command, title] of [
+    ['mill', 'Mill cards'],
+    ['token', 'Create token'],
+    ['help', 'Keyboard shortcuts'],
+  ]) {
+    await clickGameMenu(app, command);
+    const dialog = board.getByRole('dialog', { name: title });
+    await expect(dialog).toBeVisible();
+    await board.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+  }
+
+  await clickGameMenu(app, 'settings');
+  const appWindow = await windowByPage('app.html');
+  await expect(appWindow).toHaveURL(/#\/settings/);
+
+  await closeWindow('board.html');
+  await expect.poll(windowUrls).toHaveLength(1);
+  await expect.poll(() => gameMenuEnabled(app, 'draw')).toBe(false);
 });
 
 test('no renderer console errors', () => {

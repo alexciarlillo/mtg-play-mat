@@ -31,11 +31,13 @@ import {
   getDbDir,
   imageCacheDir,
 } from './shared/db/paths';
-import { createWindow } from './windows';
+import { createWindow, whenLoaded } from './windows';
 
 protocol.registerSchemesAsPrivileged([cardSchemePrivileges]);
 
 let appWindow: BrowserWindow | null = null;
+
+let menu: MenuBuilder | null = null;
 
 const testHooksEnabled = process.env.MTG_PLAY_MAT_TEST_HOOKS === '1';
 
@@ -55,9 +57,25 @@ const createAppWindow = (playTest: PlayTest) => {
     if (process.platform !== 'darwin') app.quit();
   });
 
-  new MenuBuilder(window, {
+  menu = new MenuBuilder(window, {
     openSamplePlayTest: playTest.openSampleDeck,
-  }).buildMenu();
+    openSettings: () => openSettings(playTest),
+    playTestOpen: () => playTest.isOpen,
+    runGameCommand: playTest.runMenuCommand,
+  });
+  menu.buildMenu();
+  return window;
+};
+
+// Reopens the app window if it was closed (macOS keeps the app running).
+const openSettings = (playTest: PlayTest) => {
+  const window = appWindow ?? createAppWindow(playTest);
+  if (window.isMinimized()) window.restore();
+  window.show();
+  window.focus();
+  void whenLoaded(window).then((loaded) => {
+    if (loaded) sendEvent(window, 'navigate', 'settings');
+  });
 };
 
 const start = (onDeepLink: ReturnType<typeof watchDeepLinks>) => {
@@ -80,6 +98,7 @@ const start = (onDeepLink: ReturnType<typeof watchDeepLinks>) => {
     playerId: profile.playerId,
     playerName: () => profile.name,
   });
+  playTest.onStatusChange(() => menu?.refresh());
   const online = setupNetplay({
     profile,
     settings,

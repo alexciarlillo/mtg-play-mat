@@ -11,6 +11,7 @@ import {
 } from '@playwright/test';
 
 import { type FakeScryfall, startFakeScryfall } from './fakeScryfall';
+import { clickGameMenu } from './gameMenu';
 
 const ATRAXA = "Atraxa, Praetors' Voice";
 
@@ -204,7 +205,7 @@ test('the tax can be fixed by hand, and No keeps the card where it went', async 
 test('a placeholder opponent tracks life and commander damage', async () => {
   const board = await windowFor('board.html');
   await expect(board.getByTestId('dummy')).toHaveCount(0);
-  await board.getByRole('button', { name: 'Add placeholder opponent' }).click();
+  expect(await clickGameMenu(app, 'addDummy')).toBe(true);
 
   const dummy = board.getByTestId('dummy');
   await expect(dummy).toHaveAttribute('data-name', 'Opponent 1');

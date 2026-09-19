@@ -63,7 +63,8 @@ const ContextMenu = () => {
         <button
           type="button"
           role="menuitem"
-          className="text-gray-700 block px-3 py-0.5 text-sm text-left whitespace-nowrap hover:bg-stone-300 w-full"
+          className="text-gray-700 block px-3 py-0.5 text-sm text-left whitespace-nowrap hover:bg-stone-300 disabled:text-gray-400 disabled:hover:bg-transparent w-full"
+          disabled={!spec.action}
           onClick={spec.action ?? undefined}
           key={spec.title}
         >

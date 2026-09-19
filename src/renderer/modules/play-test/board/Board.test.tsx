@@ -1,8 +1,10 @@
 import type { PublicView } from '@shared/game';
 import type { OpponentState } from '@shared/net/remoteViews';
 import { defaultSettings, type Settings } from '@shared/settings';
-import { act, render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it } from 'vitest';
+import type { BoardMenuCommand } from '@shared/types/playTest';
+import { act, fireEvent, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ContextMenuProvider } from '../../../ui/ContextMenuProvider';
 import type { ViewStore } from '../viewStore';
@@ -45,19 +47,36 @@ const storeOf = <V,>(value: V): ViewStore<V> => ({
 
 const never = () => new Promise(() => {});
 let pushSettings: (next: Settings) => void;
+let pushMenuCommand: (command: BoardMenuCommand) => void;
+let pushUndoState: (next: { canUndo: boolean; canRedo: boolean }) => void;
+let api: Record<string, ReturnType<typeof vi.fn>>;
 
 const renderBoard = (initial: Settings) => {
+  api = {
+    dispatch: vi.fn(async () => {}),
+    undo: vi.fn(async () => {}),
+    redo: vi.fn(async () => {}),
+    restartPlayTest: vi.fn(async () => {}),
+  };
   Object.assign(window, {
     api: {
+      ...api,
       getSettings: () => Promise.resolve(initial),
       onSettingsChanged: (listener: (next: Settings) => void) => {
         pushSettings = listener;
         return () => {};
       },
       getUndoState: never,
-      onUndoState: () => () => {},
+      onUndoState: (listener: typeof pushUndoState) => {
+        pushUndoState = listener;
+        return () => {};
+      },
       getCommanderPrompts: never,
       onCommanderPrompts: () => () => {},
+      onBoardMenuCommand: (listener: typeof pushMenuCommand) => {
+        pushMenuCommand = listener;
+        return () => {};
+      },
     },
   });
   render(
@@ -92,5 +111,84 @@ describe('Board turn tracking', () => {
 
     act(() => pushSettings({ ...defaultSettings, turnTracking: true }));
     expect(screen.getByTestId('turn-panel')).toBeInTheDocument();
+  });
+});
+
+describe('Board tools', () => {
+  it('has no tool buttons in the side panel', async () => {
+    renderBoard(defaultSettings);
+    await act(async () => {});
+    [
+      'Untap all',
+      'Draw N…',
+      'Mill N…',
+      'Shuffle',
+      'Token…',
+      'Undo',
+      'Redo',
+      'Restart',
+      'Add placeholder opponent',
+      'Keyboard shortcuts',
+    ].forEach((name) => {
+      expect(screen.queryByRole('button', { name })).toBeNull();
+    });
+  });
+
+  it.each([
+    ['drawMany', 'Draw cards'],
+    ['mill', 'Mill cards'],
+    ['help', 'Keyboard shortcuts'],
+    ['restart', 'Restart game?'],
+  ] as const)('opens a dialog for the %s menu command', async (cmd, title) => {
+    renderBoard(defaultSettings);
+    await act(async () => {});
+    act(() => pushMenuCommand(cmd));
+    expect(screen.getByRole('dialog', { name: title })).toBeInTheDocument();
+  });
+
+  it('restarts from the menu only after confirming', async () => {
+    const user = userEvent.setup();
+    renderBoard(defaultSettings);
+    await act(async () => {});
+    act(() => pushMenuCommand('restart'));
+    expect(api.restartPlayTest).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Restart' }));
+    expect(api.restartPlayTest).toHaveBeenCalledTimes(1);
+  });
+
+  it('adds a placeholder opponent from the menu', async () => {
+    renderBoard(defaultSettings);
+    await act(async () => {});
+    act(() => pushMenuCommand('addDummy'));
+    expect(api.dispatch).toHaveBeenCalledWith({
+      type: 'addDummy',
+      playerId: 'p1',
+      name: 'Opponent 1',
+    });
+  });
+
+  it('offers undo, redo, and restart on the battlefield menu', async () => {
+    renderBoard(defaultSettings);
+    await act(async () => {});
+    const field = screen.getByTestId('battlefield');
+
+    fireEvent.contextMenu(field);
+    expect(screen.getByRole('menuitem', { name: 'Undo' })).toBeDisabled();
+    expect(screen.getByRole('menuitem', { name: 'Redo' })).toBeDisabled();
+
+    act(() => pushUndoState({ canUndo: true, canRedo: true }));
+    fireEvent.contextMenu(field);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Undo' }));
+    expect(api.undo).toHaveBeenCalledTimes(1);
+
+    fireEvent.contextMenu(field);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Redo' }));
+    expect(api.redo).toHaveBeenCalledTimes(1);
+
+    fireEvent.contextMenu(field);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Restart game…' }));
+    expect(
+      screen.getByRole('dialog', { name: 'Restart game?' })
+    ).toBeInTheDocument();
   });
 });
