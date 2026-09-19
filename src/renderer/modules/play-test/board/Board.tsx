@@ -1,4 +1,9 @@
-import { type CardView, MAX_DUMMIES, type PublicView } from '@shared/game';
+import {
+  type CardView,
+  MAX_DUMMIES,
+  type PrivateView,
+  type PublicView,
+} from '@shared/game';
 import { MAX_DIE_SIDES } from '@shared/net/protocol';
 import type { OpponentState } from '@shared/net/remoteViews';
 import type { BoardMenuCommand } from '@shared/types/playTest';
@@ -32,6 +37,7 @@ import {
 import { CommanderDamageTaken, DummyOpponents } from './CommanderTracker';
 import CommandZone from './CommandZone';
 import CounterDialog from './CounterDialog';
+import HandTray from './HandTray';
 import Library from './Library';
 import { SIDE_PANEL_WIDTH, stackOrder } from './layout';
 import LifeCounter from './LifeCounter';
@@ -75,9 +81,11 @@ const dummyName = (view: PublicView) => {
 interface Props {
   store: ViewStore<PublicView>;
   opponent?: ViewStore<OpponentState>;
+  // Given in single-window mode, where the board also hosts the hand.
+  hand?: ViewStore<PrivateView>;
 }
 
-const Board = ({ store, opponent }: Props) => {
+const Board = ({ store, opponent, hand }: Props) => {
   const view = useView(store);
   const remote = useView(opponent ?? noOpponent);
   const menu = useContextMenu();
@@ -106,9 +114,15 @@ const Board = ({ store, opponent }: Props) => {
   } = useSettings();
   const { turnTracking } = settings;
   const { canUndo, canRedo } = useUndoState();
+  // A dialog open in the docked hand holds the game keys, as on the board.
+  const [handBusy, setHandBusy] = useState(false);
 
   useGameShortcuts(view, {
-    enabled: dialog === null && cardDialog === null && prompts.length === 0,
+    enabled:
+      dialog === null &&
+      cardDialog === null &&
+      prompts.length === 0 &&
+      !handBusy,
     onHelp: toggleHelp,
   });
 
@@ -187,169 +201,186 @@ const Board = ({ store, opponent }: Props) => {
 
   return (
     <div className="h-screen w-screen overflow-hidden bg-neutral-400 flex flex-col">
-      {duel && (
-        <div
-          data-testid="opponents"
-          className="grid h-1/2 min-h-0 gap-x-1 bg-slate-900"
-          style={{
-            gridTemplateColumns: `repeat(${peers.length}, minmax(0, 1fr))`,
-          }}
-        >
-          {peers.map((peer) => (
-            <OpponentSide
-              key={peer.info.playerId}
-              peer={peer.info}
-              view={peer.view}
-              seat={peer.seat}
-              compact={pod}
-              showTurn={turnTracking}
-            />
-          ))}
-        </div>
-      )}
-      <div className="flex flex-1 min-h-0" onContextMenu={handleContextMenu}>
-        <div
-          className={classNames(
-            'relative flex-1 h-full px-8',
-            duel ? 'py-3' : 'py-6'
-          )}
-        >
-          {view && (
-            <RevealPanel
-              reveal={view.revealed}
-              onHide={() =>
-                dispatch({ type: 'hideReveal', playerId: view.playerId })
-              }
-            />
-          )}
-          {/* Over the field, not in the side panel, which is full in a
+      {/* The docked hand sits below, so opponents and the field share
+          what is left and the table panel stays above the tray. */}
+      <div className="flex min-h-0 flex-1 flex-col">
+        {duel && (
+          <div
+            data-testid="opponents"
+            className="grid h-1/2 min-h-0 gap-x-1 bg-slate-900"
+            style={{
+              gridTemplateColumns: `repeat(${peers.length}, minmax(0, 1fr))`,
+            }}
+          >
+            {peers.map((peer) => (
+              <OpponentSide
+                key={peer.info.playerId}
+                peer={peer.info}
+                view={peer.view}
+                seat={peer.seat}
+                compact={pod}
+                showTurn={turnTracking}
+              />
+            ))}
+          </div>
+        )}
+        <div className="flex flex-1 min-h-0" onContextMenu={handleContextMenu}>
+          <div
+            className={classNames(
+              'relative flex-1 h-full px-8',
+              duel ? 'py-3' : 'py-6'
+            )}
+          >
+            {view && (
+              <RevealPanel
+                reveal={view.revealed}
+                onHide={() =>
+                  dispatch({ type: 'hideReveal', playerId: view.playerId })
+                }
+              />
+            )}
+            {/* Over the field, not in the side panel, which is full in a
               commander pod; it waits for settings so it doesn't jump. */}
-          {settingsLoaded && (
-            <FloatingPanel
-              title="Table"
-              testId="table-panel"
-              className="w-72"
-              placement={settings.tablePanel}
-              onPlacementChange={(tablePanel) => {
-                updateSettings({ tablePanel }).catch((err: unknown) =>
-                  console.error('[play-test] could not save panel', err)
-                );
-              }}
-            >
-              <TableLog log={log} onCustomDie={() => setDialog('rollDie')} />
-            </FloatingPanel>
-          )}
-          {/* Positions are relative to this box, in logical field units. */}
-          <ScaledField testId="battlefield">
-            {(scale) =>
-              view &&
-              stackOrder(view.zones.battlefield).map((card) => (
-                <BattlefieldCard
-                  key={card.instanceId}
-                  card={card}
-                  scale={scale}
-                  onAddCounter={onAddCounter}
-                  onAttach={onAttach}
-                />
-              ))
-            }
-          </ScaledField>
-        </div>
-
-        <aside
-          style={{ width: SIDE_PANEL_WIDTH }}
-          className={classNames(
-            'h-full shrink-0 overflow-y-auto bg-slate-800 text-slate-100 flex flex-col p-3',
-            duel ? 'gap-2' : 'gap-3'
-          )}
-        >
-          {view && (
-            <>
-              <LifeCounter
-                playerId={view.playerId}
-                life={view.life}
-                compact={duel}
-                onSetLife={() => setDialog('setLife')}
-              />
-              <PlayerCounters
-                counters={view.counters}
-                playerId={view.playerId}
-              />
-              {turnTracking && <TurnPanel view={view} compact={duel} />}
-              {!view.keptHand && (
-                <div
-                  data-testid="mulligan-status"
-                  className="rounded bg-amber-200 px-2 py-1 text-center text-sm font-semibold text-slate-900"
-                >
-                  Choosing opening hand · Mulligans {view.mulligans}
-                </div>
-              )}
-              <div
-                className={classNames(
-                  'grid gap-x-2',
-                  compactPiles ? 'grid-cols-4 gap-y-1' : 'grid-cols-2 gap-y-3'
-                )}
+            {settingsLoaded && (
+              <FloatingPanel
+                title="Table"
+                testId="table-panel"
+                className="w-72"
+                placement={settings.tablePanel}
+                onPlacementChange={(tablePanel) => {
+                  updateSettings({ tablePanel }).catch((err: unknown) =>
+                    console.error('[play-test] could not save panel', err)
+                  );
+                }}
               >
-                <Library
+                <TableLog log={log} onCustomDie={() => setDialog('rollDie')} />
+              </FloatingPanel>
+            )}
+            {/* Positions are relative to this box, in logical field units. */}
+            <ScaledField testId="battlefield">
+              {(scale) =>
+                view &&
+                stackOrder(view.zones.battlefield).map((card) => (
+                  <BattlefieldCard
+                    key={card.instanceId}
+                    card={card}
+                    scale={scale}
+                    onAddCounter={onAddCounter}
+                    onAttach={onAttach}
+                  />
+                ))
+              }
+            </ScaledField>
+          </div>
+
+          <aside
+            style={{ width: SIDE_PANEL_WIDTH }}
+            className={classNames(
+              'h-full shrink-0 overflow-y-auto bg-slate-800 text-slate-100 flex flex-col p-3',
+              duel ? 'gap-2' : 'gap-3'
+            )}
+          >
+            {view && (
+              <>
+                <LifeCounter
                   playerId={view.playerId}
-                  count={view.libraryCount}
-                  size={pileSize}
-                  activity={view.libraryActivity}
-                  onDrawMany={() => setDialog('drawMany')}
-                  onMill={() => setDialog('mill')}
+                  life={view.life}
+                  compact={duel}
+                  onSetLife={() => setDialog('setLife')}
                 />
-                <div
-                  data-testid="hand-count"
-                  data-drop-zone="hand"
-                  data-count={view.handCount}
-                  className="flex flex-col items-center gap-1"
-                >
+                <PlayerCounters
+                  counters={view.counters}
+                  playerId={view.playerId}
+                />
+                {turnTracking && <TurnPanel view={view} compact={duel} />}
+                {!view.keptHand && (
                   <div
-                    className={classNames(
-                      'aspect-card rounded-lg border-2 border-dashed border-slate-500',
-                      'flex items-center justify-center font-bold tabular-nums',
-                      compactPiles ? 'text-2xl' : 'text-4xl',
-                      cardWidths[pileSize]
-                    )}
+                    data-testid="mulligan-status"
+                    className="rounded bg-amber-200 px-2 py-1 text-center text-sm font-semibold text-slate-900"
                   >
-                    {view.handCount}
+                    Choosing opening hand · Mulligans {view.mulligans}
                   </div>
-                  <div className="text-sm font-medium">
-                    Hand <span className="tabular-nums">{view.handCount}</span>
-                  </div>
-                </div>
-                <ZonePile
-                  zone="graveyard"
-                  label="Graveyard"
-                  cards={view.zones.graveyard}
-                  size={pileSize}
-                  onOpen={() => setDialog('graveyard')}
-                />
-                <ZonePile
-                  zone="exile"
-                  label="Exile"
-                  cards={view.zones.exile}
-                  size={pileSize}
-                  onOpen={() => setDialog('exile')}
-                />
-                {commanderGame && (
-                  <CommandZone view={view} size={duel ? 'xs' : 'sm'} />
                 )}
-              </div>
-              <CommanderDamageTaken
-                playerId={view.playerId}
-                sources={opponentCommanders(peers)}
-                taken={view.commanderDamage}
-              />
-              <DummyOpponents
-                playerId={view.playerId}
-                dummies={view.dummies}
-                commanders={commanderSources(visibleCommanders(view))}
-              />
-            </>
-          )}
-        </aside>
+                <div
+                  className={classNames(
+                    'grid gap-x-2',
+                    compactPiles ? 'grid-cols-4 gap-y-1' : 'grid-cols-2 gap-y-3'
+                  )}
+                >
+                  <Library
+                    playerId={view.playerId}
+                    count={view.libraryCount}
+                    size={pileSize}
+                    activity={view.libraryActivity}
+                    onDrawMany={() => setDialog('drawMany')}
+                    onMill={() => setDialog('mill')}
+                  />
+                  <div
+                    data-testid="hand-count"
+                    data-drop-zone="hand"
+                    data-count={view.handCount}
+                    className="flex flex-col items-center gap-1"
+                  >
+                    <div
+                      className={classNames(
+                        'aspect-card rounded-lg border-2 border-dashed border-slate-500',
+                        'flex items-center justify-center font-bold tabular-nums',
+                        compactPiles ? 'text-2xl' : 'text-4xl',
+                        cardWidths[pileSize]
+                      )}
+                    >
+                      {view.handCount}
+                    </div>
+                    <div className="text-sm font-medium">
+                      Hand{' '}
+                      <span className="tabular-nums">{view.handCount}</span>
+                    </div>
+                  </div>
+                  <ZonePile
+                    zone="graveyard"
+                    label="Graveyard"
+                    cards={view.zones.graveyard}
+                    size={pileSize}
+                    onOpen={() => setDialog('graveyard')}
+                  />
+                  <ZonePile
+                    zone="exile"
+                    label="Exile"
+                    cards={view.zones.exile}
+                    size={pileSize}
+                    onOpen={() => setDialog('exile')}
+                  />
+                  {commanderGame && (
+                    <CommandZone view={view} size={duel ? 'xs' : 'sm'} />
+                  )}
+                </div>
+                <CommanderDamageTaken
+                  playerId={view.playerId}
+                  sources={opponentCommanders(peers)}
+                  taken={view.commanderDamage}
+                />
+                <DummyOpponents
+                  playerId={view.playerId}
+                  dummies={view.dummies}
+                  commanders={commanderSources(visibleCommanders(view))}
+                />
+              </>
+            )}
+          </aside>
+        </div>
       </div>
+      {hand && settingsLoaded && (
+        <HandTray
+          store={hand}
+          placement={settings.handTray}
+          onPlacementChange={(handTray) => {
+            updateSettings({ handTray }).catch((err: unknown) =>
+              console.error('[play-test] could not save hand tray', err)
+            );
+          }}
+          onBusyChange={setHandBusy}
+        />
+      )}
 
       {view && dialog === 'graveyard' && (
         <ZoneBrowser

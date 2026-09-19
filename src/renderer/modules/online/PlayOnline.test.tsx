@@ -18,7 +18,12 @@ const deck = (id: number, name: string): DeckSummary => ({
   updatedAt: '2026-09-18',
 });
 
-const closed: PlayTestStatus = { open: false, deck: null, sampleDeck: false };
+const closed: PlayTestStatus = {
+  open: false,
+  deck: null,
+  sampleDeck: false,
+  handInBoard: false,
+};
 
 let pushStatus: (status: PlayTestStatus) => void = () => {};
 

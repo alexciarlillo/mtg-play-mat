@@ -97,6 +97,7 @@ const start = (onDeepLink: ReturnType<typeof watchDeepLinks>) => {
     deckDb,
     playerId: profile.playerId,
     playerName: () => profile.name,
+    handInBoard: () => settings.settings.handInBoard,
   });
   playTest.onStatusChange(() => menu?.refresh());
   const online = setupNetplay({

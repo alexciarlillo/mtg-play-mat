@@ -1,12 +1,15 @@
 import '../styles.css';
 
-import type { PublicView } from '@shared/game';
+import type { PrivateView, PublicView } from '@shared/game';
 import type { OpponentState } from '@shared/net/remoteViews';
 import { createRoot } from 'react-dom/client';
 
 import Board from '../modules/play-test/board/Board';
 import { SIDE_PANEL_WIDTH } from '../modules/play-test/board/layout';
-import { createViewStore } from '../modules/play-test/viewStore';
+import {
+  createViewStore,
+  type ViewStore,
+} from '../modules/play-test/viewStore';
 import { CardPreviewProvider } from '../ui/CardPreview';
 import { ContextMenuProvider } from '../ui/ContextMenuProvider';
 
@@ -22,11 +25,29 @@ if (container) {
     fetch: window.api.getOpponentView,
   });
   const root = createRoot(container);
-  root.render(
-    <ContextMenuProvider>
-      <CardPreviewProvider reserveRight={SIDE_PANEL_WIDTH}>
-        <Board store={store} opponent={opponent} />
-      </CardPreviewProvider>
-    </ContextMenuProvider>
+  const render = (hand?: ViewStore<PrivateView>) =>
+    root.render(
+      <ContextMenuProvider>
+        <CardPreviewProvider reserveRight={SIDE_PANEL_WIDTH}>
+          <Board store={store} opponent={opponent} hand={hand} />
+        </CardPreviewProvider>
+      </ContextMenuProvider>
+    );
+  // The mode is fixed for this window's life, and main only lets it read
+  // the hand when it hosts one, so the hand store waits for the answer.
+  render();
+  window.api.getPlayTestStatus().then(
+    (status) => {
+      if (!status.handInBoard) return;
+      render(
+        createViewStore<PrivateView>({
+          subscribe: window.api.onHandView,
+          fetch: window.api.getHandView,
+        })
+      );
+    },
+    (err: unknown) => {
+      console.error('[play-test] failed to load play test status', err);
+    }
   );
 }

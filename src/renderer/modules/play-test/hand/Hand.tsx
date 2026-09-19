@@ -1,6 +1,12 @@
 import { type CardView, isModalDfc, type PrivateView } from '@shared/game';
 import classNames from 'classnames';
-import { useCallback, useEffect, useState } from 'react';
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 
 import Card from '../../../ui/Card';
 import type { ContextMenuSpec } from '../../../ui/ContextMenuStore';
@@ -163,9 +169,36 @@ const MulliganBar = ({
   );
 };
 
-const Hand = ({ store }: { store: ViewStore<PrivateView> }) => {
+// How the hand behaves when docked in the board window rather than in a
+// window of its own.
+export interface HandDock {
+  collapsed: boolean;
+  // More title bar controls, such as the tray's collapse toggle.
+  controls: ReactNode;
+  // The board holds its game keys while one of the hand's dialogs is open.
+  onBusyChange(busy: boolean): void;
+  // Lets the board make each card draggable onto the battlefield.
+  wrapCard(card: CardView, node: ReactNode): ReactNode;
+}
+
+interface Props {
+  store: ViewStore<PrivateView>;
+  dock?: HandDock;
+}
+
+const Hand = ({ store, dock }: Props) => {
   const view = useView(store);
   const [dialog, setDialog] = useState<Dialog | null>(null);
+  const docked = dock !== undefined;
+  const onBusyChange = useRef(dock?.onBusyChange);
+  useEffect(() => {
+    onBusyChange.current = dock?.onBusyChange;
+  });
+  const busy = dialog !== null;
+  useEffect(() => {
+    onBusyChange.current?.(busy);
+  }, [busy]);
+  useEffect(() => () => onBusyChange.current?.(false), []);
   const [lookCount, setLookCount] = useState(3);
   const close = useCallback(() => setDialog(null), []);
   // A look or search belongs to the game it started in.
@@ -185,7 +218,12 @@ const Hand = ({ store }: { store: ViewStore<PrivateView> }) => {
     () => setDialog((open) => (open === 'help' ? null : 'help')),
     []
   );
-  useGameShortcuts(view, { enabled: dialog === null, onHelp: toggleHelp });
+  // Docked, the board window's own shortcuts already cover the keys.
+  useGameShortcuts(view, {
+    enabled: dialog === null,
+    onHelp: toggleHelp,
+    listen: !docked,
+  });
 
   const handIds = new Set(view?.hand.map((card) => card.instanceId));
   const faceDown =
@@ -223,8 +261,19 @@ const Hand = ({ store }: { store: ViewStore<PrivateView> }) => {
   };
 
   return (
-    <div className="h-full w-screen bg-slate-800 flex flex-col">
-      <div className="flex h-6 w-screen shrink-0 items-center justify-between gap-2 bg-slate-200 px-2 [-webkit-app-region:drag]">
+    <div
+      className={classNames(
+        'h-full bg-slate-800 flex flex-col',
+        docked ? 'w-full' : 'w-screen'
+      )}
+    >
+      <div
+        data-testid="hand-title"
+        className={classNames(
+          'flex h-6 w-full shrink-0 items-center justify-between gap-2 bg-slate-200 px-2',
+          { '[-webkit-app-region:drag]': !docked }
+        )}
+      >
         <div className="flex gap-1">
           <button
             type="button"
@@ -264,17 +313,20 @@ const Hand = ({ store }: { store: ViewStore<PrivateView> }) => {
         </span>
         <div className="flex gap-1">
           <UndoButtons className={titleButton} />
-          <button
-            type="button"
-            aria-label="Keyboard shortcuts"
-            className={`${titleButton} font-bold`}
-            onClick={toggleHelp}
-          >
-            ?
-          </button>
+          {!docked && (
+            <button
+              type="button"
+              aria-label="Keyboard shortcuts"
+              className={`${titleButton} font-bold`}
+              onClick={toggleHelp}
+            >
+              ?
+            </button>
+          )}
+          {dock?.controls}
         </div>
       </div>
-      {view?.revealed && (
+      {!dock?.collapsed && view?.revealed && (
         <div
           data-testid="hand-reveal-banner"
           className="flex items-center gap-2 bg-sky-200 px-3 py-0.5 text-sm"
@@ -294,7 +346,7 @@ const Hand = ({ store }: { store: ViewStore<PrivateView> }) => {
           </button>
         </div>
       )}
-      {view && !view.keptHand && (
+      {!dock?.collapsed && view && !view.keptHand && (
         <MulliganBar
           view={view}
           choosing={selecting}
@@ -304,30 +356,39 @@ const Hand = ({ store }: { store: ViewStore<PrivateView> }) => {
           onCancel={() => setChoosing(false)}
         />
       )}
-      <div
-        data-testid="hand"
-        className="flex flex-1 items-start gap-2 overflow-x-auto px-3 py-2"
-      >
-        {view?.hand.map((card) => {
-          const isPicked = selecting && chosen.includes(card.instanceId);
-          return (
-            <div
-              key={card.instanceId}
-              className={classNames('shrink-0 rounded-lg transition', {
-                'outline-4 outline-sky-400 translate-y-1 opacity-70': isPicked,
-              })}
-            >
+      {!dock?.collapsed && (
+        <div
+          data-testid="hand"
+          className={classNames(
+            'flex flex-1 items-start gap-2 overflow-x-auto px-3 py-2',
+            { 'min-h-0': docked }
+          )}
+        >
+          {view?.hand.map((card) => {
+            const isPicked = selecting && chosen.includes(card.instanceId);
+            const face = (
               <Card
                 card={card}
                 size="md"
                 onClick={selecting ? togglePick : play}
                 menu={selecting ? [] : handMenu(card)}
               />
-            </div>
-          );
-        })}
-        {faceDown.length > 0 && <FaceDownPeek cards={faceDown} />}
-      </div>
+            );
+            return (
+              <div
+                key={card.instanceId}
+                className={classNames('shrink-0 rounded-lg transition', {
+                  'outline-4 outline-sky-400 translate-y-1 opacity-70':
+                    isPicked,
+                })}
+              >
+                {dock && !selecting ? dock.wrapCard(card, face) : face}
+              </div>
+            );
+          })}
+          {faceDown.length > 0 && <FaceDownPeek cards={faceDown} />}
+        </div>
+      )}
       {dialog === 'help' && <ShortcutHelp onClose={close} />}
       {view && dialog === 'lookCount' && (
         <NumberPrompt

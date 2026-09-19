@@ -26,7 +26,7 @@ import {
 } from '@shared/game';
 import type { DeckFormat } from '@shared/types/decks';
 import type { PlayTestStatus } from '@shared/types/playTest';
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, screen } from 'electron';
 
 import { type GameMenuCommand, runGameMenuCommand } from '../../gameMenu';
 import { type RequestHandlers, type SenderGuards, sendEvent } from '../../ipc';
@@ -35,6 +35,7 @@ import type DeckDB from '../../shared/db/DeckDB';
 import { createWindow, whenLoaded } from '../../windows';
 import { toCardRef } from './cardRef';
 import LibraryActivityTracker from './LibraryActivityTracker';
+import { mayReadHand, mayReadLibrary } from './privateAccess';
 import buildSampleDeck from './sampleDeck';
 
 export interface LoadedDeck {
@@ -49,6 +50,8 @@ interface Deps {
   // The local player: the one seat this machine is authoritative for.
   playerId: PlayerId;
   playerName(): string;
+  // Read when a play test opens: put the hand in the board window.
+  handInBoard(): boolean;
 }
 
 type PublicListener = (view: PublicView | null) => void;
@@ -87,6 +90,8 @@ const sampleDeckAllowed = () =>
 // Owns the authoritative game state and the board and hand windows, which
 // only render views of it. The windows exist only while a play test is
 // open, and closing either one ends the play test by closing both.
+// In single-window mode the board also hosts the hand, and there is no
+// hand window.
 export default class PlayTest {
   private readonly cardDb: CardDB;
 
@@ -95,6 +100,9 @@ export default class PlayTest {
   private board: BrowserWindow | null = null;
 
   private hand: BrowserWindow | null = null;
+
+  // The mode the open windows were made for.
+  private handInBoard = false;
 
   private state: GameState = emptyGame();
 
@@ -122,17 +130,20 @@ export default class PlayTest {
 
   private readonly playerName: () => string;
 
+  private readonly handInBoardSetting: () => boolean;
+
   private readonly publicListeners = new Set<PublicListener>();
 
   private readonly statusListeners = new Set<StatusListener>();
 
   private readonly logListeners = new Set<LogListener>();
 
-  constructor({ cardDb, deckDb, playerId, playerName }: Deps) {
+  constructor({ cardDb, deckDb, playerId, playerName, handInBoard }: Deps) {
     this.cardDb = cardDb;
     this.deckDb = deckDb;
     this.playerId = playerId;
     this.playerName = playerName;
+    this.handInBoardSetting = handInBoard;
   }
 
   get gameState(): GameState {
@@ -249,10 +260,17 @@ export default class PlayTest {
     },
   };
 
-  // The board is shown to others, so only the hand window sees the library.
+  private senders = () => ({
+    board: this.board?.webContents ?? null,
+    hand: this.hand?.webContents ?? null,
+    handInBoard: this.handInBoard,
+  });
+
+  // The board is shown to others, so it only sees hidden cards when it
+  // also hosts the hand.
   readonly guards: SenderGuards = {
-    getLibrary: (sender) =>
-      this.hand !== null && this.hand.webContents === sender,
+    getLibrary: (sender) => mayReadLibrary(this.senders(), sender),
+    getHandView: (sender) => mayReadHand(this.senders(), sender),
     setLibraryActivity: (sender) =>
       [this.board, this.hand].some(
         (w) => w !== null && w.webContents === sender
@@ -377,7 +395,10 @@ export default class PlayTest {
 
   private pushViews = () => {
     const hand = privateView(this.state, this.playerId);
-    if (hand) sendEvent(this.hand, 'handView', hand);
+    if (hand) {
+      sendEvent(this.hand, 'handView', hand);
+      if (this.handInBoard) sendEvent(this.board, 'handView', hand);
+    }
     this.pushUndoState();
     this.pushBoardView();
   };
@@ -430,6 +451,7 @@ export default class PlayTest {
       open,
       deck: open ? this.deckLabel : null,
       sampleDeck: sampleDeckAllowed(),
+      handInBoard: open && this.handInBoard,
     };
   };
 
@@ -447,20 +469,34 @@ export default class PlayTest {
     seed: number | undefined,
     label: PlayTestStatus['deck']
   ) => {
+    const handInBoard = this.handInBoardSetting();
+    if (this.isOpen && handInBoard !== this.handInBoard) {
+      this.closeForModeChange();
+    }
     this.newGame(deck, seed);
     this.deckLabel = label;
 
-    const { board, hand } = this.ensureWindows();
+    const { board, hand } = this.ensureWindows(handInBoard);
     this.pushStatus();
     this.addLogEntry('started a new game');
-    const loaded = await Promise.all([whenLoaded(board), whenLoaded(hand)]);
+    const windows = hand ? [board, hand] : [board];
+    const loaded = await Promise.all(windows.map(whenLoaded));
     if (!loaded.every(Boolean)) return;
 
     // Windows also fetch their view on load; this covers reused windows.
     this.pushViews();
-    hand.show();
+    hand?.show();
     board.show();
     board.focus();
+  };
+
+  // A changed mode gets fresh windows. The old ones are forgotten first,
+  // so their close handlers can't touch the new ones.
+  private closeForModeChange = () => {
+    const old = [this.board, this.hand];
+    this.board = null;
+    this.hand = null;
+    old.forEach((window) => window?.close());
   };
 
   // A reloaded or crashed window has lost any dialog it had open.
@@ -469,28 +505,38 @@ export default class PlayTest {
     window.webContents.on('render-process-gone', this.libraryActivity.clear);
   };
 
-  private ensureWindows = () => {
+  // With the hand docked, the board also gets the hand window's height.
+  private boardHeight = (handInBoard: boolean) =>
+    handInBoard
+      ? Math.min(1068, screen.getPrimaryDisplay().workAreaSize.height)
+      : 728;
+
+  private ensureWindows = (handInBoard: boolean) => {
+    this.handInBoard = handInBoard;
+
     const board =
       this.board ??
       createWindow({
         html: 'board.html',
         width: 1560,
-        height: 728,
+        height: this.boardHeight(handInBoard),
       });
 
-    const hand =
-      this.hand ??
-      createWindow({
-        html: 'hand.html',
-        width: 1280,
-        height: 340,
-        frame: false,
-      });
+    const hand = handInBoard
+      ? null
+      : (this.hand ??
+        createWindow({
+          html: 'hand.html',
+          width: 1280,
+          height: 340,
+          frame: false,
+        }));
 
     if (!this.board) {
       this.board = board;
       this.clearActivityOnReload(board);
       board.on('closed', () => {
+        if (this.board !== board) return;
         this.board = null;
         this.libraryActivity.reset();
         this.hand?.close();
@@ -499,10 +545,11 @@ export default class PlayTest {
       });
     }
 
-    if (!this.hand) {
+    if (hand && !this.hand) {
       this.hand = hand;
       this.clearActivityOnReload(hand);
       hand.on('closed', () => {
+        if (this.hand !== hand) return;
         this.hand = null;
         this.libraryActivity.reset();
         this.board?.close();

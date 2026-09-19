@@ -1,7 +1,12 @@
 import type { PlayTestStatus } from '@shared/types/playTest';
 import { useEffect, useState } from 'react';
 
-const closed: PlayTestStatus = { open: false, deck: null, sampleDeck: false };
+const closed: PlayTestStatus = {
+  open: false,
+  deck: null,
+  sampleDeck: false,
+  handInBoard: false,
+};
 
 // Whether a game is open, kept live by main's playTestStatus pushes.
 const usePlayTestStatus = (): PlayTestStatus => {

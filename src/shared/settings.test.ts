@@ -4,6 +4,8 @@ import {
   cleanDisplayName,
   DEFAULT_DISPLAY_NAME,
   defaultSettings,
+  MAX_TRAY_HEIGHT,
+  MIN_TRAY_HEIGHT,
   parseSettings,
   parseSettingsPatch,
 } from './settings';
@@ -19,6 +21,8 @@ describe('parseSettings', () => {
       displayName: DEFAULT_DISPLAY_NAME,
       turnTracking: false,
       tablePanel: { x: 1, y: 1, collapsed: false },
+      handInBoard: false,
+      handTray: { height: 280, collapsed: false },
     });
   });
 
@@ -91,5 +95,37 @@ describe('tablePanel', () => {
     expect(parseSettings({ tablePanel: [1, 1] }).tablePanel).toEqual(
       defaultSettings.tablePanel
     );
+  });
+});
+
+describe('handInBoard', () => {
+  it('is off unless set to a boolean', () => {
+    expect(parseSettings({ handInBoard: true }).handInBoard).toBe(true);
+    expect(parseSettings({ handInBoard: 'yes' }).handInBoard).toBe(false);
+  });
+});
+
+describe('handTray', () => {
+  it('keeps a valid tray and clamps its height', () => {
+    expect(
+      parseSettingsPatch({ handTray: { height: 300.4, collapsed: true } })
+    ).toEqual({ handTray: { height: 300, collapsed: true } });
+    expect(
+      parseSettingsPatch({ handTray: { height: 5, collapsed: false } })
+    ).toEqual({ handTray: { height: MIN_TRAY_HEIGHT, collapsed: false } });
+    expect(
+      parseSettingsPatch({ handTray: { height: 1e6, collapsed: false } })
+    ).toEqual({ handTray: { height: MAX_TRAY_HEIGHT, collapsed: false } });
+  });
+
+  it('drops a malformed tray', () => {
+    [
+      null,
+      { height: 200 },
+      { height: '200', collapsed: false },
+      { height: Number.NaN, collapsed: false },
+    ].forEach((handTray) => {
+      expect(parseSettingsPatch({ handTray })).toEqual({});
+    });
   });
 });

@@ -5,6 +5,8 @@ export interface PlayTestStatus {
   deck: { id: number | null; name: string } | null;
   // Unpackaged builds can also start the built-in sample deck.
   sampleDeck: boolean;
+  // The open game's board window also hosts the hand.
+  handInBoard: boolean;
 }
 
 // Game menu items the board window carries out, mostly by opening one of

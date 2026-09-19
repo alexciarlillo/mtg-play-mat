@@ -31,6 +31,8 @@ interface Options {
   // Game keys are off while a dialog is open; ? still toggles help.
   enabled: boolean;
   onHelp(): void;
+  // Off for a part of a window whose host already handles the keys.
+  listen?: boolean;
 }
 
 // Cmd/Ctrl+Z, with Shift to redo. Alt is left for other accelerators.
@@ -46,7 +48,7 @@ const undoKey = (e: KeyboardEvent): 'undo' | 'redo' | null => {
 // A text field keeps its own undo.
 export const useGameShortcuts = (
   view: PublicView | null,
-  { enabled, onHelp }: Options
+  { enabled, onHelp, listen = true }: Options
 ) => {
   const latest = useRef({ view, enabled, onHelp });
   useEffect(() => {
@@ -54,6 +56,7 @@ export const useGameShortcuts = (
   });
 
   useEffect(() => {
+    if (!listen) return undefined;
     const onKey = (e: KeyboardEvent) => {
       const { view: current, enabled: on, onHelp: help } = latest.current;
       if (isTyping(e.target)) return;
@@ -96,5 +99,5 @@ export const useGameShortcuts = (
 
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [listen]);
 };

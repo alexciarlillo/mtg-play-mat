@@ -120,6 +120,12 @@ const Settings = () => {
           checked={settings.turnTracking}
           onChange={(turnTracking) => change({ turnTracking })}
         />
+        <Toggle
+          label="Hand in the board window"
+          description="Plays in one window: your hand docks along the bottom of the board instead of opening its own window. Anyone who sees your board, such as on a screenshare, also sees your hand. Takes effect when you next start a play test."
+          checked={settings.handInBoard}
+          onChange={(handInBoard) => change({ handInBoard })}
+        />
       </Section>
     </div>
   );

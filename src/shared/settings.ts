@@ -61,6 +61,30 @@ const panelPlacement: Parse<PanelPlacement> = (input) => {
   return { x, y, collapsed };
 };
 
+// The hand tray docked along the bottom of the board, in single-window
+// mode. The height is in px; the board keeps it within the window.
+export interface TrayPlacement {
+  height: number;
+  collapsed: boolean;
+}
+
+export const MIN_TRAY_HEIGHT = 120;
+export const MAX_TRAY_HEIGHT = 1200;
+
+const trayPlacement: Parse<TrayPlacement> = (input) => {
+  if (!isRecord(input)) return undefined;
+  const { height } = input;
+  const collapsed = boolean(input.collapsed);
+  if (typeof height !== 'number' || !Number.isFinite(height)) return undefined;
+  if (collapsed === undefined) return undefined;
+  return {
+    height: Math.round(
+      Math.min(MAX_TRAY_HEIGHT, Math.max(MIN_TRAY_HEIGHT, height))
+    ),
+    collapsed,
+  };
+};
+
 const fields = {
   displayName: field(DEFAULT_DISPLAY_NAME, displayName),
   // Turn and phase tracking clutters the board, so it is opt-in.
@@ -69,6 +93,13 @@ const fields = {
   tablePanel: field<PanelPlacement>(
     { x: 1, y: 1, collapsed: false },
     panelPlacement
+  ),
+  // One window instead of a separate hand window. It shows the hand on
+  // the board, so it is opt-in; it applies when a play test opens.
+  handInBoard: field(false, boolean),
+  handTray: field<TrayPlacement>(
+    { height: 280, collapsed: false },
+    trayPlacement
   ),
 };
 
