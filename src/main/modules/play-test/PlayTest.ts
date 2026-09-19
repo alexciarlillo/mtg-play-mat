@@ -23,7 +23,8 @@ import {
   type UndoState,
 } from '@shared/game';
 import type { DeckFormat } from '@shared/types/decks';
-import { BrowserWindow } from 'electron';
+import type { PlayTestStatus } from '@shared/types/playTest';
+import { app, BrowserWindow } from 'electron';
 
 import { type RequestHandlers, type SenderGuards, sendEvent } from '../../ipc';
 import type CardDB from '../../shared/db/CardDB';
@@ -52,6 +53,9 @@ type PlayTestHandlers = Pick<
   RequestHandlers,
   | 'startPlayTest'
   | 'restartPlayTest'
+  | 'getPlayTestStatus'
+  | 'startSamplePlayTest'
+  | 'closePlayTest'
   | 'dispatch'
   | 'getBoardView'
   | 'getHandView'
@@ -62,6 +66,10 @@ type PlayTestHandlers = Pick<
   | 'getUndoState'
   | 'getLibrary'
 >;
+
+// The sample deck is a development aid, like the menu item that opens it.
+const sampleDeckAllowed = () =>
+  !app.isPackaged || process.env.DEBUG_PROD === 'true';
 
 // Owns the authoritative game state and the board and hand windows, which
 // only render views of it. The windows exist only while a play test is
@@ -78,6 +86,8 @@ export default class PlayTest {
   private state: GameState = emptyGame();
 
   private deck: LoadedDeck = { library: [], command: [], format: 'other' };
+
+  private deckLabel: PlayTestStatus['deck'] = null;
 
   // The owner decides whether a commander that left for one of these
   // zones goes to the command zone instead. This is a rules prompt, not
@@ -128,8 +138,20 @@ export default class PlayTest {
   };
 
   readonly handlers: PlayTestHandlers = {
-    startPlayTest: (deckId) => this.start(this.loadDeck(deckId)),
+    startPlayTest: (deckId) =>
+      this.start(this.loadDeck(deckId), undefined, {
+        id: deckId,
+        name: this.deckDb.getDeck(deckId)?.name ?? 'Unknown deck',
+      }),
     restartPlayTest: () => this.restart(),
+    getPlayTestStatus: () => this.status(),
+    startSamplePlayTest: () => {
+      if (sampleDeckAllowed()) void this.openSampleDeck();
+    },
+    closePlayTest: () => {
+      this.board?.close();
+      this.hand?.close();
+    },
     // Renderer input is untrusted, so parse it rather than trust its type.
     dispatch: (action: unknown) => this.dispatch(parsePlayerAction(action)),
     getBoardView: () => publicView(this.state, this.playerId),
@@ -161,9 +183,12 @@ export default class PlayTest {
     const library = buildSampleDeck();
     const leader = library.find((ref) => ref.name === 'Colossal Dreadmaw');
     const command = format === 'commander' && leader ? [leader] : [];
-    return this.start({ library, command, format }, seed).catch((err) => {
-      console.error('[PlayTest] failed to open sample deck', err);
-    });
+    const label = { id: null, name: 'Sample deck' };
+    return this.start({ library, command, format }, seed, label).catch(
+      (err) => {
+        console.error('[PlayTest] failed to open sample deck', err);
+      }
+    );
   };
 
   // The sideboard stays out of the game; commanders start in the
@@ -294,10 +319,33 @@ export default class PlayTest {
     this.pushViews();
   };
 
-  private start = async (deck: LoadedDeck, seed?: number) => {
+  private status = (): PlayTestStatus => {
+    const open = this.board !== null || this.hand !== null;
+    return {
+      open,
+      deck: open ? this.deckLabel : null,
+      sampleDeck: sampleDeckAllowed(),
+    };
+  };
+
+  // Every window gets it: the app window's lobby and deck screens show it.
+  private pushStatus = () => {
+    const status = this.status();
+    BrowserWindow.getAllWindows().forEach((window) => {
+      sendEvent(window, 'playTestStatus', status);
+    });
+  };
+
+  private start = async (
+    deck: LoadedDeck,
+    seed: number | undefined,
+    label: PlayTestStatus['deck']
+  ) => {
     this.newGame(deck, seed);
+    this.deckLabel = label;
 
     const { board, hand } = this.ensureWindows();
+    this.pushStatus();
     const loaded = await Promise.all([whenLoaded(board), whenLoaded(hand)]);
     if (!loaded.every(Boolean)) return;
 
@@ -332,6 +380,7 @@ export default class PlayTest {
         this.board = null;
         this.hand?.close();
         this.notifyPublic();
+        this.pushStatus();
       });
     }
 
@@ -341,6 +390,7 @@ export default class PlayTest {
         this.hand = null;
         this.board?.close();
         this.notifyPublic();
+        this.pushStatus();
       });
     }
 

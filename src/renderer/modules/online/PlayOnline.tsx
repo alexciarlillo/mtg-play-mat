@@ -1,9 +1,17 @@
 import { joinLink } from '@shared/net/codec';
 import type { NetState, SeatState } from '@shared/net/lobby';
 import classNames from 'classnames';
-import { type FormEvent, type ReactNode, useEffect, useState } from 'react';
+import {
+  type FormEvent,
+  type ReactNode,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 
+import GameSetup from './GameSetup';
 import useNetState from './useNetState';
+import usePlayTestStatus from './usePlayTestStatus';
 
 const button =
   'rounded-md px-3 py-1.5 text-sm font-semibold shadow-sm disabled:opacity-40';
@@ -266,15 +274,38 @@ const ResendButton = () => (
   </button>
 );
 
-const Lobby = ({ state }: { state: NetState }) => {
+// Connecting works without a game, but others see an empty side until
+// one is open, so point at the deck picker instead of blocking.
+const NoGameNotice = () => (
+  <div
+    role="status"
+    data-testid="no-game-notice"
+    className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900"
+  >
+    You don&apos;t have a game open yet. Pick a deck and start the game above so
+    the other players can see your side of the table.
+  </div>
+);
+
+const Lobby = ({
+  state,
+  gameOpen,
+  onNeedDeck,
+}: {
+  state: NetState;
+  gameOpen: boolean;
+  onNeedDeck(): void;
+}) => {
   const [joining, setJoining] = useState(false);
   const { role, phase } = state;
   const idle = role === null || phase === 'ended';
   const showJoin = idle && (joining || state.pendingInvite !== null);
+  const notice = !gameOpen && (!idle || showJoin) ? <NoGameNotice /> : null;
 
   if (role === 'host') {
     return (
       <div className="space-y-4">
+        {notice}
         {phase === 'connected' && <ResendButton />}
         <Players state={state} />
         {state.seats.map((seat) => (
@@ -287,6 +318,7 @@ const Lobby = ({ state }: { state: NetState }) => {
   if (phase === 'connected') {
     return (
       <div className="space-y-4">
+        {notice}
         <ResendButton />
         <Players state={state} />
       </div>
@@ -295,13 +327,16 @@ const Lobby = ({ state }: { state: NetState }) => {
 
   if (role === 'guest' && phase !== 'ended') {
     return (
-      <Step title="Send this reply back to the host">
-        {state.reply ? (
-          <CodeOutput label="Your reply code" code={state.reply} />
-        ) : (
-          <p className="text-sm text-gray-500">Creating your reply…</p>
-        )}
-      </Step>
+      <div className="space-y-4">
+        {notice}
+        <Step title="Send this reply back to the host">
+          {state.reply ? (
+            <CodeOutput label="Your reply code" code={state.reply} />
+          ) : (
+            <p className="text-sm text-gray-500">Creating your reply…</p>
+          )}
+        </Step>
+      </div>
     );
   }
 
@@ -313,6 +348,7 @@ const Lobby = ({ state }: { state: NetState }) => {
           className={primary}
           onClick={() => {
             setJoining(false);
+            if (!gameOpen) onNeedDeck();
             call(window.api.netHost());
           }}
         >
@@ -321,11 +357,15 @@ const Lobby = ({ state }: { state: NetState }) => {
         <button
           type="button"
           className={secondary}
-          onClick={() => setJoining(true)}
+          onClick={() => {
+            setJoining(true);
+            if (!gameOpen) onNeedDeck();
+          }}
         >
           Join a game
         </button>
       </div>
+      {notice}
       {showJoin && (
         <Step title="Paste the invite from the host">
           <CodeInput
@@ -345,6 +385,8 @@ const Lobby = ({ state }: { state: NetState }) => {
 // are connected and have a game open, each board shows the other side.
 const PlayOnline = () => {
   const state = useNetState();
+  const playTest = usePlayTestStatus();
+  const deckSelect = useRef<HTMLSelectElement>(null);
   const busy = busyPhases.includes(state.phase);
 
   return (
@@ -353,11 +395,11 @@ const PlayOnline = () => {
         <div>
           <h2 className="text-lg font-semibold text-gray-900">Play online</h2>
           <p className="text-sm text-gray-600">
-            Play with up to three others. The host invites each player with
-            their own code and pastes back their reply; everyone connects to the
-            host. Only your battlefield, graveyard, exile, command zone, life,
-            and card counts are shared; your hand and library never leave this
-            computer.
+            Pick a deck and start your game, then host or join. Play with up to
+            three others. The host invites each player with their own code and
+            pastes back their reply; everyone connects to the host. Only your
+            battlefield, graveyard, exile, command zone, life, and card counts
+            are shared; your hand and library never leave this computer.
           </p>
         </div>
         {state.role !== null && (
@@ -372,6 +414,8 @@ const PlayOnline = () => {
       </div>
 
       <DisplayName />
+
+      <GameSetup status={playTest} selectRef={deckSelect} />
 
       <div
         data-testid="net-status"
@@ -395,7 +439,11 @@ const PlayOnline = () => {
         </div>
       )}
 
-      <Lobby state={state} />
+      <Lobby
+        state={state}
+        gameOpen={playTest.open}
+        onNeedDeck={() => deckSelect.current?.focus()}
+      />
     </div>
   );
 };

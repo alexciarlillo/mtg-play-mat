@@ -191,6 +191,10 @@ test('window.api is a narrow typed bridge', async () => {
       'getUndoState',
       'onUndoState',
       'getLibrary',
+      'getPlayTestStatus',
+      'startSamplePlayTest',
+      'closePlayTest',
+      'onPlayTestStatus',
     ].sort()
   );
   expect(surface.allFunctions).toBe(true);

@@ -14,6 +14,7 @@ describe('ipc contract', () => {
       'onOpponentView',
       'onCommanderPrompts',
       'onUndoState',
+      'onPlayTestStatus',
     ]);
   });
 

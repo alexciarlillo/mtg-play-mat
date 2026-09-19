@@ -10,6 +10,7 @@ import type { NetCommand, NetReport, NetState, Profile } from '../net/lobby';
 import type { RollRequest } from '../net/protocol';
 import type { OpponentState } from '../net/remoteViews';
 import type { CardDataStatus } from '../types/cardData';
+import type { PlayTestStatus } from '../types/playTest';
 import type {
   CurrentSetListReturn,
   SearchCardsByNameOptions,
@@ -61,6 +62,10 @@ export const requests = {
   startPlayTest: request<[deckId: number]>(),
   // A new game with the same deck and a fresh seed.
   restartPlayTest: request<[]>(),
+  // Lets the app window start, show, and end a game on its own.
+  getPlayTestStatus: request<[], PlayTestStatus>(),
+  startSamplePlayTest: request<[]>(),
+  closePlayTest: request<[]>(),
   // Main validates the action and pushes fresh views to both windows.
   dispatch: request<[action: PlayerAction]>(),
   // Board and hand fetch their view on load, so a reload restores it.
@@ -111,6 +116,7 @@ export const events = {
   opponentView: event<OpponentState>(),
   commanderPrompts: event<CommanderMove[]>(),
   undoState: event<UndoState>(),
+  playTestStatus: event<PlayTestStatus>(),
 };
 
 type SpecType<S> = S extends Spec<infer T> ? T : never;

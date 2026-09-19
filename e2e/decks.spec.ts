@@ -102,6 +102,53 @@ test('an old-schema deck survives the migration', async () => {
   );
 });
 
+test('Play online picks a deck, starts the game, and hosts', async () => {
+  const page = await appWindow();
+  await page.getByRole('link', { name: 'Play online' }).first().click();
+
+  const setup = page.getByTestId('game-setup');
+  await expect(setup).toHaveAttribute('data-open', 'false');
+  await page.getByLabel('Deck', { exact: true }).selectOption({
+    label: 'Legacy Elves (3 cards)',
+  });
+  await page.getByRole('button', { name: 'Start game' }).click();
+
+  await expect(setup).toHaveAttribute('data-open', 'true');
+  await expect(page.getByTestId('game-status')).toHaveText(
+    'Game open with Legacy Elves.'
+  );
+  await expect
+    .poll(() => app.windows().some((w) => w.url().includes('board.html')))
+    .toBe(true);
+  const view = await page.evaluate(() => window.api.getHandView());
+  expect(view?.hand.map((c) => c.ref?.name).sort()).toEqual([
+    'Forest',
+    'Llanowar Elves',
+    'Llanowar Elves',
+  ]);
+
+  // With a game open, hosting goes straight to the invite, no nudge.
+  await page.getByRole('button', { name: 'Host a game' }).click();
+  await expect(page.getByLabel('Invite code for seat 2')).toHaveValue(
+    /^MPM1:/,
+    { timeout: 15_000 }
+  );
+  await expect(page.getByTestId('no-game-notice')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Leave' }).click();
+
+  await page.getByRole('button', { name: 'Close game' }).click();
+  await page
+    .getByRole('dialog', { name: 'Close game?' })
+    .getByRole('button', { name: 'Close game' })
+    .click();
+  await expect(setup).toHaveAttribute('data-open', 'false');
+  await expect
+    .poll(() => app.windows().filter((w) => !w.url().includes('net.html')))
+    .toHaveLength(1);
+
+  await page.getByRole('link', { name: 'Deck Builder' }).first().click();
+});
+
 test('import a Moxfield Commander export, skipping a bogus line', async () => {
   const page = await appWindow();
   await page.getByRole('button', { name: 'Import a deck' }).click();
