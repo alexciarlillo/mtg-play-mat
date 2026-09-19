@@ -1,4 +1,4 @@
-import type { CardView, PublicView } from '@shared/game';
+import type { CardView, LibraryActivity, PublicView } from '@shared/game';
 import type { PeerInfo } from '@shared/net/protocol';
 import classNames from 'classnames';
 import { useState } from 'react';
@@ -15,6 +15,7 @@ import {
   SIDE_PANEL_WIDTH,
   stackOrder,
 } from './layout';
+import LibraryActivityBadge from './LibraryActivityBadge';
 import { phaseLabels } from './phases';
 import PlayerCounters from './PlayerCounters';
 import RevealPanel from './RevealPanel';
@@ -50,11 +51,13 @@ const Count = ({
   count,
   testId,
   back,
+  activity,
 }: {
   label: string;
   count: number;
   testId: string;
   back?: boolean;
+  activity?: LibraryActivity | null;
 }) => (
   <div
     data-testid={testId}
@@ -63,7 +66,7 @@ const Count = ({
   >
     <div
       className={classNames(
-        'aspect-card rounded-lg flex items-center justify-center',
+        'relative aspect-card rounded-lg flex items-center justify-center',
         cardWidths.xs,
         back && count > 0
           ? 'overflow-hidden'
@@ -71,6 +74,11 @@ const Count = ({
       )}
     >
       {back && count > 0 ? <CardImg name={label} /> : count}
+      <LibraryActivityBadge
+        activity={activity}
+        compact
+        testId={`${testId}-activity`}
+      />
     </div>
     <div className="text-xs font-medium">
       {label} <span className="tabular-nums">{count}</span>
@@ -191,6 +199,7 @@ const OpponentSide = ({
               count={view.libraryCount}
               testId="opponent-library"
               back
+              activity={view.libraryActivity}
             />
             <Count
               label="Hand"

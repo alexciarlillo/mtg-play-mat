@@ -3,6 +3,7 @@ import { useState } from 'react';
 
 import Card from '../../../ui/Card';
 import { Modal } from '../common/Dialogs';
+import { useLibraryActivity } from '../common/useLibraryActivity';
 import { dispatch } from '../viewStore';
 import { useLibrary } from './useLibrary';
 
@@ -36,6 +37,7 @@ interface Props {
 // A private look at the top of the library (scry, surveil, and so on).
 // Nothing is applied until Confirm, which is a single action.
 const LookAtTopDialog = ({ playerId, seq, count, onClose }: Props) => {
+  useLibraryActivity({ kind: 'look', count });
   const library = useLibrary(seq);
   const top = library?.slice(0, count) ?? [];
   const byId = new Map(top.map((card) => [card.instanceId, card]));

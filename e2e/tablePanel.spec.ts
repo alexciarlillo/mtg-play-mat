@@ -138,12 +138,15 @@ test('a solo board shows the table panel with its log and dice', async () => {
   );
   await expect(board.getByTestId('table-event')).toHaveCount(1);
 
-  // It starts in the bottom-right corner of the field.
-  const room = await roomOf();
-  const box = await boxOf(panel());
-  expectInside(box, room);
-  expect(room.x + room.width - (box.x + box.width)).toBeLessThan(20);
-  expect(room.y + room.height - (box.y + box.height)).toBeLessThan(20);
+  // It starts in the bottom-right corner of the field. The panel re-clamps
+  // a frame after the roll makes it taller, so let the layout settle.
+  await expect(async () => {
+    const room = await roomOf();
+    const box = await boxOf(panel());
+    expectInside(box, room);
+    expect(room.x + room.width - (box.x + box.width)).toBeLessThan(20);
+    expect(room.y + room.height - (box.y + box.height)).toBeLessThan(20);
+  }).toPass({ timeout: 2000 });
 });
 
 test('dragging the handle moves the panel and it stays put', async () => {

@@ -1,6 +1,7 @@
 import type {
   CardView,
   CommanderMove,
+  LibraryActivity,
   PlayerAction,
   PrivateView,
   PublicView,
@@ -86,6 +87,9 @@ export const requests = {
   getUndoState: request<[], UndoState>(),
   // The library, top first. Only the private hand window may ask.
   getLibrary: request<[], CardView[]>(),
+  // Tells the table what the player is doing in their library (never
+  // which cards); null when the dialog closes. Board or hand only.
+  setLibraryActivity: request<[activity: LibraryActivity | null]>(),
   getCardDataStatus: request<[], CardDataStatus>(),
   // Starts a check-and-download; progress arrives as cardDataStatus.
   updateCardData: request<[], CardDataStatus>(),
@@ -123,6 +127,8 @@ export const events = {
   opponentView: event<OpponentState>(),
   commanderPrompts: event<CommanderMove[]>(),
   undoState: event<UndoState>(),
+  // A new game replaced the old one; its library dialogs are stale.
+  gameStarted: event<null>(),
   settingsChanged: event<Settings>(),
   playTestStatus: event<PlayTestStatus>(),
   // From the Game menu, to the board window.

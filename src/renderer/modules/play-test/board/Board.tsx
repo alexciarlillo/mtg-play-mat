@@ -294,6 +294,7 @@ const Board = ({ store, opponent }: Props) => {
                   playerId={view.playerId}
                   count={view.libraryCount}
                   size={pileSize}
+                  activity={view.libraryActivity}
                   onDrawMany={() => setDialog('drawMany')}
                   onMill={() => setDialog('mill')}
                 />

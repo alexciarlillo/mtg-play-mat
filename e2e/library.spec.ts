@@ -378,6 +378,29 @@ test('restarting clears the history', async () => {
   await expect(handCards()).toHaveCount(7);
 });
 
+test('your board shows your library activity until the dialog goes', async () => {
+  const badge = board.getByTestId('library-activity');
+  await expect(badge).toHaveCount(0);
+  await hand.getByRole('button', { name: 'Search library…' }).click();
+  await expect(badge).toHaveAttribute('title', 'Searching library…');
+  // A reloaded hand window has lost its dialog.
+  await hand.reload();
+  await expect(hand.getByTestId('hand')).toBeVisible();
+  await expect(badge).toHaveCount(0);
+
+  // Only the play test windows may set it, and only to known shapes.
+  const appWindow = await windowByPage('app.html');
+  await expect(
+    appWindow.evaluate(() => window.api.setLibraryActivity({ kind: 'search' }))
+  ).rejects.toThrow(/untrusted sender/);
+  await expect(
+    hand.evaluate(() =>
+      window.api.setLibraryActivity({ kind: 'look', count: -1 } as never)
+    )
+  ).rejects.toThrow(/bad library activity/);
+  await expect(badge).toHaveCount(0);
+});
+
 test('no renderer console errors', () => {
   expect(errors).toEqual([]);
 });

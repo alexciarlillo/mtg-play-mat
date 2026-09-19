@@ -705,3 +705,76 @@ describe('turns and reveals over the wire', () => {
     expect(parsed.revealed).toEqual({ source: 'hand', cards: [card] });
   });
 });
+
+describe('library activity', () => {
+  const base = (): PublicView => {
+    const v = publicView(game(), 'alice');
+    if (!v) throw new Error('no view');
+    return v;
+  };
+
+  const roundTrip = (view: PublicView) => {
+    const parsed = parseNetMessage(
+      encodeNetMessage({
+        v: PROTOCOL_VERSION,
+        seq: 1,
+        from: 'alice',
+        kind: 'public',
+        view,
+      })
+    );
+    if (parsed.kind !== 'public') throw new Error('not public');
+    return parsed.view;
+  };
+
+  it('round-trips looking, searching, and nothing', () => {
+    const activities = [
+      { kind: 'look', count: 3 },
+      { kind: 'search' },
+      null,
+    ] as const;
+    activities.forEach((libraryActivity) => {
+      const v = { ...base(), libraryActivity };
+      expect(roundTrip(v)).toEqual(v);
+    });
+  });
+
+  it('accepts views without it, from older builds', () => {
+    const parsed = parsePublicView(base());
+    expect('libraryActivity' in parsed).toBe(false);
+  });
+
+  it('keeps only known fields, and names unknown kinds "other"', () => {
+    const v = base();
+    expect(
+      parsePublicView({
+        ...v,
+        libraryActivity: { kind: 'search', count: 4, cards: ['x'] },
+      }).libraryActivity
+    ).toEqual({ kind: 'search' });
+    expect(
+      parsePublicView({ ...v, libraryActivity: { kind: 'shuffleDance' } })
+        .libraryActivity
+    ).toEqual({ kind: 'other' });
+  });
+
+  it('rejects malformed activity', () => {
+    const v = base();
+    const bad: unknown[] = [
+      'search',
+      [],
+      { kind: 3 },
+      { kind: '' },
+      { kind: 'x'.repeat(41) },
+      { kind: 'look' },
+      { kind: 'look', count: 0 },
+      { kind: 'look', count: 2.5 },
+      { kind: 'look', count: 1001 },
+    ];
+    bad.forEach((libraryActivity) =>
+      expect(() => parsePublicView({ ...v, libraryActivity })).toThrow(
+        /bad message/
+      )
+    );
+  });
+});

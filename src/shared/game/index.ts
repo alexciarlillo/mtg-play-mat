@@ -16,6 +16,13 @@ export {
   parseCardRef,
 } from './cardRefs';
 export { cascadePosition, emptyGame, getPlayer } from './core';
+export {
+  describeLibraryActivity,
+  type LibraryActivity,
+  MAX_LOOK_COUNT,
+  parseLibraryActivity,
+  sameLibraryActivity,
+} from './libraryActivity';
 export { redoAction, type Undone, undoLast, type UndoState } from './history';
 export {
   ATTACH_OFFSET,

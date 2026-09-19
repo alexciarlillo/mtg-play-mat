@@ -11,6 +11,7 @@ import {
   type GameState,
   libraryView,
   OPENING_HAND_SIZE,
+  parseLibraryActivity,
   parsePlayerAction,
   type PlayerAction,
   type PlayerId,
@@ -33,6 +34,7 @@ import type CardDB from '../../shared/db/CardDB';
 import type DeckDB from '../../shared/db/DeckDB';
 import { createWindow, whenLoaded } from '../../windows';
 import { toCardRef } from './cardRef';
+import LibraryActivityTracker from './LibraryActivityTracker';
 import buildSampleDeck from './sampleDeck';
 
 export interface LoadedDeck {
@@ -71,7 +73,12 @@ type PlayTestHandlers = Pick<
   | 'redo'
   | 'getUndoState'
   | 'getLibrary'
+  | 'setLibraryActivity'
 >;
+
+const badActivity = (message: string): never => {
+  throw new Error(`[play-test] bad library activity: ${message}`);
+};
 
 // The sample deck is a development aid, like the menu item that opens it.
 const sampleDeckAllowed = () =>
@@ -105,6 +112,11 @@ export default class PlayTest {
   private undoFloor = 0;
 
   private redoStack: PlayerAction[] = [];
+
+  private readonly libraryActivity = new LibraryActivityTracker({
+    changed: () => this.pushBoardView(),
+    log: (text) => this.addLogEntry(text),
+  });
 
   private readonly playerId: PlayerId;
 
@@ -161,7 +173,13 @@ export default class PlayTest {
 
   // What peers may see: the public view while a play test is open.
   currentPublicView = (): PublicView | null =>
-    this.isOpen ? publicView(this.state, this.playerId) : null;
+    this.isOpen ? this.boardView() : null;
+
+  // The board shows the same public view peers get.
+  private boardView = (): PublicView | null => {
+    const view = publicView(this.state, this.playerId);
+    return view && { ...view, libraryActivity: this.libraryActivity.current };
+  };
 
   onPublicChange = (listener: PublicListener) => {
     this.publicListeners.add(listener);
@@ -183,6 +201,7 @@ export default class PlayTest {
   // be screenshared, and sent to every peer.
   addLogEntry = (text: string) => {
     if (!this.isOpen) return;
+    this.libraryActivity.lineLogged(text);
     this.logListeners.forEach((listener) => listener(text));
   };
 
@@ -208,7 +227,7 @@ export default class PlayTest {
     },
     // Renderer input is untrusted, so parse it rather than trust its type.
     dispatch: (action: unknown) => this.dispatch(parsePlayerAction(action)),
-    getBoardView: () => publicView(this.state, this.playerId),
+    getBoardView: () => this.boardView(),
     getHandView: () => privateView(this.state, this.playerId),
     getCommanderPrompts: () => this.commanderPrompts,
     dismissCommanderPrompt: (instanceId: unknown) => {
@@ -223,12 +242,21 @@ export default class PlayTest {
     redo: () => this.redo(),
     getUndoState: () => this.undoState(),
     getLibrary: () => libraryView(this.state, this.playerId) ?? [],
+    // Library dialogs set this while open and clear it when they close.
+    setLibraryActivity: (activity: unknown) => {
+      if (!this.isOpen) return;
+      this.libraryActivity.set(parseLibraryActivity(activity, badActivity));
+    },
   };
 
   // The board is shown to others, so only the hand window sees the library.
   readonly guards: SenderGuards = {
     getLibrary: (sender) =>
       this.hand !== null && this.hand.webContents === sender,
+    setLibraryActivity: (sender) =>
+      [this.board, this.hand].some(
+        (w) => w !== null && w.webContents === sender
+      ),
   };
 
   // A fixed seed is only passed by end-to-end tests, which may also ask
@@ -348,11 +376,15 @@ export default class PlayTest {
   };
 
   private pushViews = () => {
-    const board = publicView(this.state, this.playerId);
     const hand = privateView(this.state, this.playerId);
-    if (board) sendEvent(this.board, 'boardView', board);
     if (hand) sendEvent(this.hand, 'handView', hand);
     this.pushUndoState();
+    this.pushBoardView();
+  };
+
+  private pushBoardView = () => {
+    const board = this.boardView();
+    if (board) sendEvent(this.board, 'boardView', board);
     this.notifyPublic();
   };
 
@@ -379,7 +411,10 @@ export default class PlayTest {
     this.undoFloor = this.state.log.length;
     this.redoStack = [];
     this.commanderPrompts = [];
+    this.libraryActivity.reset();
     sendEvent(this.board, 'commanderPrompts', []);
+    sendEvent(this.board, 'gameStarted', null);
+    sendEvent(this.hand, 'gameStarted', null);
   };
 
   private restart = () => {
@@ -428,6 +463,12 @@ export default class PlayTest {
     board.focus();
   };
 
+  // A reloaded or crashed window has lost any dialog it had open.
+  private clearActivityOnReload = (window: BrowserWindow) => {
+    window.webContents.on('did-navigate', this.libraryActivity.clear);
+    window.webContents.on('render-process-gone', this.libraryActivity.clear);
+  };
+
   private ensureWindows = () => {
     const board =
       this.board ??
@@ -448,8 +489,10 @@ export default class PlayTest {
 
     if (!this.board) {
       this.board = board;
+      this.clearActivityOnReload(board);
       board.on('closed', () => {
         this.board = null;
+        this.libraryActivity.reset();
         this.hand?.close();
         this.notifyPublic();
         this.pushStatus();
@@ -458,8 +501,10 @@ export default class PlayTest {
 
     if (!this.hand) {
       this.hand = hand;
+      this.clearActivityOnReload(hand);
       hand.on('closed', () => {
         this.hand = null;
+        this.libraryActivity.reset();
         this.board?.close();
         this.notifyPublic();
         this.pushStatus();

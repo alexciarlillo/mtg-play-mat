@@ -1,4 +1,5 @@
 import { getPlayer } from './core';
+import type { LibraryActivity } from './libraryActivity';
 import type {
   CardInstance,
   CommanderDamage,
@@ -46,6 +47,8 @@ export interface PublicView {
   turn?: number;
   phase?: Phase;
   revealed?: RevealView | null;
+  // Not game state: set while the player has a library dialog open.
+  libraryActivity?: LibraryActivity | null;
 }
 
 // What the player themselves may see: the public view plus their hand.

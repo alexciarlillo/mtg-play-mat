@@ -1,4 +1,9 @@
-import { type FormEvent, type ReactNode, useEffect, useState } from 'react';
+import {
+  type FormEvent,
+  type ReactNode,
+  useLayoutEffect,
+  useState,
+} from 'react';
 
 interface ModalProps {
   title: string;
@@ -8,7 +13,9 @@ interface ModalProps {
 }
 
 export const Modal = ({ title, onClose, children, wide }: ModalProps) => {
-  useEffect(() => {
+  // Listen before the first paint, so an Escape pressed the moment the
+  // dialog appears still closes it.
+  useLayoutEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };

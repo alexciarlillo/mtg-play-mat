@@ -3,6 +3,7 @@ import {
   type CommanderDamage,
   type DummyOpponent,
   parseCardRef,
+  parseLibraryActivity,
   type Phase,
   phases,
   type PlayerId,
@@ -295,6 +296,10 @@ export const parsePublicView = (value: unknown): PublicView => {
     ...turnFields(fields),
     ...(fields.revealed !== undefined && {
       revealed: revealed(fields.revealed),
+    }),
+    // Added within v2; older builds rebuild views without it.
+    ...(fields.libraryActivity !== undefined && {
+      libraryActivity: parseLibraryActivity(fields.libraryActivity, fail),
     }),
   };
 };

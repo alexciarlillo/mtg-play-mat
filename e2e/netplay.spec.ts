@@ -562,6 +562,89 @@ test('a reveal and the turn number reach the other board', async () => {
   await expect(panel).toHaveCount(0);
 });
 
+test('library activity shows on both boards and always clears', async () => {
+  const [hostBoard, hostHand, guestBoard] = await Promise.all([
+    page(host, 'board.html'),
+    page(host, 'hand.html'),
+    page(guest, 'board.html'),
+  ]);
+  const own = hostBoard.getByTestId('library-activity');
+  const theirs = guestBoard.getByTestId('opponent-library-activity');
+  const aliceLines = (board: Page) =>
+    board
+      .getByTestId('table-log')
+      .locator('[data-testid="log-entry"][data-by="Alice"]');
+  const cleared = async () => {
+    await expect(own).toHaveCount(0);
+    await expect(theirs).toHaveCount(0);
+  };
+  const search = async () => {
+    await hostHand.getByRole('button', { name: 'Search library…' }).click();
+    await expect(own).toHaveAttribute('data-kind', 'search');
+    await expect(theirs).toHaveAttribute('title', 'Searching library…');
+  };
+  const lookAtTop = async (count: number) => {
+    await hostHand.getByRole('button', { name: 'Look at top…' }).click();
+    await hostHand.getByLabel('How many cards?').fill(String(count));
+    await hostHand.getByRole('button', { name: 'OK', exact: true }).click();
+    await expect(own).toHaveAttribute('title', `Looking at top ${count}…`);
+    await expect(theirs).toHaveText(`Top ${count}…`);
+  };
+  await cleared();
+
+  // Searching, finished by confirming: one line on start, then the
+  // search's own line.
+  await search();
+  for (const board of [hostBoard, guestBoard]) {
+    await expect(aliceLines(board).last()).toHaveText(
+      /Alice is searching their library$/
+    );
+  }
+  await hostHand.getByRole('button', { name: 'Shuffle', exact: true }).click();
+  await cleared();
+  for (const board of [hostBoard, guestBoard]) {
+    await expect(aliceLines(board).last()).not.toHaveText(/is searching/);
+  }
+
+  // Looking, finished by cancelling. Reopening it adds no second line.
+  await lookAtTop(3);
+  for (const board of [hostBoard, guestBoard]) {
+    await expect(aliceLines(board).last()).toHaveText(
+      /Alice is looking at the top 3 cards of their library$/
+    );
+  }
+  await hostHand.getByRole('button', { name: 'Cancel' }).click();
+  await cleared();
+  const lines = await aliceLines(guestBoard).count();
+  await lookAtTop(3);
+  await hostHand.getByRole('button', { name: 'Cancel' }).click();
+  await cleared();
+  expect(await aliceLines(guestBoard).count()).toBe(lines);
+
+  // A restart closes the dialog.
+  await search();
+  await hostBoard.evaluate(() => window.api.restartPlayTest());
+  await expect(hostHand.getByTestId('library-search')).toHaveCount(0);
+  await cleared();
+  await expect(aliceLines(guestBoard).last()).toHaveText(
+    /Alice restarted the game$/
+  );
+
+  // Closing the hand window ends the game, and the activity with it.
+  await search();
+  await hostHand.evaluate(() => window.close()).catch(() => {});
+  await expect(guestBoard.getByTestId('opponent-side')).toContainText(
+    'Alice has no game open'
+  );
+  await expect(theirs).toHaveCount(0);
+  await openPlayTest(host, 7);
+  const board = await page(host, 'board.html');
+  await expect(board.getByTestId('library')).toBeVisible();
+  await expect(board.getByTestId('library-activity')).toHaveCount(0);
+  await expect(guestBoard.getByTestId('opponent-library')).toBeVisible();
+  await expect(theirs).toHaveCount(0);
+});
+
 test('no renderer console errors in either instance', () => {
   expect([...host.errors, ...guest.errors]).toEqual([]);
 });

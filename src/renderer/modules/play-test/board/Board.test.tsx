@@ -51,7 +51,11 @@ let pushMenuCommand: (command: BoardMenuCommand) => void;
 let pushUndoState: (next: { canUndo: boolean; canRedo: boolean }) => void;
 let api: Record<string, ReturnType<typeof vi.fn>>;
 
-const renderBoard = (initial: Settings) => {
+const renderBoard = (
+  initial: Settings,
+  own: PublicView = view,
+  others: OpponentState = opponent
+) => {
   api = {
     dispatch: vi.fn(async () => {}),
     undo: vi.fn(async () => {}),
@@ -81,7 +85,7 @@ const renderBoard = (initial: Settings) => {
   });
   render(
     <ContextMenuProvider>
-      <Board store={storeOf(view)} opponent={storeOf(opponent)} />
+      <Board store={storeOf(own)} opponent={storeOf(others)} />
     </ContextMenuProvider>
   );
 };
@@ -111,6 +115,42 @@ describe('Board turn tracking', () => {
 
     act(() => pushSettings({ ...defaultSettings, turnTracking: true }));
     expect(screen.getByTestId('turn-panel')).toBeInTheDocument();
+  });
+});
+
+describe('Board library activity', () => {
+  it('shows no badges while nobody is in their library', async () => {
+    renderBoard(defaultSettings);
+    await act(async () => {});
+    expect(screen.queryByTestId('library-activity')).toBeNull();
+    expect(screen.queryByTestId('opponent-library-activity')).toBeNull();
+  });
+
+  it('badges your library and each opponent library in use', async () => {
+    const [bob] = opponent.peers;
+    renderBoard(
+      defaultSettings,
+      { ...view, libraryActivity: { kind: 'search' } },
+      {
+        ...opponent,
+        peers: [
+          {
+            ...bob,
+            view: bob.view && {
+              ...bob.view,
+              libraryActivity: { kind: 'look', count: 3 },
+            },
+          },
+        ],
+      }
+    );
+    await act(async () => {});
+    const own = screen.getByTestId('library-activity');
+    expect(own).toHaveAttribute('data-kind', 'search');
+    expect(own).toHaveAttribute('title', 'Searching library…');
+    const theirs = screen.getByTestId('opponent-library-activity');
+    expect(theirs).toHaveAttribute('title', 'Looking at top 3…');
+    expect(theirs).toHaveTextContent('Top 3…');
   });
 });
 

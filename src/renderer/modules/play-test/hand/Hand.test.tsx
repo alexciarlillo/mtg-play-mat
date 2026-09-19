@@ -1,5 +1,5 @@
 import type { CardView, PrivateView } from '@shared/game';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ContextMenuProvider } from '../../../ui/ContextMenuProvider';
@@ -63,12 +63,19 @@ const library: CardView[] = [
   libraryCard(23, 'Island', 'Basic Land — Island'),
 ];
 const getLibrary = vi.fn(() => Promise.resolve(library));
+const setLibraryActivity = vi.fn(() => Promise.resolve());
+let pushGameStarted: () => void;
 
 beforeEach(() => {
   Object.assign(window, {
     api: {
       dispatch,
       getLibrary,
+      setLibraryActivity,
+      onGameStarted: (listener: () => void) => {
+        pushGameStarted = listener;
+        return () => {};
+      },
       onUndoState: () => () => {},
       getUndoState: () => new Promise(() => {}),
     },
@@ -78,6 +85,7 @@ beforeEach(() => {
 afterEach(() => {
   dispatch.mockClear();
   getLibrary.mockClear();
+  setLibraryActivity.mockClear();
 });
 
 const renderHand = (view: PrivateView) =>
@@ -263,6 +271,7 @@ describe('Hand', () => {
     fireEvent.click(screen.getByRole('button', { name: 'OK' }));
 
     const look = await screen.findAllByTestId('look-card');
+    expect(setLibraryActivity).toHaveBeenCalledWith({ kind: 'look', count: 3 });
     expect(look.map((el) => el.dataset.cardName)).toEqual([
       'Grizzly Bears',
       'Forest',
@@ -293,6 +302,34 @@ describe('Hand', () => {
       hand: [],
     });
     expect(screen.queryByTestId('look-at-top')).not.toBeInTheDocument();
+    expect(setLibraryActivity).toHaveBeenLastCalledWith(null);
+  });
+
+  it('tells the table only while a library dialog is open', async () => {
+    renderHand(viewOf({ keptHand: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Look at top…' }));
+    // Choosing how many isn't looking yet.
+    expect(setLibraryActivity).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(setLibraryActivity).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Search library…' }));
+    await screen.findAllByTestId('search-card');
+    expect(setLibraryActivity.mock.calls).toEqual([[{ kind: 'search' }]]);
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(setLibraryActivity.mock.calls).toEqual([
+      [{ kind: 'search' }],
+      [null],
+    ]);
+  });
+
+  it('closes library dialogs when a new game starts', async () => {
+    renderHand(viewOf({ keptHand: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Search library…' }));
+    await screen.findAllByTestId('search-card');
+    act(() => pushGameStarted());
+    expect(screen.queryByTestId('library-search')).toBeNull();
+    expect(setLibraryActivity).toHaveBeenLastCalledWith(null);
   });
 
   it('searches by name or type, then moves and shuffles', async () => {
@@ -317,5 +354,6 @@ describe('Hand', () => {
       to: 'battlefield',
       shuffle: true,
     });
+    expect(setLibraryActivity).toHaveBeenLastCalledWith(null);
   });
 });

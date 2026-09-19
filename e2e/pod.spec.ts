@@ -313,6 +313,36 @@ test('a guest’s dice roll shows up on all four boards', async () => {
   }
 });
 
+test('a guest searching their library shows on all four boards', async () => {
+  const boards = await Promise.all(players.map((p) => page(p, 'board.html')));
+  const hand = await page(players[CAROL], 'hand.html');
+  const badges = () => [
+    boards[CAROL].getByTestId('library-activity'),
+    ...others(players[CAROL]).map((p) =>
+      opponentSide(boards[players.indexOf(p)], 'Carol').getByTestId(
+        'opponent-library-activity'
+      )
+    ),
+  ];
+
+  await hand.getByRole('button', { name: 'Search library…' }).click();
+  for (const badge of badges()) {
+    await expect(badge).toHaveAttribute('data-kind', 'search');
+  }
+  for (const board of boards) {
+    await expect(
+      board.getByTestId('log-entry').filter({ hasText: 'Carol is' }).last()
+    ).toHaveText(/Carol is searching their library$/);
+  }
+  // Nobody else is marked.
+  await expect(
+    boards[CAROL].getByTestId('opponent-library-activity')
+  ).toHaveCount(0);
+
+  await hand.getByRole('button', { name: 'Close' }).click();
+  for (const badge of badges()) await expect(badge).toHaveCount(0);
+});
+
 test('the host sends no hidden cards and relays guests unaltered', async () => {
   const [alice] = players;
   const hostWire = await wireOf(alice);

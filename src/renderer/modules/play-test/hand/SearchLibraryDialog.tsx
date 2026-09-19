@@ -4,6 +4,7 @@ import { useState } from 'react';
 
 import Card from '../../../ui/Card';
 import { Modal } from '../common/Dialogs';
+import { useLibraryActivity } from '../common/useLibraryActivity';
 import { dispatch } from '../viewStore';
 import { useLibrary } from './useLibrary';
 
@@ -41,6 +42,7 @@ interface Props {
 }
 
 const SearchLibraryDialog = ({ playerId, seq, onClose }: Props) => {
+  useLibraryActivity({ kind: 'search' });
   const library = useLibrary(seq);
   const [query, setQuery] = useState('');
   const [picked, setPicked] = useState<string[]>([]);

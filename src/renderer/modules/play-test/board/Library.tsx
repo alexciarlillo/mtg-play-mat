@@ -1,3 +1,4 @@
+import type { LibraryActivity } from '@shared/game';
 import classNames from 'classnames';
 import type { MouseEvent } from 'react';
 
@@ -5,11 +6,13 @@ import { type CardSize, cardWidths } from '../../../ui/cardSizes';
 import CardImg from '../../../ui/CardImg';
 import { useContextMenu } from '../../../ui/ContextMenuProvider';
 import { dispatch } from '../viewStore';
+import LibraryActivityBadge from './LibraryActivityBadge';
 
 interface Props {
   playerId?: string;
   count: number;
   size?: CardSize;
+  activity?: LibraryActivity | null;
   onDrawMany(): void;
   onMill(): void;
 }
@@ -18,6 +21,7 @@ const Library = ({
   playerId,
   count,
   size = 'sm',
+  activity = null,
   onDrawMany,
   onMill,
 }: Props) => {
@@ -73,7 +77,7 @@ const Library = ({
         tabIndex={0}
         aria-label="Draw a card"
         className={classNames(
-          'flex justify-center items-center aspect-card rounded-lg',
+          'relative flex justify-center items-center aspect-card rounded-lg',
           cardWidths[size],
           count === 0
             ? 'border-2 border-dashed border-slate-500'
@@ -83,6 +87,11 @@ const Library = ({
         onClick={canDraw ? drawCard : undefined}
       >
         {count > 0 && <CardImg name="Library" />}
+        <LibraryActivityBadge
+          activity={activity}
+          compact={size === 'xs'}
+          testId="library-activity"
+        />
       </div>
       <div className="text-sm font-medium">
         Library <span className="tabular-nums">{count}</span>

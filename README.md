@@ -196,7 +196,10 @@ The **Table** panel on the board (drag it by its title, or fold it away) holds t
 action log and the dice. Every player's actions ("Bob drew 2 cards", "Alice played
 Forest") show up on every board, built only from public information: cards drawn,
 searched for, or put into a hand or library are counted, never named. Its **Dice**
-tab shows just the rolls. **d6, d20, Coin, dN** ask the host to roll; the result and
+tab shows just the rolls. While a player has Look at top or Search library open,
+their library pile gets an amber badge ("Searching…", "Top 3…") on their own board and
+every opponent's, and the log says so once; it clears when the dialog closes.
+**d6, d20, Coin, dN** ask the host to roll; the result and
 who asked for it appear on every board. **Resend state** re-sends
 yours. **Leave** disconnects: when a guest leaves, only their seat is removed and the
 host can invite that seat again. When the host leaves, the pod ends for everyone.

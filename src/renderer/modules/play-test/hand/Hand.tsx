@@ -1,6 +1,6 @@
 import { type CardView, isModalDfc, type PrivateView } from '@shared/game';
 import classNames from 'classnames';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import Card from '../../../ui/Card';
 import type { ContextMenuSpec } from '../../../ui/ContextMenuStore';
@@ -84,6 +84,8 @@ const revealTitles = {
 
 type Dialog = 'help' | 'lookCount' | 'look' | 'search';
 
+const libraryDialogs: (Dialog | null)[] = ['lookCount', 'look', 'search'];
+
 const barButton =
   'rounded px-3 py-0.5 text-sm font-semibold disabled:opacity-40 [-webkit-app-region:no-drag]';
 
@@ -166,6 +168,14 @@ const Hand = ({ store }: { store: ViewStore<PrivateView> }) => {
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const [lookCount, setLookCount] = useState(3);
   const close = useCallback(() => setDialog(null), []);
+  // A look or search belongs to the game it started in.
+  useEffect(
+    () =>
+      window.api.onGameStarted(() =>
+        setDialog((open) => (libraryDialogs.includes(open) ? null : open))
+      ),
+    []
+  );
   // Choosing which cards pay for mulligans is a local, uncommitted pick;
   // main only hears about it as one keepHand action.
   const [choosing, setChoosing] = useState(false);
