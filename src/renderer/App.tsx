@@ -17,6 +17,7 @@ const modules = [
   { label: 'Deck Builder', route: 'decks' },
   { label: 'Collection', route: 'collection' },
   { label: 'Play online', route: 'online' },
+  { label: 'Settings', route: 'settings' },
 ];
 
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>

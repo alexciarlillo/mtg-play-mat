@@ -1,4 +1,5 @@
 import { idleNetState } from '@shared/net/lobby';
+import { defaultSettings } from '@shared/settings';
 import type { DeckSummary } from '@shared/types/decks';
 import type { PlayTestStatus } from '@shared/types/playTest';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
@@ -22,8 +23,11 @@ const closed: PlayTestStatus = { open: false, deck: null, sampleDeck: false };
 let pushStatus: (status: PlayTestStatus) => void = () => {};
 
 const makeApi = (status: PlayTestStatus, decks: DeckSummary[]) => ({
-  getProfile: vi.fn(async () => ({ playerId: 'p1', displayName: 'Alex' })),
-  setDisplayName: vi.fn(),
+  getSettings: vi.fn(async () => ({
+    ...defaultSettings,
+    displayName: 'Alex',
+  })),
+  onSettingsChanged: vi.fn(() => () => {}),
   getNetState: vi.fn(async () => idleNetState),
   onNetState: vi.fn(() => () => {}),
   getPlayTestStatus: vi.fn(async () => status),

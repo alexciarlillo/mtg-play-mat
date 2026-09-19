@@ -1,14 +1,10 @@
 import { joinLink } from '@shared/net/codec';
 import type { NetState, SeatState } from '@shared/net/lobby';
 import classNames from 'classnames';
-import {
-  type FormEvent,
-  type ReactNode,
-  useEffect,
-  useRef,
-  useState,
-} from 'react';
+import { type FormEvent, type ReactNode, useRef, useState } from 'react';
+import { Link } from 'react-router';
 
+import useSettings from '../../hooks/useSettings';
 import GameSetup from './GameSetup';
 import useNetState from './useNetState';
 import usePlayTestStatus from './usePlayTestStatus';
@@ -120,43 +116,21 @@ const CodeInput = ({
   );
 };
 
+// The name lives on the Settings page; this just says who you'll be.
 const DisplayName = () => {
-  const [name, setName] = useState('');
-  const [saved, setSaved] = useState('');
-
-  useEffect(() => {
-    void window.api.getProfile().then(({ displayName }) => {
-      setName(displayName);
-      setSaved(displayName);
-    });
-  }, []);
-
-  const save = (e: FormEvent) => {
-    e.preventDefault();
-    call(
-      window.api.setDisplayName(name).then(({ displayName }) => {
-        setName(displayName);
-        setSaved(displayName);
-      })
-    );
-  };
-
+  const { settings, loaded } = useSettings();
+  if (!loaded) return null;
   return (
-    <form className="flex items-end gap-2" onSubmit={save}>
-      <label className="text-sm font-medium text-gray-900">
-        Your name
-        <input
-          aria-label="Your name"
-          className="mt-1 block w-56 rounded-md border-0 px-2 py-1.5 text-gray-900 ring-1 ring-gray-300"
-          maxLength={32}
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-      </label>
-      <button type="submit" className={secondary} disabled={name === saved}>
-        Save
-      </button>
-    </form>
+    <p data-testid="online-name" className="text-sm text-gray-700">
+      Playing as{' '}
+      <span className="font-semibold text-gray-900">
+        {settings.displayName}
+      </span>
+      .{' '}
+      <Link to="/settings" className="text-indigo-600 hover:text-indigo-500">
+        Change it in Settings
+      </Link>
+    </p>
   );
 };
 

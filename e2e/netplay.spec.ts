@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -44,6 +44,11 @@ let guest: Instance;
 
 const launch = async (label: string): Promise<Instance> => {
   const userDataDir = mkdtempSync(path.join(tmpdir(), `mtg-net-${label}-`));
+  // The turn number reaching the other board needs turn tracking on.
+  writeFileSync(
+    path.join(userDataDir, 'settings.json'),
+    JSON.stringify({ turnTracking: true })
+  );
   const app = await electron.launch({
     args: ['.', `--user-data-dir=${userDataDir}`],
     env,
@@ -104,11 +109,14 @@ const profileOf = ({ app }: Instance) =>
 
 const lobby = async (instance: Instance, name: string) => {
   const app = await page(instance, 'app.html');
-  await app.getByRole('link', { name: 'Play online' }).first().click();
-  await expect(app).toHaveURL(/#\/online/);
+  await app.getByRole('link', { name: 'Settings' }).first().click();
+  await expect(app).toHaveURL(/#\/settings/);
   await app.getByLabel('Your name').fill(name);
   await app.getByRole('button', { name: 'Save' }).click();
   await expect(app.getByRole('button', { name: 'Save' })).toBeDisabled();
+  await app.getByRole('link', { name: 'Play online' }).first().click();
+  await expect(app).toHaveURL(/#\/online/);
+  await expect(app.getByTestId('online-name')).toContainText(name);
   return app;
 };
 

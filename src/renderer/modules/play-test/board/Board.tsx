@@ -4,6 +4,7 @@ import type { OpponentState } from '@shared/net/remoteViews';
 import classNames from 'classnames';
 import { type MouseEvent, type ReactNode, useCallback, useState } from 'react';
 
+import useSettings from '../../../hooks/useSettings';
 import { cardWidths } from '../../../ui/cardSizes';
 import { useContextMenu } from '../../../ui/ContextMenuProvider';
 import { ConfirmDialog, NumberPrompt } from '../common/Dialogs';
@@ -112,6 +113,7 @@ const Board = ({ store, opponent }: Props) => {
   );
 
   const prompts = useCommanderPrompts();
+  const { turnTracking } = useSettings().settings;
 
   useGameShortcuts(view, {
     enabled: dialog === null && cardDialog === null && prompts.length === 0,
@@ -189,6 +191,7 @@ const Board = ({ store, opponent }: Props) => {
               view={peer.view}
               seat={peer.seat}
               compact={pod}
+              showTurn={turnTracking}
             />
           ))}
         </div>
@@ -251,7 +254,7 @@ const Board = ({ store, opponent }: Props) => {
                 counters={view.counters}
                 playerId={view.playerId}
               />
-              <TurnPanel view={view} compact={duel} />
+              {turnTracking && <TurnPanel view={view} compact={duel} />}
               {!view.keptHand && (
                 <div
                   data-testid="mulligan-status"

@@ -5,6 +5,7 @@ import Collection from './modules/collection/Collection';
 import DeckBuilder from './modules/deck-builder/DeckBuilder';
 import DeckViewer from './modules/deck-builder/DeckViewer';
 import PlayOnline from './modules/online/PlayOnline';
+import Settings from './modules/settings/Settings';
 
 export const routes: RouteObject[] = [
   {
@@ -16,6 +17,7 @@ export const routes: RouteObject[] = [
       { path: 'decks/:deckId', element: <DeckViewer /> },
       { path: 'collection', element: <Collection /> },
       { path: 'online', element: <PlayOnline /> },
+      { path: 'settings', element: <Settings /> },
     ],
   },
 ];

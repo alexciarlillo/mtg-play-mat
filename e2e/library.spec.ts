@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -78,6 +78,11 @@ const keep = async () => {
 
 test.beforeAll(async () => {
   userDataDir = mkdtempSync(path.join(tmpdir(), 'mtg-play-mat-e2e-lib-'));
+  // Later steps drive the turn panel, which is off by default.
+  writeFileSync(
+    path.join(userDataDir, 'settings.json'),
+    JSON.stringify({ turnTracking: true })
+  );
   app = await electron.launch({
     args: ['.', `--user-data-dir=${userDataDir}`],
     env: { ...process.env, MTG_PLAY_MAT_TEST_HOOKS: '1' },

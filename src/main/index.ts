@@ -1,4 +1,5 @@
 import { mkdirSync } from 'node:fs';
+import path from 'node:path';
 
 import { CARD_SCHEME } from '@shared/cardImages';
 import { app, BrowserWindow, net, protocol } from 'electron';
@@ -16,12 +17,12 @@ import MenuBuilder from './menu';
 import createCardDataHandlers from './modules/card-data/cardDataHandlers';
 import createCollectionHandlers from './modules/collection/collectionHandlers';
 import createDeckHandlers from './modules/decks/deckHandlers';
-import {
-  createProfileStore,
-  setupNetplay,
-} from './modules/netplay/setupNetplay';
+import ProfileStore from './modules/netplay/ProfileStore';
+import { setupNetplay } from './modules/netplay/setupNetplay';
 import PlayTest from './modules/play-test/PlayTest';
 import createTokenHandlers from './modules/play-test/tokenHandlers';
+import createSettingsHandlers from './modules/settings/settingsHandlers';
+import SettingsStore from './modules/settings/SettingsStore';
 import CardDB from './shared/db/CardDB';
 import DeckDB from './shared/db/DeckDB';
 import {
@@ -64,7 +65,15 @@ const start = (onDeepLink: ReturnType<typeof watchDeepLinks>) => {
   const appVersion = app.getVersion();
   const cardDb = new CardDB(cardDbPath());
   const deckDb = new DeckDB(deckDbPath());
-  const profile = createProfileStore();
+  const settings = new SettingsStore(
+    path.join(app.getPath('userData'), 'settings.json')
+  );
+  settings.onChange((next) => {
+    BrowserWindow.getAllWindows().forEach((window) => {
+      sendEvent(window, 'settingsChanged', next);
+    });
+  });
+  const profile = new ProfileStore(settings);
   const playTest = new PlayTest({
     cardDb,
     deckDb,
@@ -73,6 +82,7 @@ const start = (onDeepLink: ReturnType<typeof watchDeepLinks>) => {
   });
   const online = setupNetplay({
     profile,
+    settings,
     playTest,
     getAppWindow: () => appWindow,
     testHooks: testHooksEnabled,
@@ -107,8 +117,14 @@ const start = (onDeepLink: ReturnType<typeof watchDeepLinks>) => {
       ...playTest.handlers,
       ...createTokenHandlers({ cardDb }),
       ...online.handlers,
+      ...createSettingsHandlers({ settings }),
     },
-    { ...online.guards, ...playTest.guards }
+    {
+      ...online.guards,
+      ...playTest.guards,
+      // The hidden net window has no reason to change preferences.
+      updateSettings: (sender) => !online.netWindow.isNetSender(sender),
+    }
   );
 
   createAppWindow(playTest);
@@ -136,6 +152,7 @@ const start = (onDeepLink: ReturnType<typeof watchDeepLinks>) => {
           playTest.openSampleDeck(seed, 'commander'),
         gameState: () => playTest.gameState,
         profile: () => profile.profile,
+        settings: () => settings.settings,
       },
     });
   }

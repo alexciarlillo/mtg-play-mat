@@ -1,13 +1,12 @@
-import path from 'node:path';
-
 import type { IceServer, NetConfig } from '@shared/net/lobby';
 import { app, BrowserWindow, screen } from 'electron';
 
 import { type RequestHandlers, type SenderGuards, sendEvent } from '../../ipc';
 import type PlayTest from '../play-test/PlayTest';
+import type SettingsStore from '../settings/SettingsStore';
 import Netplay from './Netplay';
 import NetWindow from './NetWindow';
-import ProfileStore from './ProfileStore';
+import type ProfileStore from './ProfileStore';
 
 const PUBLIC_STUN: IceServer[] = [
   { urls: 'stun:stun.l.google.com:19302' },
@@ -64,8 +63,6 @@ const growForTable = (board: BrowserWindow | null, opponents: number) => {
 
 type NetplaySetupHandlers = Pick<
   RequestHandlers,
-  | 'getProfile'
-  | 'setDisplayName'
   | 'getNetState'
   | 'netHost'
   | 'netInvite'
@@ -79,16 +76,15 @@ type NetplaySetupHandlers = Pick<
   | 'getOpponentView'
 >;
 
-export const createProfileStore = () =>
-  new ProfileStore(path.join(app.getPath('userData'), 'settings.json'));
-
 export const setupNetplay = ({
   profile,
+  settings,
   playTest,
   getAppWindow,
   testHooks,
 }: {
   profile: ProfileStore;
+  settings: SettingsStore;
   playTest: PlayTest;
   getAppWindow(): BrowserWindow | null;
   testHooks: boolean;
@@ -120,15 +116,14 @@ export const setupNetplay = ({
     growForTable(playTest.boardWindow, netplay.opponentCount);
   });
 
+  // Peers learn a new name without waiting for a reconnect, whichever
+  // window changed it.
+  settings.onChange((next, previous) => {
+    if (next.displayName !== previous.displayName) netplay.resend();
+  });
+
   const handlers: NetplaySetupHandlers = {
     ...netplay.handlers,
-    getProfile: () => profile.profile,
-    setDisplayName: (name: unknown) => {
-      const next = profile.setDisplayName(name);
-      // Peers learn the new name without waiting for a reconnect.
-      netplay.resend();
-      return next;
-    },
   };
 
   const guards: SenderGuards = { netReport: netWindow.isNetSender };

@@ -6,9 +6,10 @@ import type {
   PublicView,
   UndoState,
 } from '../game';
-import type { NetCommand, NetReport, NetState, Profile } from '../net/lobby';
+import type { NetCommand, NetReport, NetState } from '../net/lobby';
 import type { RollRequest } from '../net/protocol';
 import type { OpponentState } from '../net/remoteViews';
+import type { Settings, SettingsPatch } from '../settings';
 import type { CardDataStatus } from '../types/cardData';
 import type { PlayTestStatus } from '../types/playTest';
 import type {
@@ -84,8 +85,6 @@ export const requests = {
   getCardDataStatus: request<[], CardDataStatus>(),
   // Starts a check-and-download; progress arrives as cardDataStatus.
   updateCardData: request<[], CardDataStatus>(),
-  getProfile: request<[], Profile>(),
-  setDisplayName: request<[name: string], Profile>(),
   // Lobby actions; results and errors arrive as netState.
   getNetState: request<[], NetState>(),
   netHost: request<[]>(),
@@ -104,6 +103,10 @@ export const requests = {
   getOpponentView: request<[], OpponentState>(),
   // Token printings by name, for creating tokens in a play test.
   searchTokens: request<[query: string], TokenSearchResult[]>(),
+  // App preferences. Main drops invalid keys and values from a patch, and
+  // every window hears about the change as settingsChanged.
+  getSettings: request<[], Settings>(),
+  updateSettings: request<[patch: SettingsPatch], Settings>(),
 };
 
 // Main -> renderer pushes. The preload exposes each as on<Name>(listener).
@@ -116,6 +119,7 @@ export const events = {
   opponentView: event<OpponentState>(),
   commanderPrompts: event<CommanderMove[]>(),
   undoState: event<UndoState>(),
+  settingsChanged: event<Settings>(),
   playTestStatus: event<PlayTestStatus>(),
 };
 

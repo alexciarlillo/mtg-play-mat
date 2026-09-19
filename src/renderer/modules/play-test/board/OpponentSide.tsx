@@ -86,11 +86,14 @@ const OpponentSide = ({
   view,
   seat = null,
   compact = false,
+  showTurn = false,
 }: {
   peer: PeerInfo;
   view: PublicView | null;
   seat?: number | null;
   compact?: boolean;
+  // Follows the local turn tracking setting, not the opponent's.
+  showTurn?: boolean;
 }) => {
   const [open, setOpen] = useState<Pile | null>(null);
 
@@ -167,7 +170,7 @@ const OpponentSide = ({
             testId="opponent-player-counters"
           />
         )}
-        {view?.turn !== undefined && (
+        {showTurn && view?.turn !== undefined && (
           <div data-testid="opponent-turn" className="text-xs text-slate-300">
             Turn <span className="font-bold tabular-nums">{view.turn}</span>
             {view.phase && ` · ${phaseLabels[view.phase]}`}

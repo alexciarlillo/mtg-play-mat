@@ -93,11 +93,14 @@ const profileOf = ({ app }: Player) =>
 
 const lobby = async (player: Player) => {
   const app = await page(player, 'app.html');
-  await app.getByRole('link', { name: 'Play online' }).first().click();
-  await expect(app).toHaveURL(/#\/online/);
+  await app.getByRole('link', { name: 'Settings' }).first().click();
+  await expect(app).toHaveURL(/#\/settings/);
   await app.getByLabel('Your name').fill(player.name);
   await app.getByRole('button', { name: 'Save' }).click();
   await expect(app.getByRole('button', { name: 'Save' })).toBeDisabled();
+  await app.getByRole('link', { name: 'Play online' }).first().click();
+  await expect(app).toHaveURL(/#\/online/);
+  await expect(app.getByTestId('online-name')).toContainText(player.name);
   return app;
 };
 
