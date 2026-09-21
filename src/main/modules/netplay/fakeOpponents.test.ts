@@ -1,6 +1,12 @@
+import type { PublicView } from '@shared/game';
 import { describe, expect, it } from 'vitest';
 
-import { fakePeers, MAX_FAKE_PEERS } from './fakeOpponents';
+import {
+  fakePeers,
+  MAX_FAKE_PEERS,
+  MIRROR_SEAT,
+  mirroredView,
+} from './fakeOpponents';
 
 const counts = [1, 2, 3];
 
@@ -130,5 +136,63 @@ describe('fakePeers', () => {
     expect(fakePeers(MAX_FAKE_PEERS + 5, 7)).toEqual(
       fakePeers(MAX_FAKE_PEERS, 7)
     );
+  });
+});
+
+// A local view, as the player's own game produces it: ids not yet
+// namespaced against anyone.
+const localView = (): PublicView => ({
+  seq: 3,
+  playerId: 'alice',
+  name: 'Alice',
+  life: 40,
+  counters: {},
+  mulligans: 0,
+  keptHand: true,
+  zones: {
+    battlefield: [
+      {
+        instanceId: 'c1',
+        ref: {
+          id: 'forest',
+          name: 'Forest',
+          typeLine: 'Basic Land — Forest',
+          faces: [{ name: 'Forest', typeLine: 'Basic Land — Forest' }],
+        },
+        owner: 'alice',
+        controller: 'alice',
+        zone: 'battlefield',
+        position: { x: 0, y: 0 },
+        tapped: false,
+        faceDown: false,
+        faceIndex: 0,
+        counters: {},
+        isToken: false,
+        attachedTo: null,
+      },
+    ],
+    graveyard: [],
+    exile: [],
+    command: [],
+  },
+  handCount: 7,
+  libraryCount: 53,
+  commanderDamage: [],
+  dummies: [],
+});
+
+describe('mirroredView', () => {
+  it('namespaces against the mirror seat, so ids cannot collide', () => {
+    const [seat] = fakePeers(MIRROR_SEAT + 1, 7);
+    const mirrored = mirroredView(localView());
+
+    expect(mirrored!.zones.battlefield[0].instanceId).toBe(
+      `${seat.info.playerId}/c1`
+    );
+    expect(mirrored!.life).toBe(40);
+  });
+
+  it('has nothing to show without a local view', () => {
+    expect(mirroredView(null)).toBeNull();
   });
 });

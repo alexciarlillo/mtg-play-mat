@@ -43,7 +43,7 @@ import {
 import type { DeckFormat } from '@shared/types/decks';
 
 import type { RequestHandlers } from '../../ipc';
-import { fakePeers } from './fakeOpponents';
+import { fakePeers, MIRROR_SEAT, mirroredView } from './fakeOpponents';
 
 // Where the peer connections actually live (a hidden renderer window).
 export interface Transport {
@@ -224,6 +224,7 @@ export default class Netplay {
     const next = fakePeers(count, FAKE_SEED, startingLife(format));
     if (next.length === 0 && this.fakes.length === 0) return true;
     this.fakes = next;
+    this.mirrorLocal(this.deps.localView());
     this.fakeRev += 1;
     this.pushOpponent();
     return true;
@@ -251,6 +252,23 @@ export default class Netplay {
 
   localViewChanged = (view: PublicView | null) => {
     this.send({ kind: 'public', view });
+    if (this.mirrorLocal(view)) {
+      this.fakeRev += 1;
+      this.pushOpponent();
+    }
+  };
+
+  // The mirror seat carries the local board so the player can see how
+  // their own layout reads from across the table. Only the view is
+  // copied: the seat keeps its own identity, and nothing is re-dealt.
+  private mirrorLocal = (view: PublicView | null): boolean => {
+    const seat = this.fakes[MIRROR_SEAT];
+    if (!seat) return false;
+    const mirrored = { ...seat, view: mirroredView(view) };
+    this.fakes = this.fakes.map((peer, index) =>
+      index === MIRROR_SEAT ? mirrored : peer
+    );
+    return true;
   };
 
   // A line of the local player's action log: onto the local table log,

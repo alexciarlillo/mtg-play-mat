@@ -9,6 +9,7 @@ import {
   type PlayerId,
   type Position,
   publicView,
+  type PublicView,
   reduce,
   startingLife,
 } from '@shared/game';
@@ -26,7 +27,9 @@ interface FakePlayer {
 // One per guest seat, so a full pod can be filled. The ids are fixed so
 // the same seat is the same player from run to run.
 const fakePlayers: FakePlayer[] = [
-  { playerId: 'fake-mira', name: 'Mira Castellan' },
+  // Seat 0 carries the local board, so it says whose it is: without
+  // that, it is a coin toss which board on screen is the player's own.
+  { playerId: 'fake-mira', name: 'You (mirror)' },
   { playerId: 'fake-desmond', name: 'Desmond Okafor' },
   { playerId: 'fake-yuki', name: 'Yuki Tanaka' },
 ];
@@ -202,3 +205,13 @@ export const fakePeers = (
   Array.from({ length: seatCount(count) }, (_, index) =>
     fakePeer(index, seed, life)
   );
+
+// Dev-only: this seat shows the local player's own board instead of a
+// generated one, because a generated board is tidier than a real one
+// and says little about how the player's layout reads from a seat.
+export const MIRROR_SEAT = 0;
+
+// Namespaced exactly as a received view is, or the mirrored instance
+// ids would collide with the local game's.
+export const mirroredView = (view: PublicView | null): PublicView | null =>
+  view && namespaceView(view, fakePlayers[MIRROR_SEAT].playerId);

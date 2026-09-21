@@ -23,6 +23,36 @@ const view = (playerId: string, life = 20): PublicView => ({
   dummies: [],
 });
 
+// A battlefield card, so a mirrored view can be checked for namespaced
+// instance ids rather than for its shape alone.
+const withCard = (base: PublicView, instanceId: string): PublicView => ({
+  ...base,
+  zones: {
+    ...base.zones,
+    battlefield: [
+      {
+        instanceId,
+        ref: {
+          id: 'forest',
+          name: 'Forest',
+          typeLine: 'Basic Land — Forest',
+          faces: [{ name: 'Forest', typeLine: 'Basic Land — Forest' }],
+        },
+        owner: base.playerId,
+        controller: base.playerId,
+        zone: 'battlefield',
+        position: { x: 0, y: 0 },
+        tapped: false,
+        faceDown: false,
+        faceIndex: 0,
+        counters: {},
+        isToken: false,
+        attachedTo: null,
+      },
+    ],
+  },
+});
+
 const names: Record<string, string> = {
   alice: 'Alice',
   bob: 'Bob',
@@ -768,8 +798,63 @@ describe('Netplay fake opponents', () => {
     expect(pushed?.peers).toHaveLength(3);
     expect(pushed?.peers.map((p) => p.seat)).toEqual([2, 3, 4]);
     expect(pushed?.selfSeat).toBe(1);
-    expect(pushed?.peers[0].view?.playerId).toBe('fake-mira');
+    expect(pushed?.peers.map((p) => p.info.playerId)).toEqual([
+      'fake-mira',
+      'fake-desmond',
+      'fake-yuki',
+    ]);
+    // Only the first seat mirrors; the rest keep their generated boards.
+    expect(pushed?.peers[0].view?.playerId).toBe('alice');
+    expect(pushed?.peers[1].view?.playerId).toBe('fake-desmond');
     expect(t.netplay.handlers.getOpponentView()).toEqual(pushed);
+  });
+
+  it('mirrors the local board into the first fake seat, namespaced', () => {
+    const t = setup();
+    t.setLocal(withCard(view('alice'), 'c1'));
+    t.netplay.setFakeOpponents(3);
+    const mirror = t.opponent()?.peers[0];
+    expect(mirror?.info.name).toBe('You (mirror)');
+    expect(mirror?.view?.zones.battlefield[0].instanceId).toBe('fake-mira/c1');
+    // The generated seats namespace against their own ids, so nothing
+    // the board shows can collide with the local game's instance ids.
+    const ids = t
+      .opponent()
+      ?.peers.flatMap((p) => p.view?.zones.battlefield ?? [])
+      .map((c) => c.instanceId);
+    expect(ids?.every((id) => id.startsWith('fake-'))).toBe(true);
+    expect(new Set(ids).size).toBe(ids?.length);
+  });
+
+  it('follows the local board as it changes', () => {
+    const t = setup();
+    t.netplay.setFakeOpponents(3);
+    const before = t.opponent();
+    t.netplay.localViewChanged(withCard(view('alice', 12), 'c2'));
+    const after = t.opponent();
+    expect(after).not.toBe(before);
+    expect(after?.seq).toBeGreaterThan(before?.seq ?? 0);
+    expect(after?.peers[0].view?.life).toBe(12);
+    expect(after?.peers[0].view?.zones.battlefield[0].instanceId).toBe(
+      'fake-mira/c2'
+    );
+    // The generated seats are untouched, so nothing is re-dealt.
+    expect(after?.peers[1].view).toBe(before?.peers[1].view);
+  });
+
+  it('leaves the mirror seat blank until the local game has a view', () => {
+    const t = setup();
+    t.setLocal(null);
+    t.netplay.setFakeOpponents(2);
+    expect(t.opponent()?.peers).toHaveLength(2);
+    expect(t.opponent()?.peers[0].view).toBeNull();
+    expect(t.opponent()?.peers[1].view?.playerId).toBe('fake-desmond');
+  });
+
+  it('pushes nothing on a local change with no fake pod', () => {
+    const t = setup();
+    t.netplay.localViewChanged(view('alice', 9));
+    expect(t.opponents).toHaveLength(0);
   });
 
   it('moves seq on every change of the fake pod', () => {
