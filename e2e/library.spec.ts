@@ -324,7 +324,12 @@ test('undoing a commander prompt answer keeps the prompt consistent', async () =
 
   await commander.getByTestId('card').click();
   await expect(onField).toHaveCount(1);
-  await expect(tax).toHaveText('Tax +2');
+  // The cast itself leaves the tax alone; the player records it.
+  await expect(tax).toContainText('Tax +0');
+  await board
+    .getByRole('button', { name: `One cast more for ${LEADER}` })
+    .click();
+  await expect(tax).toContainText('Tax +2');
 
   await onField.click({ button: 'right' });
   await menuItem(board, 'Move to graveyard').click();
@@ -337,7 +342,7 @@ test('undoing a commander prompt answer keeps the prompt consistent', async () =
   await board.keyboard.press('ControlOrMeta+z');
   await expect(commander).toHaveAttribute('data-zone', 'graveyard');
   await expect(prompt).toContainText('went to the graveyard');
-  await expect(tax).toHaveText('Tax +2');
+  await expect(tax).toContainText('Tax +2');
 
   // No leaves it there; undoing the death drops the prompt for good.
   await prompt.getByRole('button', { name: 'No' }).click();

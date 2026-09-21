@@ -9,6 +9,7 @@ import classNames from 'classnames';
 import Card from '../../../ui/Card';
 import { type CardSize, cardWidths } from '../../../ui/cardSizes';
 import { moveMenu, moveTo } from '../common/cardMenus';
+import { dispatch } from '../viewStore';
 import { visibleCommanders } from './commanders';
 
 const whereLabels: Record<PublicZoneId, string> = {
@@ -17,6 +18,9 @@ const whereLabels: Record<PublicZoneId, string> = {
   graveyard: 'In graveyard',
   exile: 'In exile',
 };
+
+const step =
+  'h-4 w-4 rounded bg-slate-800 text-xs font-bold leading-none hover:bg-slate-500';
 
 interface Props {
   view: PublicView;
@@ -27,7 +31,7 @@ interface Props {
 }
 
 // The command zone with each commander's tax. Clicking a commander here
-// casts it (moves it to the battlefield, which counts toward the tax).
+// casts it; the tax is a counter the player steps by a cast at a time.
 const CommandZone = ({
   view,
   size = 'sm',
@@ -37,6 +41,13 @@ const CommandZone = ({
   const commanders = visibleCommanders(view);
   const others = view.zones.command.filter((card) => !card.isCommander);
   const cast = (card: CardView) => moveTo(card, 'battlefield');
+  // A step is one cast, so the shown mana cost moves by two at a time.
+  const adjustCasts = (card: CardView, delta: number) =>
+    dispatch({
+      type: 'adjustCommanderCasts',
+      instanceId: card.instanceId,
+      delta,
+    });
 
   return (
     <div
@@ -48,7 +59,7 @@ const CommandZone = ({
       <div className="text-xs font-semibold uppercase tracking-wide text-slate-300">
         Command zone
       </div>
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap justify-center gap-2">
         {[...commanders, ...others].map((card) => {
           const inCommand = card.zone === 'command';
           const tax = commanderTax(card);
@@ -92,13 +103,31 @@ const CommandZone = ({
                   data-tax={tax}
                   title="Commander tax: 2 more mana per previous cast"
                   className={classNames(
-                    'rounded px-1.5 text-sm font-bold tabular-nums',
-                    tax > 0
-                      ? 'bg-amber-300 text-slate-900'
-                      : 'bg-slate-700 text-slate-200'
+                    'flex items-center gap-1 rounded px-1 py-0.5 text-[11px]',
+                    tax > 0 ? 'bg-slate-600' : 'bg-slate-700/60'
                   )}
                 >
-                  Tax +{tax}
+                  {!readOnly && (
+                    <button
+                      type="button"
+                      aria-label={`One cast less for ${card.ref?.name}`}
+                      className={step}
+                      onClick={() => adjustCasts(card, -1)}
+                    >
+                      −
+                    </button>
+                  )}
+                  <span className="font-bold tabular-nums">Tax +{tax}</span>
+                  {!readOnly && (
+                    <button
+                      type="button"
+                      aria-label={`One cast more for ${card.ref?.name}`}
+                      className={step}
+                      onClick={() => adjustCasts(card, 1)}
+                    >
+                      +
+                    </button>
+                  )}
                 </div>
               )}
             </div>

@@ -352,6 +352,11 @@ describe('copyCard of a commander', () => {
       instanceId: id,
       to: 'battlefield',
     });
+    state = reduce(state, {
+      type: 'adjustCommanderCasts',
+      instanceId: id,
+      delta: 1,
+    });
     expect(state.cards[id]).toMatchObject({
       isCommander: true,
       commanderCasts: 1,

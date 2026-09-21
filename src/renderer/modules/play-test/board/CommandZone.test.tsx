@@ -98,6 +98,26 @@ describe('CommandZone', () => {
     );
   });
 
+  it('steps the tax a cast at a time, per commander', () => {
+    renderZone(partners);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'One cast more for Tymna' })
+    );
+    expect(dispatch).toHaveBeenLastCalledWith({
+      type: 'adjustCommanderCasts',
+      instanceId: 'p1:0',
+      delta: 1,
+    });
+    fireEvent.click(
+      screen.getByRole('button', { name: 'One cast less for Thrasios' })
+    );
+    expect(dispatch).toHaveBeenLastCalledWith({
+      type: 'adjustCommanderCasts',
+      instanceId: 'p1:1',
+      delta: -1,
+    });
+  });
+
   it('casts a commander on click', () => {
     renderZone(partners);
     fireEvent.click(screen.getAllByTestId('card')[0]);
@@ -131,6 +151,10 @@ describe('CommandZone', () => {
     fireEvent.contextMenu(screen.getAllByTestId('card')[0]);
     expect(dispatch).not.toHaveBeenCalled();
     expect(screen.queryAllByRole('menuitem')).toHaveLength(0);
+    expect(screen.queryAllByRole('button')).toHaveLength(0);
+    expect(screen.getAllByTestId('commander-tax')[1]).toHaveTextContent(
+      'Tax +4'
+    );
     expect(screen.getByTestId('command-zone')).not.toHaveAttribute(
       'data-drop-zone'
     );

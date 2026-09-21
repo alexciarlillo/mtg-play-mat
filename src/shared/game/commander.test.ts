@@ -62,7 +62,7 @@ describe('commander setup', () => {
 });
 
 describe('commander tax', () => {
-  it('counts each cast from the command zone', () => {
+  it('does not move when a commander is cast', () => {
     let state = commanderGame();
     const id = commanderId(state);
     expect(commanderTax(state.cards[id])).toBe(0);
@@ -70,19 +70,19 @@ describe('commander tax', () => {
     state = reduce(state, move(id, 'battlefield'));
     expect(state.cards[id]).toMatchObject({
       zone: 'battlefield',
-      commanderCasts: 1,
+      commanderCasts: 0,
     });
-    expect(commanderTax(state.cards[id])).toBe(2);
+    expect(commanderTax(state.cards[id])).toBe(0);
 
     state = applyAll(state, [
       move(id, 'command'),
       move(id, 'battlefield'),
       move(id, 'command'),
     ]);
-    expect(commanderTax(state.cards[id])).toBe(4);
+    expect(commanderTax(state.cards[id])).toBe(0);
   });
 
-  it('does not count casts from other zones or moves to other zones', () => {
+  it('does not move for a trip through any other zone either', () => {
     let state = commanderGame();
     const id = commanderId(state);
     state = applyAll(state, [
@@ -98,6 +98,11 @@ describe('commander tax', () => {
   it('keeps the flag and count through every zone change', () => {
     let state = commanderGame();
     const id = commanderId(state);
+    state = reduce(state, {
+      type: 'adjustCommanderCasts',
+      instanceId: id,
+      delta: 1,
+    });
     state = reduce(state, move(id, 'battlefield'));
     state = reduce(state, { type: 'toggleTap', instanceId: id });
     for (const to of [
@@ -169,8 +174,8 @@ describe('commander tax', () => {
     let state = commanderGame(2);
     const [a, b] = [commanderId(state, 0), commanderId(state, 1)];
     state = applyAll(state, [
-      move(a, 'battlefield'),
-      move(a, 'command'),
+      { type: 'adjustCommanderCasts', instanceId: a, delta: 2 },
+      { type: 'adjustCommanderCasts', instanceId: b, delta: 1 },
       move(a, 'battlefield'),
       move(b, 'battlefield'),
     ]);
@@ -444,7 +449,10 @@ describe('commander views', () => {
       isCommander: true,
       commanderCasts: 0,
     });
-    state = reduce(state, move(id, 'battlefield'));
+    state = applyAll(state, [
+      { type: 'adjustCommanderCasts', instanceId: id, delta: 1 },
+      move(id, 'battlefield'),
+    ]);
     expect(publicView(state, P1)?.zones.battlefield[0]).toMatchObject({
       isCommander: true,
       commanderCasts: 1,

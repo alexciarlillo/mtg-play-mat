@@ -573,6 +573,7 @@ describe('public view validation', () => {
     const [id] = zone(state, 'alice', 'command');
     state = applyAll(state, [
       { type: 'moveCard', instanceId: id, to: 'battlefield' },
+      { type: 'adjustCommanderCasts', instanceId: id, delta: 1 },
       { type: 'addDummy', playerId: 'alice', name: 'Dummy' },
       {
         type: 'adjustCommanderDamage',

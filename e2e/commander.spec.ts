@@ -70,6 +70,12 @@ const commander = (board: Page) =>
 
 const tax = (board: Page) => commander(board).getByTestId('commander-tax');
 
+// The tax steps by a cast at a time, which is 2 mana.
+const taxStep = (board: Page, more: boolean) =>
+  board.getByRole('button', {
+    name: `One cast ${more ? 'more' : 'less'} for ${ATRAXA}`,
+  });
+
 const onBattlefield = (board: Page) =>
   board
     .getByTestId('battlefield')
@@ -103,14 +109,14 @@ test('a commander deck starts at 40 with its commander in command', async () => 
   await expect(board.getByTestId('life')).toHaveText('40');
   await expect(commander(board)).toHaveAttribute('data-zone', 'command');
   await expect(commander(board).getByTestId('commander-badge')).toBeVisible();
-  await expect(tax(board)).toHaveText('Tax +0');
+  await expect(tax(board)).toContainText('Tax +0');
   await expect(board.getByTestId('command-zone')).toHaveAttribute(
     'data-count',
     '1'
   );
 });
 
-test('casting from the command zone raises the tax', async () => {
+test('casting leaves the tax alone; the player steps it', async () => {
   const board = await windowFor('board.html');
   await commander(board).getByTestId('card').click();
 
@@ -118,12 +124,18 @@ test('casting from the command zone raises the tax', async () => {
   await expect(
     onBattlefield(board).getByTestId('commander-badge')
   ).toBeVisible();
-  await expect(tax(board)).toHaveText('Tax +2');
+  await expect(tax(board)).toContainText('Tax +0');
   await expect(commander(board)).toHaveAttribute('data-zone', 'battlefield');
   await expect(board.getByTestId('command-zone')).toHaveAttribute(
     'data-count',
     '0'
   );
+
+  // Never below zero, and one step per cast.
+  await taxStep(board, false).click();
+  await expect(tax(board)).toContainText('Tax +0');
+  await taxStep(board, true).click();
+  await expect(tax(board)).toContainText('Tax +2');
 });
 
 test('dying prompts a return to the command zone', async () => {
@@ -145,21 +157,22 @@ test('dying prompts a return to the command zone', async () => {
     'data-count',
     '0'
   );
-  await expect(tax(board)).toHaveText('Tax +2');
+  await expect(tax(board)).toContainText('Tax +2');
 
   await commander(board).getByTestId('card').click();
   await expect(onBattlefield(board)).toHaveCount(1);
-  await expect(tax(board)).toHaveText('Tax +4');
+  await taxStep(board, true).click();
+  await expect(tax(board)).toContainText('Tax +4');
 });
 
 test('the tax can be fixed by hand, and No keeps the card where it went', async () => {
   const board = await windowFor('board.html');
   await onBattlefield(board).click({ button: 'right' });
   await menuItem(board, 'Commander tax −2').click();
-  await expect(tax(board)).toHaveText('Tax +2');
+  await expect(tax(board)).toContainText('Tax +2');
   await onBattlefield(board).click({ button: 'right' });
   await menuItem(board, 'Commander tax +2').click();
-  await expect(tax(board)).toHaveText('Tax +4');
+  await expect(tax(board)).toContainText('Tax +4');
 
   await onBattlefield(board).click({ button: 'right' });
   await menuItem(board, 'Move to exile').click();
@@ -199,7 +212,7 @@ test('the tax can be fixed by hand, and No keeps the card where it went', async 
   await menuItem(board, 'Move to command zone').click();
   await board.keyboard.press('Escape');
   await expect(commander(board)).toHaveAttribute('data-zone', 'command');
-  await expect(tax(board)).toHaveText('Tax +4');
+  await expect(tax(board)).toContainText('Tax +4');
 });
 
 test('a placeholder opponent tracks life and commander damage', async () => {

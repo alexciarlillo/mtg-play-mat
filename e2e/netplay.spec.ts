@@ -504,6 +504,12 @@ test('commanders, tax, and commander damage reach the other board', async () => 
 
   await hostBoard.getByTestId('command-zone').getByTestId('card').click();
   await expect(seen).toHaveAttribute('data-zone', 'battlefield');
+  await expect(seen.getByTestId('commander-tax')).toHaveText('Tax +0');
+
+  // The tax is the host's to set, and the guest sees what they set.
+  await hostBoard
+    .getByRole('button', { name: `One cast more for ${DREADMAW}` })
+    .click();
   await expect(seen.getByTestId('commander-tax')).toHaveText('Tax +2');
   await expect(
     opponentField(guestBoard).getByTestId('commander-badge')

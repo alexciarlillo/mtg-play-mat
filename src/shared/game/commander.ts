@@ -36,18 +36,16 @@ export const commanderTax = (card: {
   card.isCommander ? (card.commanderCasts ?? 0) * COMMANDER_TAX_PER_CAST : 0;
 
 // Wraps another rule set so a commander keeps its identity and cast count
-// through every zone change, and each cast from the command zone counts
-// towards the tax. There is no stack, so the battlefield stands in for it.
+// through every zone change. The count is the player's to set: leaving the
+// command zone is not always a cast, and a cast is not always a move.
 export const withCommanderRules = (rules: Rules): Rules => ({
   onZoneChange: (card, from, to) => {
     const moved = rules.onZoneChange(card, from, to);
     if (!card.isCommander || !moved) return moved;
-    const casts = card.commanderCasts ?? 0;
     return {
       ...moved,
       isCommander: true,
-      commanderCasts:
-        from === 'command' && to === 'battlefield' ? casts + 1 : casts,
+      commanderCasts: card.commanderCasts ?? 0,
     };
   },
 });
