@@ -11,6 +11,24 @@ export const FIELD_HEIGHT = 640;
 // The narrower panel beside each opponent in a pod of three or four.
 export const POD_PANEL_WIDTH = 184;
 
+// Share of the board the row of opponents takes, by seat count. A field
+// scales to fit its width and never past a square, so the more seats
+// split the row the less of the height they can use, and a pod hands the
+// rest to the local field instead of holding on to half.
+const ROW_HEIGHTS = ['50%', '50%', '35%'];
+
+// A seat's panel is the tallest thing in the row, so the row keeps its
+// height even when a tall hand tray leaves little board — short of
+// taking more than its share of what is left.
+const POD_ROW_MIN_HEIGHT = 'min(320px, 60%)';
+
+export const opponentRowHeight = (
+  seats: number
+): { height: string; minHeight?: string } => ({
+  height: ROW_HEIGHTS[Math.min(seats, ROW_HEIGHTS.length) - 1],
+  minHeight: seats > 1 ? POD_ROW_MIN_HEIGHT : undefined,
+});
+
 // Logical width that holds every card of a battlefield, so a narrow
 // opponent field can shrink to show all of it. A tapped md card is about
 // 224 units wide.

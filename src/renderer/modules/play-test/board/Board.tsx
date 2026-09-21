@@ -39,7 +39,7 @@ import CommandZone from './CommandZone';
 import CounterDialog from './CounterDialog';
 import HandTray from './HandTray';
 import Library from './Library';
-import { SIDE_PANEL_WIDTH, stackOrder } from './layout';
+import { opponentRowHeight, SIDE_PANEL_WIDTH, stackOrder } from './layout';
 import LifeCounter from './LifeCounter';
 import OpponentSide from './OpponentSide';
 import { opponentCommanders, requestRoll, seatOrder } from './pod';
@@ -208,11 +208,12 @@ const Board = ({ store, opponent, hand }: Props) => {
           <div
             data-testid="opponents"
             className={classNames(
-              'grid h-1/2 min-h-0 bg-slate-900',
+              'grid min-h-0 bg-slate-900',
               // Alleys around the seats, so each pod board reads as one.
               pod && 'gap-x-3 px-1'
             )}
             style={{
+              ...opponentRowHeight(peers.length),
               gridTemplateColumns: `repeat(${peers.length}, minmax(0, 1fr))`,
             }}
           >

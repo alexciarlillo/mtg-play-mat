@@ -32,6 +32,58 @@ const pileTitles: Record<Pile, string> = {
 
 const piles: Pile[] = ['graveyard', 'exile'];
 
+const tile =
+  'flex w-full items-center justify-between gap-1 rounded bg-slate-800 px-1.5 py-1 text-[11px]';
+
+// A zone as its name and count alone. A pod seat's panel is 184px wide,
+// so card-sized piles would wrap into two rows and push the command
+// zone off the bottom of the panel.
+const ZoneCount = ({
+  label,
+  count,
+  testId,
+  activity,
+  onOpen,
+}: {
+  label: string;
+  count: number;
+  testId: string;
+  activity?: LibraryActivity | null;
+  onOpen?(): void;
+}) => {
+  const body = (
+    <>
+      <span className="truncate">{label}</span>
+      <span className="font-bold tabular-nums">{count}</span>
+    </>
+  );
+  return (
+    <div
+      data-testid={testId}
+      data-count={count}
+      className="relative flex min-w-0"
+    >
+      {onOpen ? (
+        <button
+          type="button"
+          aria-label={`Browse opponent's ${label.toLowerCase()}`}
+          className={classNames(tile, 'hover:bg-slate-600')}
+          onClick={onOpen}
+        >
+          {body}
+        </button>
+      ) : (
+        <div className={tile}>{body}</div>
+      )}
+      <LibraryActivityBadge
+        activity={activity}
+        compact
+        testId={`${testId}-activity`}
+      />
+    </div>
+  );
+};
+
 const OpponentCard = ({ card }: { card: CardView }) => {
   const { x, y } = card.position ?? { x: 0, y: 0 };
   return (
@@ -209,31 +261,58 @@ const OpponentSide = ({
           </div>
         )}
         {view && (
-          <div className="flex flex-wrap justify-between gap-1">
-            <Count
-              label="Library"
-              count={view.libraryCount}
-              testId="opponent-library"
-              back
-              activity={view.libraryActivity}
-            />
-            <Count
-              label="Hand"
-              count={view.handCount}
-              testId="opponent-hand-count"
-            />
-            {piles.map((zone) => (
-              <ZonePile
-                key={zone}
-                zone={zone}
-                label={pileTitles[zone]}
-                cards={view.zones[zone]}
-                onOpen={() => setOpen(zone)}
-                size="xs"
-                readOnly
-                testId={`opponent-${zone}`}
-              />
-            ))}
+          <div className="flex flex-col gap-1">
+            {compact ? (
+              <div className="grid grid-cols-2 gap-1">
+                <ZoneCount
+                  label="Library"
+                  count={view.libraryCount}
+                  testId="opponent-library"
+                  activity={view.libraryActivity}
+                />
+                <ZoneCount
+                  label="Hand"
+                  count={view.handCount}
+                  testId="opponent-hand-count"
+                />
+                {piles.map((zone) => (
+                  <ZoneCount
+                    key={zone}
+                    label={pileTitles[zone]}
+                    count={view.zones[zone].length}
+                    testId={`opponent-${zone}`}
+                    onOpen={() => setOpen(zone)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-wrap justify-between gap-1">
+                <Count
+                  label="Library"
+                  count={view.libraryCount}
+                  testId="opponent-library"
+                  back
+                  activity={view.libraryActivity}
+                />
+                <Count
+                  label="Hand"
+                  count={view.handCount}
+                  testId="opponent-hand-count"
+                />
+                {piles.map((zone) => (
+                  <ZonePile
+                    key={zone}
+                    zone={zone}
+                    label={pileTitles[zone]}
+                    cards={view.zones[zone]}
+                    onOpen={() => setOpen(zone)}
+                    size="xs"
+                    readOnly
+                    testId={`opponent-${zone}`}
+                  />
+                ))}
+              </div>
+            )}
             {hasCommanders(view) && (
               <CommandZone
                 view={view}

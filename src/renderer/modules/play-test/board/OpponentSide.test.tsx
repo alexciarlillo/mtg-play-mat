@@ -1,6 +1,6 @@
 import type { CardView, PublicView } from '@shared/game';
 import type { PeerInfo } from '@shared/net/protocol';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ContextMenuProvider } from '../../../ui/ContextMenuProvider';
@@ -48,11 +48,28 @@ const view: PublicView = {
   dummies: [],
 };
 
-const renderSide = (compact: boolean) => {
+const commander: CardView = {
+  ...card,
+  instanceId: 'p2:2',
+  ref: {
+    id: '9d5b2e2e-27f7-4f06-9b8a-2c3f2c5d1a11',
+    name: 'Colossal Dreadmaw',
+    typeLine: 'Creature \u2014 Dinosaur',
+    faces: [
+      { name: 'Colossal Dreadmaw', typeLine: 'Creature \u2014 Dinosaur' },
+    ],
+  },
+  zone: 'command',
+  position: null,
+  tapped: false,
+  isCommander: true,
+};
+
+const renderSide = (compact: boolean, own: PublicView = view) => {
   Object.assign(window, { api: { dispatch: vi.fn(() => Promise.resolve()) } });
   return render(
     <ContextMenuProvider>
-      <OpponentSide peer={peer} view={view} seat={0} compact={compact} />
+      <OpponentSide peer={peer} view={own} seat={0} compact={compact} />
     </ContextMenuProvider>
   );
 };
@@ -72,6 +89,42 @@ describe('OpponentSide', () => {
     const name = screen.getByTestId('opponent-name');
     expect(name).toHaveTextContent('Mira Castellan');
     expect(name.className).not.toContain('truncate');
+  });
+
+  it('drops the card-sized piles in a pod, keeping counts and browsing', () => {
+    const { unmount } = renderSide(true);
+    const graveyard = screen.getByTestId('opponent-graveyard');
+    expect(graveyard.querySelector('.aspect-card')).toBeNull();
+    expect(
+      screen.getByRole('button', { name: "Browse opponent's graveyard" })
+    ).toBeInTheDocument();
+    expect(screen.getByTestId('opponent-library')).toHaveAttribute(
+      'data-count',
+      '53'
+    );
+    expect(screen.getByTestId('opponent-hand-count')).toHaveAttribute(
+      'data-count',
+      '7'
+    );
+
+    unmount();
+    renderSide(false);
+    expect(
+      screen.getByTestId('opponent-graveyard').querySelector('.aspect-card')
+    ).not.toBeNull();
+  });
+
+  it('shows the command zone and its tax in a pod', () => {
+    const commanderView: PublicView = {
+      ...view,
+      zones: { ...view.zones, command: [commander] },
+    };
+    renderSide(true, commanderView);
+    const zone = screen.getByTestId('opponent-command');
+    expect(zone).toHaveTextContent('Command zone');
+    expect(within(zone).getByTestId('commander-tax')).toHaveTextContent(
+      'Tax +0'
+    );
   });
 
   it('frames a pod seat so it reads on its own', () => {

@@ -2,7 +2,13 @@ import type { PublicView } from '@shared/game';
 import type { OpponentState } from '@shared/net/remoteViews';
 import { defaultSettings, type Settings } from '@shared/settings';
 import type { BoardMenuCommand } from '@shared/types/playTest';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -115,6 +121,33 @@ describe('Board turn tracking', () => {
 
     act(() => pushSettings({ ...defaultSettings, turnTracking: true }));
     expect(screen.getByTestId('turn-panel')).toBeInTheDocument();
+  });
+});
+
+describe('Board opponent row', () => {
+  const podOf = (names: string[]): OpponentState => ({
+    ...opponent,
+    peers: names.map((name, seat) => ({
+      info: { playerId: `p${seat + 2}`, name, appVersion: '0.0.0' },
+      seat: seat + 1,
+      view: { ...view, playerId: `p${seat + 2}`, name },
+    })),
+  });
+
+  it('gives a duel half the board and a pod of three less', async () => {
+    renderBoard(defaultSettings, view, podOf(['Bob']));
+    await act(async () => {});
+    const duel = screen.getByTestId('opponents');
+    expect(duel.style.height).toBe('50%');
+    expect(duel.style.minHeight).toBe('');
+
+    cleanup();
+    renderBoard(defaultSettings, view, podOf(['Bob', 'Carol', 'Dave']));
+    await act(async () => {});
+    const pod = screen.getByTestId('opponents');
+    expect(Number.parseInt(pod.style.height, 10)).toBeLessThan(50);
+    // A seat's panel still sets the floor when the board is short.
+    expect(pod.style.minHeight).toContain('320px');
   });
 });
 
