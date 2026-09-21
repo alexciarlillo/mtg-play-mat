@@ -7,6 +7,7 @@ import {
 } from 'electron';
 
 import { type GameMenuCommand, gameMenuTemplate } from './gameMenu';
+import { MAX_FAKE_PEERS } from './modules/netplay/fakeOpponents';
 
 interface DarwinMenuItemConstructorOptions extends MenuItemConstructorOptions {
   selector?: string;
@@ -14,10 +15,13 @@ interface DarwinMenuItemConstructorOptions extends MenuItemConstructorOptions {
 }
 
 export interface MenuActions {
+  fakeOpponents(): number;
+  fakeOpponentsEnabled(): boolean;
   openSamplePlayTest(): void;
   openSettings(): void;
   playTestOpen(): boolean;
   runGameCommand(command: GameMenuCommand): void;
+  setFakeOpponents(count: number): void;
 }
 
 const isDebug = !app.isPackaged || process.env.DEBUG_PROD === 'true';
@@ -146,6 +150,7 @@ export default class MenuBuilder {
         },
         { type: 'separator' },
         this.samplePlayTestItem(),
+        this.fakeOpponentsItem(),
       ],
     };
     const subMenuViewProd: MenuItemConstructorOptions = {
@@ -239,6 +244,7 @@ export default class MenuBuilder {
               },
               { type: 'separator' },
               this.samplePlayTestItem(),
+              this.fakeOpponentsItem(),
             ]
           : [
               {
@@ -271,6 +277,27 @@ export default class MenuBuilder {
       click: () => {
         this.actions.openSamplePlayTest();
       },
+    };
+  }
+
+  // Synthetic opponents render as real peers do, so the pod layout can
+  // be judged without connecting anyone. Menus are immutable once built,
+  // so a change rebuilds the menu to show the count that stuck.
+  fakeOpponentsItem(): MenuItemConstructorOptions {
+    const current = this.actions.fakeOpponents();
+    return {
+      id: 'fake-opponents',
+      label: 'Fake Opponents',
+      enabled: this.actions.fakeOpponentsEnabled(),
+      submenu: Array.from({ length: MAX_FAKE_PEERS + 1 }, (_, count) => ({
+        id: `fake-opponents-${count}`,
+        label: count === 0 ? 'None' : String(count),
+        type: 'radio' as const,
+        checked: count === current,
+        click: () => {
+          this.actions.setFakeOpponents(count);
+        },
+      })),
     };
   }
 

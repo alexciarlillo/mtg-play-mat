@@ -17,6 +17,7 @@ import MenuBuilder from './menu';
 import createCardDataHandlers from './modules/card-data/cardDataHandlers';
 import createCollectionHandlers from './modules/collection/collectionHandlers';
 import createDeckHandlers from './modules/decks/deckHandlers';
+import type Netplay from './modules/netplay/Netplay';
 import ProfileStore from './modules/netplay/ProfileStore';
 import { setupNetplay } from './modules/netplay/setupNetplay';
 import PlayTest from './modules/play-test/PlayTest';
@@ -39,11 +40,23 @@ let appWindow: BrowserWindow | null = null;
 
 let menu: MenuBuilder | null = null;
 
+// The app window, and so the menu, can exist before netplay is set up,
+// so the menu reads the instance through this holder instead of taking
+// it as a parameter.
+let netplay: Netplay | null = null;
+
 const testHooksEnabled = process.env.MTG_PLAY_MAT_TEST_HOOKS === '1';
 
 // Tests point this at a local fixture server. Without one, tests skip the
 // launch check so they never pull the real ~80 MB bulk file.
 const bulkDataUrlOverride = process.env.MTG_PLAY_MAT_BULK_DATA_URL;
+
+// Fake opponents are refused once a session is live, so the menu greys
+// out rather than offering a click it cannot honour.
+const fakeOpponentsAllowed = () => {
+  const state = netplay?.netState;
+  return state !== undefined && state.role === null && state.phase === 'idle';
+};
 
 const createAppWindow = (playTest: PlayTest) => {
   const window = createWindow({ html: 'app.html', width: 1500, height: 500 });
@@ -58,10 +71,17 @@ const createAppWindow = (playTest: PlayTest) => {
   });
 
   menu = new MenuBuilder(window, {
+    fakeOpponents: () => netplay?.fakeOpponents ?? 0,
+    fakeOpponentsEnabled: fakeOpponentsAllowed,
     openSamplePlayTest: playTest.openSampleDeck,
     openSettings: () => openSettings(playTest),
     playTestOpen: () => playTest.isOpen,
     runGameCommand: playTest.runMenuCommand,
+    setFakeOpponents: (count) => {
+      netplay?.setFakeOpponents(count);
+      // The count may have been refused, so rebuild from the real one.
+      menu?.refresh();
+    },
   });
   menu.buildMenu();
   return window;
@@ -107,6 +127,7 @@ const start = (onDeepLink: ReturnType<typeof watchDeepLinks>) => {
     getAppWindow: () => appWindow,
     testHooks: testHooksEnabled,
   });
+  netplay = online.netplay;
 
   const cardData = new CardDataService({
     cardDb,
