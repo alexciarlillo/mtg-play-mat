@@ -2,7 +2,7 @@ import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 
 import { CARD_SCHEME } from '@shared/cardImages';
-import { app, BrowserWindow, net, protocol } from 'electron';
+import { app, BrowserWindow, protocol } from 'electron';
 
 import CardDataService from './cardData/CardDataService';
 import runIngestProcess from './cardData/runIngestProcess';
@@ -125,7 +125,10 @@ const start = (onDeepLink: ReturnType<typeof watchDeepLinks>) => {
     createCardImageHandler({
       cacheDir: imageCacheDir(),
       lookupImage: cardDb.getFaceImage,
-      fetch: (url) => net.fetch(url, { headers: scryfallHeaders(appVersion) }),
+      // Node's fetch, not Electron's: net.fetch decodes response headers
+      // as UTF-8, and Scryfall's content-disposition carries a raw star
+      // for promo printings, which throws past our catch and kills main.
+      fetch: (url) => fetch(url, { headers: scryfallHeaders(appVersion) }),
     })
   );
 
