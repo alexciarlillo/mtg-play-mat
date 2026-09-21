@@ -10,7 +10,7 @@ import { hasCommanders } from './commanders';
 import { CommanderDamageTaken } from './CommanderTracker';
 import CommandZone from './CommandZone';
 import {
-  fieldWidth,
+  fieldBounds,
   POD_PANEL_WIDTH,
   SIDE_PANEL_WIDTH,
   stackOrder,
@@ -104,13 +104,21 @@ const OpponentSide = ({
   showTurn?: boolean;
 }) => {
   const [open, setOpen] = useState<Pile | null>(null);
+  const bounds = view ? fieldBounds(view.zones.battlefield) : null;
 
   return (
     <div
       data-testid="opponent-side"
       data-player-name={peer.name}
       data-seat={seat ?? undefined}
-      className="flex h-full min-w-0 min-h-0 border-b-4 border-slate-900 bg-stone-500"
+      className={classNames(
+        'flex h-full min-w-0 min-h-0 bg-stone-500',
+        // A pod puts seats side by side, so each one needs an edge of its
+        // own or its field reads as the next seat's.
+        compact
+          ? 'overflow-hidden rounded-lg ring-2 ring-slate-600'
+          : 'border-b-4 border-slate-900'
+      )}
     >
       <div
         className={classNames(
@@ -123,10 +131,11 @@ const OpponentSide = ({
           size={compact ? 'xs' : 'sm'}
           testId="opponent-reveal-panel"
         />
-        {view ? (
+        {view && bounds ? (
           <ScaledField
             testId="opponent-battlefield"
-            fitWidth={fieldWidth(view.zones.battlefield)}
+            fitWidth={bounds.width}
+            offsetX={bounds.offsetX}
           >
             {() =>
               stackOrder(view.zones.battlefield).map((card) => (
@@ -151,12 +160,19 @@ const OpponentSide = ({
         <div className="flex items-center justify-between gap-2">
           <div
             data-testid="opponent-name"
-            className="truncate text-sm font-semibold uppercase tracking-wide"
+            className={classNames(
+              'min-w-0 font-semibold uppercase tracking-wide',
+              // Names are how seats are told apart, so a pod wraps rather
+              // than cutting one off after eight characters.
+              compact
+                ? 'flex-1 break-words text-xs leading-tight'
+                : 'truncate text-sm'
+            )}
           >
             {peer.name}
           </div>
           {view && (
-            <div className="text-right">
+            <div className="shrink-0 text-right">
               <span className="mr-1 text-xs uppercase text-slate-400">
                 Life
               </span>

@@ -207,7 +207,11 @@ const Board = ({ store, opponent, hand }: Props) => {
         {duel && (
           <div
             data-testid="opponents"
-            className="grid h-1/2 min-h-0 gap-x-1 bg-slate-900"
+            className={classNames(
+              'grid h-1/2 min-h-0 bg-slate-900',
+              // Alleys around the seats, so each pod board reads as one.
+              pod && 'gap-x-3 px-1'
+            )}
             style={{
               gridTemplateColumns: `repeat(${peers.length}, minmax(0, 1fr))`,
             }}

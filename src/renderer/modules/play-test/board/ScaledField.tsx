@@ -9,14 +9,17 @@ interface Box {
 
 // Fills its parent and lays children out in logical battlefield units,
 // scaled down to fit when the space is shorter than a full field, or
-// narrower than fitWidth logical units.
+// narrower than fitWidth logical units. offsetX shifts the contents
+// right, for fields whose leftmost card overhangs its own position.
 const ScaledField = ({
   testId,
   fitWidth,
+  offsetX = 0,
   children,
 }: {
   testId: string;
   fitWidth?: number;
+  offsetX?: number;
   children(scale: number): ReactNode;
 }) => {
   const outer = useRef<HTMLDivElement>(null);
@@ -52,7 +55,14 @@ const ScaledField = ({
           transform: scale === 1 ? undefined : `scale(${scale})`,
         }}
       >
-        {children(scale)}
+        <div
+          className="absolute inset-0"
+          style={{
+            transform: offsetX === 0 ? undefined : `translateX(${offsetX}px)`,
+          }}
+        >
+          {children(scale)}
+        </div>
       </div>
     </div>
   );

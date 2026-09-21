@@ -17,11 +17,28 @@ export const POD_PANEL_WIDTH = 184;
 const CARD_EXTENT = 230;
 const MIN_FIT_WIDTH = 640;
 
-export const fieldWidth = (cards: { position: Position | null }[]) =>
-  Math.max(
-    MIN_FIT_WIDTH,
-    ...cards.map((card) => (card.position?.x ?? 0) + CARD_EXTENT)
-  );
+// A tapped card turns about its centre, so its box reaches this far left
+// of the card's own x. Reserving it keeps a tapped card at x = 0 inside
+// the field instead of over the edge of the window.
+const TAP_EXTENT = 32;
+
+export interface FieldBounds {
+  // Logical units the field's contents shift right by, so that the
+  // leftmost card's turned box starts at the field's own left edge.
+  offsetX: number;
+  width: number;
+}
+
+export const fieldBounds = (
+  cards: { position: Position | null }[]
+): FieldBounds => {
+  const xs = cards.map((card) => card.position?.x ?? 0);
+  const offsetX = TAP_EXTENT - Math.min(0, ...xs);
+  return {
+    offsetX,
+    width: Math.max(MIN_FIT_WIDTH, offsetX + Math.max(0, ...xs) + CARD_EXTENT),
+  };
+};
 
 export const fieldScale = (height: number) =>
   height > 0 ? Math.min(1, height / FIELD_HEIGHT) : 1;
