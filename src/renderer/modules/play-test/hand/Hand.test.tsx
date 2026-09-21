@@ -108,6 +108,13 @@ describe('Hand', () => {
     });
   });
 
+  it('keeps the mulligan controls inside the title bar', () => {
+    renderHand(viewOf());
+    expect(screen.getByTestId('hand-title')).toContainElement(
+      screen.getByTestId('mulligan-bar')
+    );
+  });
+
   it('mulligans from the bar and the M key', () => {
     renderHand(viewOf());
     fireEvent.click(screen.getByRole('button', { name: 'Mulligan' }));

@@ -95,6 +95,12 @@ const libraryDialogs: (Dialog | null)[] = ['lookCount', 'look', 'search'];
 const barButton =
   'rounded px-3 py-0.5 text-sm font-semibold disabled:opacity-40 [-webkit-app-region:no-drag]';
 
+const mulliganButton =
+  'rounded px-2 text-xs font-semibold disabled:opacity-40 [-webkit-app-region:no-drag]';
+
+const mulliganBar =
+  'flex shrink-0 items-center gap-2 whitespace-nowrap rounded bg-amber-200 px-2 py-0.5 text-xs';
+
 interface MulliganBarProps {
   view: PrivateView;
   choosing: boolean;
@@ -104,6 +110,9 @@ interface MulliganBarProps {
   onCancel(): void;
 }
 
+// The mulligan controls sit in the title bar rather than in a strip of
+// their own so the cards never move while the player is reading the hand
+// they are deciding on.
 const MulliganBar = ({
   view,
   choosing,
@@ -116,17 +125,14 @@ const MulliganBar = ({
 
   if (choosing) {
     return (
-      <div
-        data-testid="mulligan-bar"
-        className="flex items-center gap-2 bg-amber-200 px-3 py-1 text-sm"
-      >
+      <div data-testid="mulligan-bar" className={mulliganBar}>
         <span className="font-semibold">
           Choose {owed} card{owed === 1 ? '' : 's'} to put on the bottom (
           {chosen.length}/{owed})
         </span>
         <button
           type="button"
-          className={`${barButton} bg-slate-800 text-white`}
+          className={`${mulliganButton} bg-slate-800 text-white`}
           disabled={chosen.length !== owed}
           onClick={onConfirm}
         >
@@ -134,7 +140,7 @@ const MulliganBar = ({
         </button>
         <button
           type="button"
-          className={`${barButton} ring-1 ring-slate-600`}
+          className={`${mulliganButton} ring-1 ring-slate-600`}
           onClick={onCancel}
         >
           Back
@@ -144,23 +150,20 @@ const MulliganBar = ({
   }
 
   return (
-    <div
-      data-testid="mulligan-bar"
-      className="flex items-center gap-2 bg-amber-200 px-3 py-1 text-sm"
-    >
+    <div data-testid="mulligan-bar" className={mulliganBar}>
       <span className="font-semibold">
         Opening hand · Mulligans {view.mulligans}
       </span>
       <button
         type="button"
-        className={`${barButton} bg-emerald-700 text-white`}
+        className={`${mulliganButton} bg-emerald-700 text-white`}
         onClick={onKeep}
       >
         Keep
       </button>
       <button
         type="button"
-        className={`${barButton} bg-slate-800 text-white`}
+        className={`${mulliganButton} bg-slate-800 text-white`}
         onClick={() => dispatch({ type: 'mulligan', playerId: view.playerId })}
       >
         Mulligan
@@ -274,7 +277,7 @@ const Hand = ({ store, dock }: Props) => {
           { '[-webkit-app-region:drag]': !docked }
         )}
       >
-        <div className="flex gap-1">
+        <div className="flex shrink-0 gap-1">
           <button
             type="button"
             className={titleButton}
@@ -307,11 +310,23 @@ const Hand = ({ store, dock }: Props) => {
             Reveal hand
           </button>
         </div>
-        <span>
-          Hand {view ? `(${view.hand.length})` : ''} · Library{' '}
-          {view?.libraryCount ?? 0}
-        </span>
-        <div className="flex gap-1">
+        <div className="flex min-w-0 items-center gap-2">
+          {!dock?.collapsed && view && !view.keptHand && (
+            <MulliganBar
+              view={view}
+              choosing={selecting}
+              chosen={chosen}
+              onKeep={keep}
+              onConfirm={confirm}
+              onCancel={() => setChoosing(false)}
+            />
+          )}
+          <span className="truncate">
+            Hand {view ? `(${view.hand.length})` : ''} · Library{' '}
+            {view?.libraryCount ?? 0}
+          </span>
+        </div>
+        <div className="flex shrink-0 gap-1">
           <UndoButtons className={titleButton} />
           {!docked && (
             <button
@@ -345,16 +360,6 @@ const Hand = ({ store, dock }: Props) => {
             Hide
           </button>
         </div>
-      )}
-      {!dock?.collapsed && view && !view.keptHand && (
-        <MulliganBar
-          view={view}
-          choosing={selecting}
-          chosen={chosen}
-          onKeep={keep}
-          onConfirm={confirm}
-          onCancel={() => setChoosing(false)}
-        />
       )}
       {!dock?.collapsed && (
         <div
