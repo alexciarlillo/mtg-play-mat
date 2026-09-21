@@ -134,20 +134,26 @@ describe('Board opponent row', () => {
     })),
   });
 
-  it('gives a duel half the board and a pod of three less', async () => {
+  it('gives a duel half the board and a pod only a panel of it', async () => {
     renderBoard(defaultSettings, view, podOf(['Bob']));
     await act(async () => {});
     const duel = screen.getByTestId('opponents');
     expect(duel.style.height).toBe('50%');
     expect(duel.style.minHeight).toBe('');
 
-    cleanup();
-    renderBoard(defaultSettings, view, podOf(['Bob', 'Carol', 'Dave']));
-    await act(async () => {});
-    const pod = screen.getByTestId('opponents');
-    expect(Number.parseInt(pod.style.height, 10)).toBeLessThan(50);
-    // A seat's panel still sets the floor when the board is short.
-    expect(pod.style.minHeight).toContain('320px');
+    // Every pod takes the same height, whatever the seat count: the
+    // panel needs it and a seat's field cannot use more than its width.
+    for (const names of [
+      ['Bob', 'Carol'],
+      ['Bob', 'Carol', 'Dave'],
+    ]) {
+      cleanup();
+      renderBoard(defaultSettings, view, podOf(names));
+      await act(async () => {});
+      const pod = screen.getByTestId('opponents');
+      expect(pod.style.height).toContain('320px');
+      expect(pod.style.minHeight).toBe('');
+    }
   });
 });
 

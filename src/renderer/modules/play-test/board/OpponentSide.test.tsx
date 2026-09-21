@@ -127,13 +127,15 @@ describe('OpponentSide', () => {
     );
   });
 
-  it('frames a pod seat so it reads on its own', () => {
+  it('frames a pod seat so it reads on its own, with square corners', () => {
     const { unmount } = renderSide(true);
-    expect(screen.getByTestId('opponent-side').className).toContain('rounded');
+    const seat = screen.getByTestId('opponent-side').className;
+    expect(seat).toContain('ring-inset');
+    expect(seat).not.toContain('rounded');
     unmount();
     renderSide(false);
-    expect(screen.getByTestId('opponent-side').className).not.toContain(
-      'rounded'
-    );
+    const duel = screen.getByTestId('opponent-side').className;
+    expect(duel).not.toContain('ring');
+    expect(duel).not.toContain('rounded');
   });
 });
