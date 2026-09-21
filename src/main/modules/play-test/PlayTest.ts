@@ -150,6 +150,12 @@ export default class PlayTest {
     return this.state;
   }
 
+  // The format decides starting life, so anything staging a game beside
+  // this one needs it.
+  get deckFormat(): DeckFormat {
+    return this.deck.format;
+  }
+
   get boardWindow(): BrowserWindow | null {
     return this.board;
   }

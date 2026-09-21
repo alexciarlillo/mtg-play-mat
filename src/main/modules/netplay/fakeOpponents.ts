@@ -4,8 +4,10 @@ import {
   type GameState,
   getPlayer,
   type InstanceId,
+  nextRandom,
   OPENING_HAND_SIZE,
   type PlayerId,
+  type Position,
   publicView,
   reduce,
   startingLife,
@@ -31,12 +33,29 @@ const fakePlayers: FakePlayer[] = [
 
 export const MAX_FAKE_PEERS = fakePlayers.length;
 
-// Enough to fill a board without emptying the hand.
-const PERMANENTS_PLAYED = 5;
+// A mid-game board: two rows of permanents with cards still in hand.
+const LANDS_PLAYED = 5;
 
-const TAPPED_PERMANENTS = 2;
+const CREATURES_PLAYED = 4;
 
-const TURNS_PLAYED = 2;
+// Lands pay for the spells, so those are the ones left tapped.
+const TAPPED_LANDS = 3;
+
+const TURNS_PLAYED = 5;
+
+// The battlefield's logical geometry. It belongs to the renderer's board
+// layout, which main must not import, so the numbers are restated here.
+const FIELD_HEIGHT = 640;
+const FIELD_WIDTH = 640;
+const CARD_EXTENT = 230;
+
+// Creatures in front of the lands, both rows clear of the field's edges.
+const CREATURE_ROW_Y = 40;
+const LAND_ROW_Y = FIELD_HEIGHT - CARD_EXTENT - 50;
+
+// How far a card may sit off its row, so a board reads as hand-placed
+// rather than as a grid.
+const JITTER = 18;
 
 // Nothing on the wire carries this, so it only has to be recognisable
 // if it ever surfaces in a peer list.
@@ -47,14 +66,35 @@ const FAKE_APP_VERSION = '0.0.0-fake';
 const seatSeed = (seed: number, index: number) =>
   (Math.floor(seed) + index * 0x9e3779b1) >>> 0;
 
-const isPermanent = (state: GameState, id: InstanceId) => {
-  const typeLine = state.cards[id]?.ref.typeLine ?? '';
-  return typeLine.includes('Land') || typeLine.includes('Creature');
+const clamp = (value: number, max: number) => Math.max(0, Math.min(max, value));
+
+// Salted so the two axes of a card, and neighbouring cards, get
+// unrelated offsets rather than the same one.
+const jitter = (seed: number, index: number, axis: number) => {
+  const salt = (seed + index * 0x85ebca6b + axis * 0xc2b2ae35) >>> 0;
+  return (nextRandom(salt)[0] - 0.5) * JITTER;
 };
 
-const handPermanents = (state: GameState, playerId: PlayerId): InstanceId[] =>
+// A row spread across the field, wide enough that a full row of lands
+// only overlaps the way a real player's fanned-out row does.
+const rowPositions = (count: number, y: number, seed: number): Position[] => {
+  const span = FIELD_WIDTH - CARD_EXTENT;
+  const step = count > 1 ? span / (count - 1) : 0;
+  return Array.from({ length: count }, (_, index) => ({
+    x: Math.round(clamp(index * step + jitter(seed, index, 0), span)),
+    y: Math.round(
+      clamp(y + jitter(seed, index, 1), FIELD_HEIGHT - CARD_EXTENT)
+    ),
+  }));
+};
+
+const handMatching = (
+  state: GameState,
+  playerId: PlayerId,
+  match: (typeLine: string) => boolean
+): InstanceId[] =>
   (getPlayer(state, playerId)?.zones.hand ?? []).filter((id) =>
-    isPermanent(state, id)
+    match(state.cards[id]?.ref.typeLine ?? '')
   );
 
 // Dealt and played through the real reducer so the resulting view is the
@@ -62,7 +102,8 @@ const handPermanents = (state: GameState, playerId: PlayerId): InstanceId[] =>
 const dealtGame = (
   playerId: PlayerId,
   name: string,
-  seed: number
+  seed: number,
+  life: number
 ): GameState => {
   const library = buildSampleDeck();
   const leader = library.find((ref) => ref.name === 'Colossal Dreadmaw');
@@ -76,7 +117,7 @@ const dealtGame = (
           name,
           deck: library,
           command: leader ? [leader] : [],
-          life: startingLife('commander'),
+          life,
         },
       ],
     },
@@ -92,14 +133,31 @@ const dealtGame = (
   ];
   const kept = opening.reduce(reduce, emptyGame());
 
-  const played = handPermanents(kept, playerId).slice(0, PERMANENTS_PLAYED);
+  const lands = handMatching(kept, playerId, (type) =>
+    type.includes('Land')
+  ).slice(0, LANDS_PLAYED);
+  const creatures = handMatching(
+    kept,
+    playerId,
+    (type) => type.includes('Creature') && !type.includes('Land')
+  ).slice(0, CREATURES_PLAYED);
+  // Placed deliberately rather than left to the engine's cascade, which
+  // would pile a seat's whole board into one overlapping corner stack.
+  const creatureRow = rowPositions(creatures.length, CREATURE_ROW_Y, seed);
+  const landRow = rowPositions(lands.length, LAND_ROW_Y, seed + 1);
+  const played: [InstanceId, Position][] = [
+    ...creatures.map((id, i): [InstanceId, Position] => [id, creatureRow[i]]),
+    ...lands.map((id, i): [InstanceId, Position] => [id, landRow[i]]),
+  ];
+
   const board: GameAction[] = [
-    ...played.map((instanceId): GameAction => ({
+    ...played.map(([instanceId, position]): GameAction => ({
       type: 'moveCard',
       instanceId,
       to: 'battlefield',
+      position,
     })),
-    ...played.slice(0, TAPPED_PERMANENTS).map((instanceId): GameAction => ({
+    ...lands.slice(0, TAPPED_LANDS).map((instanceId): GameAction => ({
       type: 'tap',
       instanceId,
     })),
@@ -108,9 +166,9 @@ const dealtGame = (
   return board.reduce(reduce, kept);
 };
 
-const fakePeer = (index: number, seed: number): RemotePeer => {
+const fakePeer = (index: number, seed: number, life: number): RemotePeer => {
   const { playerId, name } = fakePlayers[index];
-  const state = dealtGame(playerId, name, seatSeed(seed, index));
+  const state = dealtGame(playerId, name, seatSeed(seed, index), life);
   const view = publicView(state, playerId);
   const info: PeerInfo = { playerId, name, appVersion: FAKE_APP_VERSION };
   return {
@@ -133,7 +191,14 @@ const seatCount = (count: number) => {
     : 0;
 };
 
-// Synthetic opponents for testing pod layouts. The same seed and count
-// always give the same peers; each seat gets its own shuffle.
-export const fakePeers = (count: number, seed: number): RemotePeer[] =>
-  Array.from({ length: seatCount(count) }, (_, index) => fakePeer(index, seed));
+// Synthetic opponents for testing pod layouts. The same seed, count and
+// life always give the same peers; each seat gets its own shuffle. Life
+// defaults to constructed's, the format a sample play test runs.
+export const fakePeers = (
+  count: number,
+  seed: number,
+  life: number = startingLife('constructed')
+): RemotePeer[] =>
+  Array.from({ length: seatCount(count) }, (_, index) =>
+    fakePeer(index, seed, life)
+  );

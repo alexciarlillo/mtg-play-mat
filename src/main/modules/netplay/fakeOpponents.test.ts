@@ -4,6 +4,14 @@ import { fakePeers, MAX_FAKE_PEERS } from './fakeOpponents';
 
 const counts = [1, 2, 3];
 
+// The battlefield's logical field, as the renderer's board layout sizes
+// it. A card reaches this far right and down from its position.
+const FIELD = 640;
+const CARD_EXTENT = 230;
+
+const battlefield = (peer: ReturnType<typeof fakePeers>[number]) =>
+  peer.view!.zones.battlefield;
+
 describe('fakePeers', () => {
   it.each(counts)('returns %i well-formed peers', (count) => {
     const peers = fakePeers(count, 7);
@@ -46,6 +54,49 @@ describe('fakePeers', () => {
     expect(view.commanderDamage).toEqual([]);
     expect(view.dummies).toEqual([]);
     expect(view.revealed).toBeNull();
+  });
+
+  it('starts every fake on the life it is given', () => {
+    fakePeers(MAX_FAKE_PEERS, 7, 30).forEach((peer) => {
+      expect(peer.view!.life).toBe(30);
+    });
+  });
+
+  it('defaults to constructed life rather than commander', () => {
+    expect(fakePeers(1, 7)[0].view!.life).toBe(20);
+  });
+
+  it('spreads a board out instead of stacking it on one position', () => {
+    const cards = battlefield(fakePeers(1, 7)[0]);
+    const places = new Set(
+      cards.map((card) => `${card.position?.x},${card.position?.y}`)
+    );
+
+    expect(cards.length).toBeGreaterThan(5);
+    expect(places.size).toBe(cards.length);
+  });
+
+  it('uses both rows and most of the field width', () => {
+    const cards = battlefield(fakePeers(1, 7)[0]);
+    const xs = cards.map((card) => card.position!.x);
+    const ys = cards.map((card) => card.position!.y);
+
+    expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThan(FIELD / 2);
+    expect(
+      new Set(ys.map((y) => (y > FIELD / 2 ? 'back' : 'front'))).size
+    ).toBe(2);
+  });
+
+  it('keeps every card inside the logical field', () => {
+    fakePeers(MAX_FAKE_PEERS, 7).forEach((peer) => {
+      battlefield(peer).forEach(({ position }) => {
+        expect(position).not.toBeNull();
+        expect(position!.x).toBeGreaterThanOrEqual(0);
+        expect(position!.y).toBeGreaterThanOrEqual(0);
+        expect(position!.x).toBeLessThanOrEqual(FIELD - CARD_EXTENT);
+        expect(position!.y).toBeLessThanOrEqual(FIELD - CARD_EXTENT);
+      });
+    });
   });
 
   it('namespaces instance ids with the peer that owns them', () => {

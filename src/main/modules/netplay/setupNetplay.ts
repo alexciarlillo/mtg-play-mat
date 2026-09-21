@@ -104,6 +104,7 @@ export const setupNetplay = ({
     appVersion: app.getVersion(),
     profile: () => profile.profile,
     localView: playTest.currentPublicView,
+    localFormat: () => playTest.deckFormat,
     pushState: (state) => sendEvent(getAppWindow(), 'netState', state),
     pushOpponent: (state) => {
       growForTable(playTest.boardWindow, state.peers.length);

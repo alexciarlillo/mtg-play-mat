@@ -1,6 +1,6 @@
 import { randomInt } from 'node:crypto';
 
-import type { PlayerId, PublicView } from '@shared/game';
+import { type PlayerId, type PublicView, startingLife } from '@shared/game';
 import {
   CodeError,
   extractCode,
@@ -40,6 +40,7 @@ import {
   type RemotePeer,
   RemoteViews,
 } from '@shared/net/remoteViews';
+import type { DeckFormat } from '@shared/types/decks';
 
 import type { RequestHandlers } from '../../ipc';
 import { fakePeers } from './fakeOpponents';
@@ -60,6 +61,8 @@ export interface NetplayDeps {
   appVersion: string;
   profile(): { playerId: string; displayName: string };
   localView(): PublicView | null;
+  // The local game's format, so fake opponents start on its life total.
+  localFormat?(): DeckFormat;
   pushState(state: NetState): void;
   pushOpponent(state: OpponentState): void;
   // How long the host waits for a channel after pasting a reply.
@@ -217,7 +220,8 @@ export default class Netplay {
   // outright while a session is live, so a real pod never sees them.
   setFakeOpponents = (count: number): boolean => {
     if (this.state.role !== null || this.state.phase !== 'idle') return false;
-    const next = fakePeers(count, FAKE_SEED);
+    const format = this.deps.localFormat?.() ?? 'constructed';
+    const next = fakePeers(count, FAKE_SEED, startingLife(format));
     if (next.length === 0 && this.fakes.length === 0) return true;
     this.fakes = next;
     this.fakeRev += 1;
