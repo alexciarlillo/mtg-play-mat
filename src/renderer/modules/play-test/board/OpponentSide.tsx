@@ -165,12 +165,10 @@ const OpponentSide = ({
       data-seat={seat ?? undefined}
       className={classNames(
         'flex h-full min-w-0 min-h-0 bg-stone-500',
-        // A pod puts seats side by side, so each one needs an edge of its
-        // own or its field reads as the next seat's. The frame sits
-        // inside the seat so the alley beside it stays a clean gutter.
-        compact
-          ? 'overflow-hidden ring-4 ring-inset ring-slate-400'
-          : 'border-b-4 border-slate-900'
+        // A pod tells its seats apart by the dark alleys between them, so
+        // the seat itself carries no frame; it only clips a field that
+        // would otherwise spill into its neighbour.
+        compact ? 'overflow-hidden' : 'border-b-4 border-slate-900'
       )}
     >
       <div

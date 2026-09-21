@@ -127,11 +127,12 @@ describe('OpponentSide', () => {
     );
   });
 
-  it('frames a pod seat so it reads on its own, with square corners', () => {
+  it('leaves a pod seat unframed, with square corners', () => {
     const { unmount } = renderSide(true);
     const seat = screen.getByTestId('opponent-side').className;
-    expect(seat).toContain('ring-inset');
+    expect(seat).not.toContain('ring');
     expect(seat).not.toContain('rounded');
+    expect(seat).toContain('overflow-hidden');
     unmount();
     renderSide(false);
     const duel = screen.getByTestId('opponent-side').className;
