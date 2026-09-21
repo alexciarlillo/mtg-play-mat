@@ -35,9 +35,14 @@ import {
   type RosterEntry,
   VersionError,
 } from '@shared/net/protocol';
-import { type OpponentState, RemoteViews } from '@shared/net/remoteViews';
+import {
+  type OpponentState,
+  type RemotePeer,
+  RemoteViews,
+} from '@shared/net/remoteViews';
 
 import type { RequestHandlers } from '../../ipc';
+import { fakePeers } from './fakeOpponents';
 
 // Where the peer connections actually live (a hidden renderer window).
 export interface Transport {
@@ -132,6 +137,9 @@ const roll = (request: RollRequest, random: (max: number) => number) =>
 
 const listNames = (names: string[]) => names.join(', ');
 
+// Fixed, so the same fake pod comes back every time it is asked for.
+const FAKE_SEED = 20_260_921;
+
 // The lobby and the wire protocol. Main is the hub: local view changes go
 // out through the transport, and peer messages come back here, are
 // checked, and only then reach the board. A pod is a star: guests link to
@@ -162,6 +170,15 @@ export default class Netplay {
   // ignored.
   private session = 0;
 
+  // Synthetic opponents for testing pod layouts. Built once per count
+  // because each one runs the game engine, and never while a session is
+  // live, so they cannot reach the wire or a roster.
+  private fakes: RemotePeer[] = [];
+
+  // Added to the snapshot's seq so a change in the fake pod alone still
+  // moves it forward for the board.
+  private fakeRev = 0;
+
   constructor(private readonly deps: NetplayDeps) {
     this.remote = new RemoteViews(() => this.deps.profile().playerId);
   }
@@ -181,7 +198,7 @@ export default class Netplay {
       const report = parseNetReport(input);
       if (report) this.handleReport(report);
     },
-    getOpponentView: () => this.remote.snapshot(),
+    getOpponentView: () => this.opponentState(),
   };
 
   get netState(): NetState {
@@ -189,8 +206,24 @@ export default class Netplay {
   }
 
   get opponentCount(): number {
-    return this.remote.connectedPeers.length;
+    return this.remote.connectedPeers.length + this.fakes.length;
   }
+
+  get fakeOpponents(): number {
+    return this.fakes.length;
+  }
+
+  // Dev-only: populates the board with synthetic opponents. Refused
+  // outright while a session is live, so a real pod never sees them.
+  setFakeOpponents = (count: number): boolean => {
+    if (this.state.role !== null || this.state.phase !== 'idle') return false;
+    const next = fakePeers(count, FAKE_SEED);
+    if (next.length === 0 && this.fakes.length === 0) return true;
+    this.fakes = next;
+    this.fakeRev += 1;
+    this.pushOpponent();
+    return true;
+  };
 
   // The net window crashed: every link went with it.
   transportLost = () => {
@@ -747,7 +780,8 @@ export default class Netplay {
     this.clearConnectTimer();
     this.seats.forEach((seat) => this.clearSeatTimer(seat));
     this.seats = new Map();
-    if (this.remote.clear()) this.pushOpponent();
+    const hadFakes = this.clearFakes();
+    if (this.remote.clear() || hadFakes) this.pushOpponent();
     this.state = {
       ...idleNetState,
       pendingInvite: this.state.pendingInvite,
@@ -809,7 +843,31 @@ export default class Netplay {
     this.deps.pushState(this.state);
   };
 
+  private clearFakes = (): boolean => {
+    if (this.fakes.length === 0) return false;
+    this.fakes = [];
+    this.fakeRev += 1;
+    return true;
+  };
+
+  // The only way opponent state leaves here, so everything the board is
+  // shown agrees; the roster and the wire read their own sources.
+  private opponentState = (): OpponentState => {
+    const snapshot = this.remote.snapshot();
+    // The offset outlives the fakes themselves: both halves only grow, so
+    // the board never sees seq go backwards and drop an update.
+    const seq = snapshot.seq + this.fakeRev;
+    if (this.fakes.length === 0) return { ...snapshot, seq };
+    return {
+      ...snapshot,
+      seq,
+      // Fakes sit in guest seats, so the local player holds the host's.
+      selfSeat: snapshot.selfSeat ?? HOST_SEAT,
+      peers: [...snapshot.peers, ...this.fakes],
+    };
+  };
+
   private pushOpponent = () => {
-    this.deps.pushOpponent(this.remote.snapshot());
+    this.deps.pushOpponent(this.opponentState());
   };
 }

@@ -760,6 +760,71 @@ describe('Netplay guest', () => {
   });
 });
 
+describe('Netplay fake opponents', () => {
+  it('merges fake peers into the pushed and fetched opponent state', () => {
+    const t = setup();
+    expect(t.netplay.setFakeOpponents(3)).toBe(true);
+    const pushed = t.opponent();
+    expect(pushed?.peers).toHaveLength(3);
+    expect(pushed?.peers.map((p) => p.seat)).toEqual([2, 3, 4]);
+    expect(pushed?.selfSeat).toBe(1);
+    expect(pushed?.peers[0].view?.playerId).toBe('fake-mira');
+    expect(t.netplay.handlers.getOpponentView()).toEqual(pushed);
+  });
+
+  it('moves seq on every change of the fake pod', () => {
+    const t = setup();
+    t.netplay.setFakeOpponents(1);
+    t.netplay.setFakeOpponents(3);
+    t.netplay.setFakeOpponents(0);
+    const seqs = t.opponents.map((o) => o.seq);
+    expect(seqs).toHaveLength(3);
+    expect(seqs[1]).toBeGreaterThan(seqs[0]);
+    expect(seqs[2]).toBeGreaterThan(seqs[1]);
+    expect(t.opponent()?.peers).toEqual([]);
+  });
+
+  it('counts fake opponents so the board grows for a pod', () => {
+    const t = setup();
+    t.netplay.setFakeOpponents(2);
+    expect(t.netplay.opponentCount).toBe(2);
+    expect(t.netplay.fakeOpponents).toBe(2);
+  });
+
+  it('refuses a fake pod while a session is live', async () => {
+    const t = await hostWith({ 2: 'bob' });
+    expect(t.netplay.setFakeOpponents(3)).toBe(false);
+    expect(t.netplay.opponentCount).toBe(1);
+    expect(t.opponent()?.peers.map((p) => p.info.playerId)).toEqual(['bob']);
+  });
+
+  it('clears fake opponents when hosting or joining', async () => {
+    const t = setup();
+    t.netplay.setFakeOpponents(3);
+    await t.netplay.host();
+    expect(t.netplay.fakeOpponents).toBe(0);
+    expect(t.opponent()?.peers).toEqual([]);
+
+    const g = setup('bob');
+    g.netplay.setFakeOpponents(3);
+    const invite = await packDescription({ type: 'offer', sdp: 'v=0' });
+    await g.netplay.join(invite);
+    await flush();
+    expect(g.netplay.fakeOpponents).toBe(0);
+    expect(g.opponent()?.peers).toEqual([]);
+  });
+
+  it('never puts a fake peer on the wire', async () => {
+    const t = setup();
+    t.netplay.setFakeOpponents(3);
+    const h = await hostWith({ 2: 'bob' });
+    h.netplay.localViewChanged(view('alice', 5));
+    h.netplay.localLogEntry('drew a card');
+    expect(JSON.stringify(h.sends())).not.toContain('fake-');
+    expect(h.state().players.map((p) => p.playerId)).toEqual(['alice', 'bob']);
+  });
+});
+
 describe('Netplay solo', () => {
   it('keeps the local log without anyone to send it to', () => {
     const t = setup();
