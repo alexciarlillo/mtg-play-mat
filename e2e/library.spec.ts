@@ -79,10 +79,11 @@ const keep = async () => {
 
 test.beforeAll(async () => {
   userDataDir = mkdtempSync(path.join(tmpdir(), 'mtg-play-mat-e2e-lib-'));
-  // Later steps drive the turn panel, which is off by default.
+  // Later steps drive the turn panel, which is off by default, and the
+  // separate hand window.
   writeFileSync(
     path.join(userDataDir, 'settings.json'),
-    JSON.stringify({ turnTracking: true })
+    JSON.stringify({ turnTracking: true, handInBoard: false })
   );
   app = await electron.launch({
     args: ['.', `--user-data-dir=${userDataDir}`],

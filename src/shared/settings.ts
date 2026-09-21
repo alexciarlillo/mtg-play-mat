@@ -85,6 +85,23 @@ const trayPlacement: Parse<TrayPlacement> = (input) => {
   };
 };
 
+// The opponents' row along the top of the board, in px. The player
+// drags it to the height they want; the board keeps it within the
+// window, so a height saved on a large screen still fits a small one.
+export const MIN_OPPONENT_ROW_HEIGHT = 120;
+export const MAX_OPPONENT_ROW_HEIGHT = 1200;
+export const DEFAULT_OPPONENT_ROW_HEIGHT = 320;
+
+const opponentRowHeight: Parse<number> = (input) =>
+  typeof input === 'number' && Number.isFinite(input)
+    ? Math.round(
+        Math.min(
+          MAX_OPPONENT_ROW_HEIGHT,
+          Math.max(MIN_OPPONENT_ROW_HEIGHT, input)
+        )
+      )
+    : undefined;
+
 const fields = {
   displayName: field(DEFAULT_DISPLAY_NAME, displayName),
   // Turn and phase tracking clutters the board, so it is opt-in.
@@ -94,13 +111,15 @@ const fields = {
     { x: 1, y: 1, collapsed: false },
     panelPlacement
   ),
-  // One window instead of a separate hand window. It shows the hand on
-  // the board, so it is opt-in; it applies when a play test opens.
-  handInBoard: field(false, boolean),
+  // One window instead of a separate hand window: the default, since a
+  // single window is the simpler table. It applies when a play test
+  // opens, and anyone watching the board also sees the hand.
+  handInBoard: field(true, boolean),
   handTray: field<TrayPlacement>(
     { height: 280, collapsed: false },
     trayPlacement
   ),
+  opponentRow: field(DEFAULT_OPPONENT_ROW_HEIGHT, opponentRowHeight),
 };
 
 type Fields = typeof fields;

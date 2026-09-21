@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { fieldBounds, opponentRowHeight, stackOrder } from './layout';
+import { fieldBounds, stackOrder } from './layout';
 
 const card = (instanceId: string, attachedTo: string | null = null) => ({
   instanceId,
@@ -36,19 +36,6 @@ describe('fieldBounds', () => {
       offsetX: 32,
       width: 640,
     });
-  });
-});
-
-describe('opponentRowHeight', () => {
-  it('splits the board evenly for a duel', () => {
-    expect(opponentRowHeight(1)).toEqual({ height: '50%' });
-  });
-
-  it('gives a pod its panels height and no share of the rest', () => {
-    const pod = { height: 'min(320px, 60%)' };
-    expect(opponentRowHeight(2)).toEqual(pod);
-    expect(opponentRowHeight(3)).toEqual(pod);
-    expect(opponentRowHeight(4)).toEqual(pod);
   });
 });
 

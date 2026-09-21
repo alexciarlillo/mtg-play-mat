@@ -1,6 +1,10 @@
 import type { PublicView } from '@shared/game';
 import type { OpponentState } from '@shared/net/remoteViews';
-import { defaultSettings, type Settings } from '@shared/settings';
+import {
+  defaultSettings,
+  MIN_OPPONENT_ROW_HEIGHT,
+  type Settings,
+} from '@shared/settings';
 import type { BoardMenuCommand } from '@shared/types/playTest';
 import {
   act,
@@ -134,26 +138,68 @@ describe('Board opponent row', () => {
     })),
   });
 
-  it('gives a duel half the board and a pod only a panel of it', async () => {
-    renderBoard(defaultSettings, view, podOf(['Bob']));
-    await act(async () => {});
-    const duel = screen.getByTestId('opponents');
-    expect(duel.style.height).toBe('50%');
-    expect(duel.style.minHeight).toBe('');
+  const drag = (by: number) => {
+    const handle = screen.getByTestId('opponents-resize');
+    fireEvent.pointerDown(handle, { button: 0, pointerId: 1, clientY: 400 });
+    fireEvent.pointerMove(handle, { pointerId: 1, clientY: 400 + by });
+    fireEvent.pointerUp(handle, { pointerId: 1, clientY: 400 + by });
+  };
 
-    // Every pod takes the same height, whatever the seat count: the
-    // panel needs it and a seat's field cannot use more than its width.
-    for (const names of [
-      ['Bob', 'Carol'],
-      ['Bob', 'Carol', 'Dave'],
-    ]) {
+  it('takes the saved height, whatever the seat count', async () => {
+    for (const names of [['Bob'], ['Bob', 'Carol'], ['Bob', 'Carol', 'Dave']]) {
       cleanup();
-      renderBoard(defaultSettings, view, podOf(names));
+      renderBoard({ ...defaultSettings, opponentRow: 260 }, view, podOf(names));
       await act(async () => {});
-      const pod = screen.getByTestId('opponents');
-      expect(pod.style.height).toContain('320px');
-      expect(pod.style.minHeight).toBe('');
+      const row = screen.getByTestId('opponents');
+      expect(row.style.height).toBe('260px');
+      // The board below always keeps its share, however tall the row.
+      expect(row.style.maxHeight).toBe('60%');
     }
+  });
+
+  it('saves a dragged height and shows it while dragging', async () => {
+    renderBoard(defaultSettings, view, podOf(['Bob', 'Carol']));
+    const updateSettings = vi.fn(async (patch: Partial<Settings>) => ({
+      ...defaultSettings,
+      ...patch,
+    }));
+    Object.assign(window.api, { updateSettings });
+    await act(async () => {});
+
+    const row = screen.getByTestId('opponents');
+    // jsdom lays nothing out, so the drag starts from a measured zero.
+    vi.spyOn(row, 'getBoundingClientRect').mockReturnValue({
+      height: 320,
+    } as DOMRect);
+
+    const handle = screen.getByTestId('opponents-resize');
+    fireEvent.pointerDown(handle, { button: 0, pointerId: 1, clientY: 400 });
+    fireEvent.pointerMove(handle, { pointerId: 1, clientY: 460 });
+    expect(row.style.height).toBe('380px');
+    fireEvent.pointerUp(handle, { pointerId: 1, clientY: 460 });
+    expect(updateSettings).toHaveBeenCalledWith({ opponentRow: 380 });
+  });
+
+  it('clamps a drag to the row minimum and its share of the window', async () => {
+    renderBoard(defaultSettings, view, podOf(['Bob', 'Carol']));
+    const updateSettings = vi.fn(async (patch: Partial<Settings>) => ({
+      ...defaultSettings,
+      ...patch,
+    }));
+    Object.assign(window.api, { updateSettings });
+    await act(async () => {});
+
+    const row = screen.getByTestId('opponents');
+    vi.spyOn(row, 'getBoundingClientRect').mockReturnValue({
+      height: 320,
+    } as DOMRect);
+
+    drag(-5000);
+    expect(row.style.height).toBe(`${MIN_OPPONENT_ROW_HEIGHT}px`);
+    drag(5000);
+    const share = Math.round(window.innerHeight * 0.6);
+    expect(row.style.height).toBe(`${share}px`);
+    expect(updateSettings).toHaveBeenLastCalledWith({ opponentRow: share });
   });
 });
 

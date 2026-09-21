@@ -40,9 +40,9 @@ import CommandZone from './CommandZone';
 import CounterDialog from './CounterDialog';
 import HandTray from './HandTray';
 import Library from './Library';
-import { opponentRowHeight, SIDE_PANEL_WIDTH, stackOrder } from './layout';
+import { SIDE_PANEL_WIDTH, stackOrder } from './layout';
 import LifeCounter from './LifeCounter';
-import OpponentSide from './OpponentSide';
+import OpponentsRow from './OpponentsRow';
 import { opponentCommanders, requestRoll, seatOrder } from './pod';
 import PlayerCounters from './PlayerCounters';
 import RevealPanel from './RevealPanel';
@@ -194,7 +194,6 @@ const Board = ({ store, opponent, hand }: Props) => {
   // With an opponent the board splits in two and the own panel compacts.
   // Three or four players put every opponent in one row across the top.
   const duel = peers.length > 0;
-  const pod = peers.length > 1;
   const commanderGame = view !== null && hasCommanders(view);
   const damageSources = opponentCommanders(peers);
   const damageRows =
@@ -209,30 +208,17 @@ const Board = ({ store, opponent, hand }: Props) => {
       {/* The docked hand sits below, so opponents and the field share
           what is left and the table panel stays above the tray. */}
       <div className="flex min-h-0 flex-1 flex-col">
-        {duel && (
-          <div
-            data-testid="opponents"
-            className={classNames(
-              'grid min-h-0 bg-slate-900',
-              // Alleys around the seats, so each pod board reads as one.
-              pod && 'gap-x-3 px-1'
-            )}
-            style={{
-              ...opponentRowHeight(peers.length),
-              gridTemplateColumns: `repeat(${peers.length}, minmax(0, 1fr))`,
+        {duel && settingsLoaded && (
+          <OpponentsRow
+            peers={peers}
+            height={settings.opponentRow}
+            onHeightChange={(opponentRow) => {
+              updateSettings({ opponentRow }).catch((err: unknown) =>
+                console.error('[play-test] could not save opponents row', err)
+              );
             }}
-          >
-            {peers.map((peer) => (
-              <OpponentSide
-                key={peer.info.playerId}
-                peer={peer.info}
-                view={peer.view}
-                seat={peer.seat}
-                compact={pod}
-                showTurn={turnTracking}
-              />
-            ))}
-          </div>
+            showTurn={turnTracking}
+          />
         )}
         <div className="flex flex-1 min-h-0" onContextMenu={handleContextMenu}>
           <div
@@ -289,7 +275,7 @@ const Board = ({ store, opponent, hand }: Props) => {
           >
             <div
               className={classNames(
-                'min-h-0 flex-1 overflow-y-auto flex flex-col p-3',
+                'scroll-visible min-h-0 flex-1 overflow-y-auto flex flex-col p-3',
                 duel ? 'gap-2' : 'gap-3'
               )}
             >
@@ -381,7 +367,7 @@ const Board = ({ store, opponent, hand }: Props) => {
                 has to stay in sight however little board a docked hand
                 leaves. Half the panel at most, so the rest keeps room. */}
             {view && damageRows && (
-              <div className="max-h-[50%] shrink-0 overflow-y-auto border-t border-slate-600 px-3 py-2">
+              <div className="scroll-visible max-h-[50%] shrink-0 overflow-y-auto border-t border-slate-600 px-3 py-2">
                 <CommanderDamageTaken
                   playerId={view.playerId}
                   sources={damageSources}

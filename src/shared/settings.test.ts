@@ -3,8 +3,11 @@ import { describe, expect, it } from 'vitest';
 import {
   cleanDisplayName,
   DEFAULT_DISPLAY_NAME,
+  DEFAULT_OPPONENT_ROW_HEIGHT,
   defaultSettings,
+  MAX_OPPONENT_ROW_HEIGHT,
   MAX_TRAY_HEIGHT,
+  MIN_OPPONENT_ROW_HEIGHT,
   MIN_TRAY_HEIGHT,
   parseSettings,
   parseSettingsPatch,
@@ -21,8 +24,9 @@ describe('parseSettings', () => {
       displayName: DEFAULT_DISPLAY_NAME,
       turnTracking: false,
       tablePanel: { x: 1, y: 1, collapsed: false },
-      handInBoard: false,
+      handInBoard: true,
       handTray: { height: 280, collapsed: false },
+      opponentRow: DEFAULT_OPPONENT_ROW_HEIGHT,
     });
   });
 
@@ -99,9 +103,30 @@ describe('tablePanel', () => {
 });
 
 describe('handInBoard', () => {
-  it('is off unless set to a boolean', () => {
-    expect(parseSettings({ handInBoard: true }).handInBoard).toBe(true);
-    expect(parseSettings({ handInBoard: 'yes' }).handInBoard).toBe(false);
+  it('is on unless a saved boolean says otherwise', () => {
+    expect(parseSettings({}).handInBoard).toBe(true);
+    expect(parseSettings({ handInBoard: false }).handInBoard).toBe(false);
+    expect(parseSettings({ handInBoard: 'yes' }).handInBoard).toBe(true);
+  });
+});
+
+describe('opponentRow', () => {
+  it('keeps a valid height and clamps it', () => {
+    expect(parseSettingsPatch({ opponentRow: 420.6 })).toEqual({
+      opponentRow: 421,
+    });
+    expect(parseSettingsPatch({ opponentRow: 5 })).toEqual({
+      opponentRow: MIN_OPPONENT_ROW_HEIGHT,
+    });
+    expect(parseSettingsPatch({ opponentRow: 1e6 })).toEqual({
+      opponentRow: MAX_OPPONENT_ROW_HEIGHT,
+    });
+  });
+
+  it('drops a height that is not a finite number', () => {
+    ['320', Number.NaN, null, {}].forEach((opponentRow) => {
+      expect(parseSettingsPatch({ opponentRow })).toEqual({});
+    });
   });
 });
 

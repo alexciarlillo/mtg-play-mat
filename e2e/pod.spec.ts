@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -51,6 +51,11 @@ const [ALICE, BOB, CAROL, DAVE] = [0, 1, 2, 3];
 
 const launch = async (name: string, seat: number): Promise<Player> => {
   const userDataDir = mkdtempSync(path.join(tmpdir(), `mtg-pod-${name}-`));
+  // These steps drive the separate hand window.
+  writeFileSync(
+    path.join(userDataDir, 'settings.json'),
+    JSON.stringify({ handInBoard: false })
+  );
   const app = await electron.launch({
     args: ['.', `--user-data-dir=${userDataDir}`],
     env,

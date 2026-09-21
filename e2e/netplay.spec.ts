@@ -44,10 +44,11 @@ let guest: Instance;
 
 const launch = async (label: string): Promise<Instance> => {
   const userDataDir = mkdtempSync(path.join(tmpdir(), `mtg-net-${label}-`));
-  // The turn number reaching the other board needs turn tracking on.
+  // The turn number reaching the other board needs turn tracking on,
+  // and these steps drive the separate hand window.
   writeFileSync(
     path.join(userDataDir, 'settings.json'),
-    JSON.stringify({ turnTracking: true })
+    JSON.stringify({ turnTracking: true, handInBoard: false })
   );
   const app = await electron.launch({
     args: ['.', `--user-data-dir=${userDataDir}`],

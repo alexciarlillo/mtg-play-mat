@@ -204,7 +204,7 @@ const OpponentSide = ({
       <aside
         style={{ width: compact ? POD_PANEL_WIDTH : SIDE_PANEL_WIDTH }}
         className={classNames(
-          'h-full shrink-0 overflow-y-auto bg-slate-700 text-slate-100 flex flex-col gap-2',
+          'scroll-visible h-full shrink-0 overflow-y-auto bg-slate-700 text-slate-100 flex flex-col gap-2',
           compact ? 'p-2' : 'p-3'
         )}
       >

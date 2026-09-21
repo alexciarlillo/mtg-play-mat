@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -87,6 +87,11 @@ const putOnField = async (name: string, position: Position) => {
 test.beforeAll(async () => {
   scryfall = await startFakeScryfall();
   userDataDir = mkdtempSync(path.join(tmpdir(), 'mtg-play-mat-e2e-cards-'));
+  // These steps drive the separate hand window.
+  writeFileSync(
+    path.join(userDataDir, 'settings.json'),
+    JSON.stringify({ handInBoard: false })
+  );
   app = await electron.launch({
     args: ['.', `--user-data-dir=${userDataDir}`],
     env: {

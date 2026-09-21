@@ -11,18 +11,6 @@ export const FIELD_HEIGHT = 640;
 // The narrower panel beside each opponent in a pod of three or four.
 export const POD_PANEL_WIDTH = 184;
 
-// A pod seat's field can never use more height than its own width, so
-// only its panel gains from a taller row: 320px shows the command zone
-// and tax row whole, and 60% guards the local half under a tall tray.
-const POD_ROW_HEIGHT = 'min(320px, 60%)';
-
-// A duel mirrors one board against another, so it stays an even split.
-const DUEL_ROW_HEIGHT = '50%';
-
-export const opponentRowHeight = (seats: number): { height: string } => ({
-  height: seats > 1 ? POD_ROW_HEIGHT : DUEL_ROW_HEIGHT,
-});
-
 // Logical width that holds every card of a battlefield, so a narrow
 // opponent field can shrink to show all of it. A tapped md card is about
 // 224 units wide.
