@@ -255,7 +255,7 @@ test('a face-down permanent shows a 2/2 back and never leaks', async () => {
 
 test('an attached card follows its host when the host is dragged', async () => {
   const host = await putOnField('Llanowar Elves', { x: 420, y: 360 });
-  const aura = await putOnField('Forest', { x: 820, y: 360 });
+  const aura = await putOnField('Forest', { x: 740, y: 360 });
 
   await cardFace(aura).click({ button: 'right' });
   await menuItem(board, 'Attach to…').click();

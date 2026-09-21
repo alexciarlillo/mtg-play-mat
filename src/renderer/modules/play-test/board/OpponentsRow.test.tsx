@@ -1,12 +1,22 @@
 import type { PublicView } from '@shared/game';
 import type { RemotePeer } from '@shared/net/remoteViews';
 import { DEFAULT_OPPONENT_ROW_HEIGHT } from '@shared/settings';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ContextMenuProvider } from '../../../ui/ContextMenuProvider';
-import { POD_PANEL_WIDTH, SIDE_PANEL_WIDTH } from './layout';
+import {
+  POD_PANEL_WIDTH,
+  SIDE_PANEL_WIDTH,
+  TIGHT_PANEL_HEIGHT,
+} from './layout';
 import OpponentsRow from './OpponentsRow';
 
 const view: PublicView = {
@@ -31,13 +41,17 @@ const podOf = (names: string[]): RemotePeer[] =>
     view: { ...view, playerId: `p${seat + 2}`, name },
   }));
 
-const renderRow = (names: string[], onHeightChange = vi.fn()) => {
+const renderRow = (
+  names: string[],
+  onHeightChange = vi.fn(),
+  height = DEFAULT_OPPONENT_ROW_HEIGHT
+) => {
   Object.assign(window, { api: { dispatch: vi.fn(() => Promise.resolve()) } });
   const row = (peers: RemotePeer[]) => (
     <ContextMenuProvider>
       <OpponentsRow
         peers={peers}
-        height={DEFAULT_OPPONENT_ROW_HEIGHT}
+        height={height}
         onHeightChange={onHeightChange}
         showTurn={false}
       />
@@ -164,6 +178,21 @@ describe('OpponentsRow hidden boards', () => {
     expect(sizes('Bob')).toBe(board);
     expect(sizes('Carol')).toBe(board);
     expect(screen.getAllByTestId('opponent-battlefield')).toHaveLength(2);
+  });
+
+  it('drops a short duel panel to count tiles so nothing scrolls', () => {
+    // Card-sized piles need room a dragged-down duel row cannot give,
+    // and its counts must stay in sight beside the command zone.
+    renderRow(['Bob'], vi.fn(), TIGHT_PANEL_HEIGHT - 1);
+    expect(
+      screen.getByTestId('opponent-graveyard').querySelector('.aspect-card')
+    ).toBeNull();
+
+    cleanup();
+    renderRow(['Bob'], vi.fn(), TIGHT_PANEL_HEIGHT);
+    expect(
+      screen.getByTestId('opponent-graveyard').querySelector('.aspect-card')
+    ).not.toBeNull();
   });
 
   it('leaves the row height alone, hidden or not', async () => {

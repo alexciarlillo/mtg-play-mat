@@ -4,9 +4,13 @@ import {
   MIN_OPPONENT_ROW_HEIGHT,
 } from '@shared/settings';
 import classNames from 'classnames';
-import { type PointerEvent, useRef, useState } from 'react';
+import { type PointerEvent, useLayoutEffect, useRef, useState } from 'react';
 
-import { POD_PANEL_WIDTH, SIDE_PANEL_WIDTH } from './layout';
+import {
+  POD_PANEL_WIDTH,
+  SIDE_PANEL_WIDTH,
+  TIGHT_PANEL_HEIGHT,
+} from './layout';
 import OpponentSide from './OpponentSide';
 
 interface Resize {
@@ -52,6 +56,19 @@ const OpponentsRow = ({
   const panelWidth = pod ? POD_PANEL_WIDTH : SIDE_PANEL_WIDTH;
   const isHidden = (playerId: string) => hiddenIds.includes(playerId);
   const shown = resize?.height ?? rowHeight(height);
+  // What the row ends up with, which is not what it asked for: a tall
+  // hand tray takes the rest of the board and caps it.
+  const [measured, setMeasured] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    const el = row.current;
+    if (!el || typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(([entry]) => {
+      setMeasured(entry.contentRect.height);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  const tight = !pod && (measured ?? shown) < TIGHT_PANEL_HEIGHT;
 
   // Only the seats here are ever asked about, and a toggle drops the
   // ids of anyone who has left, so a board can never be folded away by
@@ -134,6 +151,7 @@ const OpponentsRow = ({
             view={peer.view}
             seat={peer.seat}
             compact={pod}
+            tight={tight}
             showTurn={showTurn}
             hidden={isHidden(peer.info.playerId)}
             onToggleHidden={() => toggleHidden(peer.info.playerId)}

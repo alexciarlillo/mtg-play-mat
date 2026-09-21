@@ -48,6 +48,7 @@ const ScaledField = ({
       <div
         data-testid={testId}
         data-scale={scale}
+        data-offset-x={offsetX}
         className="absolute left-0 top-0 origin-top-left"
         style={{
           width: box ? box.width / scale : '100%',

@@ -11,6 +11,11 @@ export const FIELD_HEIGHT = 640;
 // The narrower panel beside each opponent in a pod of three or four.
 export const POD_PANEL_WIDTH = 184;
 
+// A duel panel shorter than this cannot hold card-sized zone piles and a
+// command zone at once, so its counts drop to the pod's name-and-count
+// tiles rather than under a fold.
+export const TIGHT_PANEL_HEIGHT = 300;
+
 // Logical width that holds every card of a battlefield, so a narrow
 // opponent field can shrink to show all of it. A tapped md card is about
 // 224 units wide.

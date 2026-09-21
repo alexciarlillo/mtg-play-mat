@@ -40,7 +40,7 @@ import CommandZone from './CommandZone';
 import CounterDialog from './CounterDialog';
 import HandTray from './HandTray';
 import Library from './Library';
-import { SIDE_PANEL_WIDTH, stackOrder } from './layout';
+import { fieldBounds, SIDE_PANEL_WIDTH, stackOrder } from './layout';
 import LifeCounter from './LifeCounter';
 import OpponentsRow from './OpponentsRow';
 import { opponentCommanders, requestRoll, seatOrder } from './pod';
@@ -201,6 +201,10 @@ const Board = ({ store, opponent, hand }: Props) => {
     damageRowsFor(damageSources, view.commanderDamage).length > 0;
   // The command zone needs room too, so piles shrink to one row for it.
   const compactPiles = duel || commanderGame;
+  // The field reserves room for a tapped card's overhang the way an
+  // opponent's does; only the shift is taken, so spreading out to the
+  // right never shrinks the board the player is playing on.
+  const offsetX = view ? fieldBounds(view.zones.battlefield).offsetX : 0;
   const pileSize = compactPiles ? 'xs' : 'sm';
 
   return (
@@ -253,7 +257,7 @@ const Board = ({ store, opponent, hand }: Props) => {
               </FloatingPanel>
             )}
             {/* Positions are relative to this box, in logical field units. */}
-            <ScaledField testId="battlefield">
+            <ScaledField testId="battlefield" offsetX={offsetX}>
               {(scale) =>
                 view &&
                 stackOrder(view.zones.battlefield).map((card) => (
@@ -261,6 +265,7 @@ const Board = ({ store, opponent, hand }: Props) => {
                     key={card.instanceId}
                     card={card}
                     scale={scale}
+                    offsetX={offsetX}
                     onAddCounter={onAddCounter}
                     onAttach={onAttach}
                   />

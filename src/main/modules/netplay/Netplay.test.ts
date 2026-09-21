@@ -4,6 +4,7 @@ import { packDescription } from '@shared/net/codec';
 import type { NetCommand, NetState } from '@shared/net/lobby';
 import type { NetMessage } from '@shared/net/protocol';
 import type { OpponentState } from '@shared/net/remoteViews';
+import type { DeckFormat } from '@shared/types/decks';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import Netplay from './Netplay';
@@ -72,6 +73,7 @@ const setup = (me = 'alice') => {
     retire: vi.fn(),
   };
   let local: PublicView | null = view(me);
+  let format: DeckFormat = 'constructed';
   const rolls: number[] = [];
   const netplay = new Netplay({
     transport,
@@ -79,6 +81,7 @@ const setup = (me = 'alice') => {
     appVersion: '9.9.9',
     profile: () => ({ playerId: me, displayName: names[me] }),
     localView: () => local,
+    localFormat: () => format,
     pushState: (s) => states.push(s),
     pushOpponent: (s) => opponents.push(s),
     connectTimeoutMs: 50,
@@ -105,6 +108,9 @@ const setup = (me = 'alice') => {
     state: () => netplay.netState,
     setLocal: (v: PublicView | null) => {
       local = v;
+    },
+    setFormat: (f: DeckFormat) => {
+      format = f;
     },
   };
 };
@@ -840,6 +846,28 @@ describe('Netplay fake opponents', () => {
     );
     // The generated seats are untouched, so nothing is re-dealt.
     expect(after?.peers[1].view).toBe(before?.peers[1].view);
+  });
+
+  it('re-deals the generated seats when the format changes', () => {
+    const t = setup();
+    t.netplay.setFakeOpponents(3);
+    expect(t.opponent()?.peers[1].view?.life).toBe(20);
+
+    t.setFormat('commander');
+    t.netplay.localViewChanged(view('alice', 40));
+    const after = t.opponent();
+    expect(after?.peers.map((p) => p.view?.life)).toEqual([40, 40, 40]);
+    // The mirror still carries the local board rather than a dealt one.
+    expect(after?.peers[0].view?.playerId).toBe('alice');
+    expect(after?.peers[1].view?.playerId).toBe('fake-desmond');
+  });
+
+  it('leaves the generated seats alone while the format holds', () => {
+    const t = setup();
+    t.netplay.setFakeOpponents(3);
+    const before = t.opponent();
+    t.netplay.localViewChanged(view('alice', 12));
+    expect(t.opponent()?.peers[1].view).toBe(before?.peers[1].view);
   });
 
   it('leaves the mirror seat blank until the local game has a view', () => {

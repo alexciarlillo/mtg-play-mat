@@ -19,6 +19,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ContextMenuProvider } from '../../../ui/ContextMenuProvider';
 import type { ViewStore } from '../viewStore';
 import Board from './Board';
+import { fieldBounds } from './layout';
 
 const view: PublicView = {
   seq: 1,
@@ -289,6 +290,19 @@ describe('Board tools', () => {
       type: 'addDummy',
       playerId: 'p1',
       name: 'Opponent 1',
+    });
+  });
+
+  it('reserves the turned-card overhang at the field left edge', async () => {
+    renderBoard(defaultSettings);
+    await act(async () => {});
+    const { offsetX } = fieldBounds(view.zones.battlefield);
+    const field = screen.getByTestId('battlefield');
+    // Drops read the reserve back off the field to undo it, so a card
+    // still lands where it was aimed.
+    expect(field).toHaveAttribute('data-offset-x', String(offsetX));
+    expect(field.firstElementChild).toHaveStyle({
+      transform: `translateX(${offsetX}px)`,
     });
   });
 

@@ -115,6 +115,18 @@ describe('Hand', () => {
     );
   });
 
+  it('keeps the reveal banner inside the title bar', () => {
+    renderHand(
+      viewOf({
+        keptHand: true,
+        revealed: { source: 'hand', cards: viewOf().hand.map((c) => c.ref!) },
+      })
+    );
+    expect(screen.getByTestId('hand-title')).toContainElement(
+      screen.getByTestId('hand-reveal-banner')
+    );
+  });
+
   it('mulligans from the bar and the M key', () => {
     renderHand(viewOf());
     fireEvent.click(screen.getByRole('button', { name: 'Mulligan' }));

@@ -1,4 +1,9 @@
-import { type CardView, isModalDfc, type PrivateView } from '@shared/game';
+import {
+  type CardView,
+  isModalDfc,
+  type PrivateView,
+  type RevealView,
+} from '@shared/game';
 import classNames from 'classnames';
 import {
   type ReactNode,
@@ -92,9 +97,6 @@ type Dialog = 'help' | 'lookCount' | 'look' | 'search';
 
 const libraryDialogs: (Dialog | null)[] = ['lookCount', 'look', 'search'];
 
-const barButton =
-  'rounded px-3 py-0.5 text-sm font-semibold disabled:opacity-40 [-webkit-app-region:no-drag]';
-
 const mulliganButton =
   'rounded px-2 text-xs font-semibold disabled:opacity-40 [-webkit-app-region:no-drag]';
 
@@ -171,6 +173,34 @@ const MulliganBar = ({
     </div>
   );
 };
+
+// Beside the mulligan controls, and for the same reason: a strip of its
+// own pushed the cards down every time something was revealed, and the
+// tray has no height to lose.
+const RevealBar = ({
+  view,
+  reveal,
+}: {
+  view: PrivateView;
+  reveal: RevealView;
+}) => (
+  <div
+    data-testid="hand-reveal-banner"
+    className="flex min-w-0 items-center gap-2 rounded bg-sky-200 px-2 py-0.5 text-xs"
+  >
+    <span className="truncate font-semibold">
+      Everyone can see {revealTitles[reveal.source]} ({reveal.cards.length}). It
+      hides at your next action.
+    </span>
+    <button
+      type="button"
+      className={`${mulliganButton} shrink-0 ring-1 ring-slate-600`}
+      onClick={() => dispatch({ type: 'hideReveal', playerId: view.playerId })}
+    >
+      Hide
+    </button>
+  </div>
+);
 
 // How the hand behaves when docked in the board window rather than in a
 // window of its own.
@@ -311,6 +341,9 @@ const Hand = ({ store, dock }: Props) => {
           </button>
         </div>
         <div className="flex min-w-0 items-center gap-2">
+          {!dock?.collapsed && view?.revealed && (
+            <RevealBar view={view} reveal={view.revealed} />
+          )}
           {!dock?.collapsed && view && !view.keptHand && (
             <MulliganBar
               view={view}
@@ -341,26 +374,6 @@ const Hand = ({ store, dock }: Props) => {
           {dock?.controls}
         </div>
       </div>
-      {!dock?.collapsed && view?.revealed && (
-        <div
-          data-testid="hand-reveal-banner"
-          className="flex items-center gap-2 bg-sky-200 px-3 py-0.5 text-sm"
-        >
-          <span className="font-semibold">
-            Everyone can see {revealTitles[view.revealed.source]} (
-            {view.revealed.cards.length}). It hides at your next action.
-          </span>
-          <button
-            type="button"
-            className={`${barButton} ring-1 ring-slate-600`}
-            onClick={() =>
-              dispatch({ type: 'hideReveal', playerId: view.playerId })
-            }
-          >
-            Hide
-          </button>
-        </div>
-      )}
       {!dock?.collapsed && (
         <div
           data-testid="hand"

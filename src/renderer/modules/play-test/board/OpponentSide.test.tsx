@@ -84,6 +84,28 @@ describe('OpponentSide', () => {
     ).toHaveStyle({ transform: `translateX(${offsetX}px)` });
   });
 
+  it('pins a duel seat command zone below its scrolling column', () => {
+    const withCommander: PublicView = {
+      ...view,
+      zones: { ...view.zones, command: [commander] },
+    };
+    const { unmount } = renderSide(false, withCommander);
+    const pinned = screen.getByTestId('opponent-command').parentElement;
+    expect(pinned?.className).toContain('shrink-0');
+    const scroller = pinned?.previousElementSibling;
+    expect(scroller?.className).toContain('overflow-y-auto');
+    // Counts and life scroll; the command zone and its tax never do.
+    expect(scroller).toContainElement(screen.getByTestId('opponent-library'));
+    expect(scroller).toContainElement(screen.getByTestId('opponent-life'));
+
+    // A pod keeps its counts and command zone in one scrolling column,
+    // so no count can fall below a fold the seat cannot show.
+    unmount();
+    renderSide(true, withCommander);
+    const inColumn = screen.getByTestId('opponent-command').parentElement;
+    expect(inColumn).toContainElement(screen.getByTestId('opponent-library'));
+  });
+
   it('keeps the whole name in a pod', () => {
     renderSide(true);
     const name = screen.getByTestId('opponent-name');

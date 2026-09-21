@@ -21,7 +21,10 @@ const clamp = (value: number, max: number) =>
 
 // Where a card dropped at a screen point lands, in logical field units.
 // The grab point (in unscaled card px) stays under the pointer, and the
-// card is kept inside the field. Null when the point is off the field.
+// card is kept inside the field. offsetX is how far the field's contents
+// are shifted right of its own left edge, so a position means the same
+// thing as the one already on a card. Null when the point is off the
+// field.
 export const fieldDropPosition = ({
   pointer,
   grab,
@@ -29,6 +32,7 @@ export const fieldDropPosition = ({
   scale,
   fieldSize,
   cardSize,
+  offsetX = 0,
 }: {
   pointer: Position;
   grab: Position;
@@ -36,6 +40,7 @@ export const fieldDropPosition = ({
   scale: number;
   fieldSize: Size;
   cardSize: Size;
+  offsetX?: number;
 }): Position | null => {
   const inside =
     pointer.x >= field.left &&
@@ -46,8 +51,8 @@ export const fieldDropPosition = ({
   return {
     x: Math.round(
       clamp(
-        (pointer.x - field.left) / scale - grab.x,
-        fieldSize.width - cardSize.width
+        (pointer.x - field.left) / scale - grab.x - offsetX,
+        fieldSize.width - offsetX - cardSize.width
       )
     ),
     y: Math.round(
@@ -86,6 +91,7 @@ export const dropHandCard = (
     scale: Number(field.dataset.scale) || 1,
     fieldSize: { width: field.clientWidth, height: field.clientHeight },
     cardSize,
+    offsetX: Number(field.dataset.offsetX) || 0,
   });
   if (!position) return;
   dispatch({

@@ -35,11 +35,15 @@ interface Props extends BattlefieldMenuOptions {
   card: CardView;
   // The field's CSS scale, so drags track the pointer when it is shrunk.
   scale?: number;
+  // How far the field's contents are shifted right of its left edge, so
+  // a card dropped at the right edge stays inside it.
+  offsetX?: number;
 }
 
 const BattlefieldCard = ({
   card,
   scale = 1,
+  offsetX = 0,
   onAddCounter,
   onAttach,
 }: Props) => {
@@ -87,7 +91,7 @@ const BattlefieldCard = ({
     const inside =
       node && field
         ? {
-            x: clamp(at.x, field.clientWidth - node.offsetWidth),
+            x: clamp(at.x, field.clientWidth - offsetX - node.offsetWidth),
             y: clamp(at.y, field.clientHeight - node.offsetHeight),
           }
         : at;

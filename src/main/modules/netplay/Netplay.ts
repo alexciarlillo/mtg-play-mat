@@ -178,6 +178,10 @@ export default class Netplay {
   // live, so they cannot reach the wire or a roster.
   private fakes: RemotePeer[] = [];
 
+  // The starting life the fake seats were dealt, so a play test opened
+  // in another format can re-deal them on its own.
+  private fakeLife: number | null = null;
+
   // Added to the snapshot's seq so a change in the fake pod alone still
   // moves it forward for the board.
   private fakeRev = 0;
@@ -220,9 +224,10 @@ export default class Netplay {
   // outright while a session is live, so a real pod never sees them.
   setFakeOpponents = (count: number): boolean => {
     if (this.state.role !== null || this.state.phase !== 'idle') return false;
-    const format = this.deps.localFormat?.() ?? 'constructed';
-    const next = fakePeers(count, FAKE_SEED, startingLife(format));
+    const life = this.localLife();
+    const next = fakePeers(count, FAKE_SEED, life);
     if (next.length === 0 && this.fakes.length === 0) return true;
+    this.fakeLife = life;
     this.fakes = next;
     this.mirrorLocal(this.deps.localView());
     this.fakeRev += 1;
@@ -252,10 +257,28 @@ export default class Netplay {
 
   localViewChanged = (view: PublicView | null) => {
     this.send({ kind: 'public', view });
-    if (this.mirrorLocal(view)) {
+    const redealt = this.redealFakes();
+    if (this.mirrorLocal(view) || redealt) {
       this.fakeRev += 1;
       this.pushOpponent();
     }
+  };
+
+  private localLife = () =>
+    startingLife(this.deps.localFormat?.() ?? 'constructed');
+
+  // A play test opened in another format starts on another life total,
+  // and the fake seats were dealt for the old one. Only the generated
+  // seats are re-dealt: the mirror carries the local board as it is.
+  private redealFakes = (): boolean => {
+    const life = this.localLife();
+    if (this.fakes.length === 0 || life === this.fakeLife) return false;
+    this.fakeLife = life;
+    const next = fakePeers(this.fakes.length, FAKE_SEED, life);
+    this.fakes = this.fakes.map((peer, index) =>
+      index === MIRROR_SEAT ? peer : (next[index] ?? peer)
+    );
+    return true;
   };
 
   // The mirror seat carries the local board so the player can see how

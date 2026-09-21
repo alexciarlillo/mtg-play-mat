@@ -149,6 +149,7 @@ const OpponentSide = ({
   view,
   seat = null,
   compact = false,
+  tight = false,
   showTurn = false,
   hidden = false,
   onToggleHidden,
@@ -157,6 +158,8 @@ const OpponentSide = ({
   view: PublicView | null;
   seat?: number | null;
   compact?: boolean;
+  // Panel too short for card-sized zone piles beside a command zone.
+  tight?: boolean;
   // Follows the local turn tracking setting, not the opponent's.
   showTurn?: boolean;
   // Board folded away, usually because this player is out of the game.
@@ -166,6 +169,14 @@ const OpponentSide = ({
 }) => {
   const [open, setOpen] = useState<Pile | null>(null);
   const bounds = view ? fieldBounds(view.zones.battlefield) : null;
+  // A pod shows every panel at once and keeps its counts above the fold,
+  // so only a duel's panel pins: it is the one a tall hand tray leaves
+  // too short for a command zone at the bottom of the column.
+  const pinCommand = !compact && view !== null && hasCommanders(view);
+  // Counts as tiles rather than piles: a pod's panel is too narrow for
+  // piles, and a short duel panel too low to show them and the command
+  // zone at once.
+  const countTiles = compact || tight;
 
   const hideButton = onToggleHidden && (
     <button
@@ -284,102 +295,119 @@ const OpponentSide = ({
 
       <aside
         style={{ width: compact ? POD_PANEL_WIDTH : SIDE_PANEL_WIDTH }}
-        className={classNames(
-          'scroll-visible h-full shrink-0 overflow-y-auto bg-slate-700 text-slate-100 flex flex-col gap-2',
-          compact ? 'p-2' : 'p-3'
-        )}
+        className="h-full shrink-0 bg-slate-700 text-slate-100 flex flex-col"
       >
-        {header}
-        {view && (
-          <PlayerCounters
-            counters={view.counters}
-            testId="opponent-player-counters"
-          />
-        )}
-        {showTurn && view?.turn !== undefined && (
-          <div data-testid="opponent-turn" className="text-xs text-slate-300">
-            Turn <span className="font-bold tabular-nums">{view.turn}</span>
-            {view.phase && ` · ${phaseLabels[view.phase]}`}
-          </div>
-        )}
-        {view && !view.keptHand && (
-          <div
-            data-testid="opponent-mulligan-status"
-            className="rounded bg-amber-200 px-2 py-0.5 text-center text-xs font-semibold text-slate-900"
-          >
-            Choosing opening hand · Mulligans {view.mulligans}
-          </div>
-        )}
-        {view && (
-          <div className="flex flex-col gap-1">
-            {compact ? (
-              <div className="grid grid-cols-2 gap-1">
-                <ZoneCount
-                  label="Library"
-                  count={view.libraryCount}
-                  testId="opponent-library"
-                  activity={view.libraryActivity}
-                />
-                <ZoneCount
-                  label="Hand"
-                  count={view.handCount}
-                  testId="opponent-hand-count"
-                />
-                {piles.map((zone) => (
+        <div
+          className={classNames(
+            'scroll-visible min-h-0 flex-1 overflow-y-auto flex flex-col gap-2',
+            compact ? 'p-2' : 'p-3'
+          )}
+        >
+          {header}
+          {view && (
+            <PlayerCounters
+              counters={view.counters}
+              testId="opponent-player-counters"
+            />
+          )}
+          {showTurn && view?.turn !== undefined && (
+            <div data-testid="opponent-turn" className="text-xs text-slate-300">
+              Turn <span className="font-bold tabular-nums">{view.turn}</span>
+              {view.phase && ` · ${phaseLabels[view.phase]}`}
+            </div>
+          )}
+          {view && !view.keptHand && (
+            <div
+              data-testid="opponent-mulligan-status"
+              className="rounded bg-amber-200 px-2 py-0.5 text-center text-xs font-semibold text-slate-900"
+            >
+              Choosing opening hand · Mulligans {view.mulligans}
+            </div>
+          )}
+          {view && (
+            <div className="flex flex-col gap-1">
+              {countTiles ? (
+                <div className="grid grid-cols-2 gap-1">
                   <ZoneCount
-                    key={zone}
-                    label={pileTitles[zone]}
-                    count={view.zones[zone].length}
-                    testId={`opponent-${zone}`}
-                    onOpen={() => setOpen(zone)}
+                    label="Library"
+                    count={view.libraryCount}
+                    testId="opponent-library"
+                    activity={view.libraryActivity}
                   />
-                ))}
-              </div>
-            ) : (
-              <div className="flex flex-wrap justify-between gap-1">
-                <Count
-                  label="Library"
-                  count={view.libraryCount}
-                  testId="opponent-library"
-                  back
-                  activity={view.libraryActivity}
-                />
-                <Count
-                  label="Hand"
-                  count={view.handCount}
-                  testId="opponent-hand-count"
-                />
-                {piles.map((zone) => (
-                  <ZonePile
-                    key={zone}
-                    zone={zone}
-                    label={pileTitles[zone]}
-                    cards={view.zones[zone]}
-                    onOpen={() => setOpen(zone)}
-                    size="xs"
-                    readOnly
-                    testId={`opponent-${zone}`}
+                  <ZoneCount
+                    label="Hand"
+                    count={view.handCount}
+                    testId="opponent-hand-count"
                   />
-                ))}
-              </div>
-            )}
-            {hasCommanders(view) && (
-              <CommandZone
-                view={view}
-                size="xs"
-                readOnly
-                testId="opponent-command"
-              />
-            )}
+                  {piles.map((zone) => (
+                    <ZoneCount
+                      key={zone}
+                      label={pileTitles[zone]}
+                      count={view.zones[zone].length}
+                      testId={`opponent-${zone}`}
+                      onOpen={() => setOpen(zone)}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-wrap justify-between gap-1">
+                  <Count
+                    label="Library"
+                    count={view.libraryCount}
+                    testId="opponent-library"
+                    back
+                    activity={view.libraryActivity}
+                  />
+                  <Count
+                    label="Hand"
+                    count={view.handCount}
+                    testId="opponent-hand-count"
+                  />
+                  {piles.map((zone) => (
+                    <ZonePile
+                      key={zone}
+                      zone={zone}
+                      label={pileTitles[zone]}
+                      cards={view.zones[zone]}
+                      onOpen={() => setOpen(zone)}
+                      size="xs"
+                      readOnly
+                      testId={`opponent-${zone}`}
+                    />
+                  ))}
+                </div>
+              )}
+              {!pinCommand && hasCommanders(view) && (
+                <CommandZone
+                  view={view}
+                  size="xs"
+                  readOnly
+                  testId="opponent-command"
+                />
+              )}
+            </div>
+          )}
+          {view && (
+            <CommanderDamageTaken
+              playerId={null}
+              sources={[]}
+              taken={view.commanderDamage}
+              testId="opponent-commander-damage"
+            />
+          )}
+        </div>
+        {/* Pinned below the scrolling column: a seat is read for its
+            command zone and tax, and a tall hand tray leaves a duel's
+            panel too short to hold everything above them. */}
+        {view && pinCommand && (
+          <div className="scroll-visible max-h-[50%] shrink-0 overflow-y-auto border-t border-slate-600 px-3 py-2">
+            <CommandZone
+              view={view}
+              size="xs"
+              readOnly
+              testId="opponent-command"
+            />
           </div>
-        )}
-        {view && (
-          <CommanderDamageTaken
-            playerId={null}
-            sources={[]}
-            taken={view.commanderDamage}
-            testId="opponent-commander-damage"
-          />
         )}
       </aside>
 
