@@ -1,3 +1,4 @@
+import { EyeIcon, EyeSlashIcon } from '@heroicons/react/20/solid';
 import type { CardView, LibraryActivity, PublicView } from '@shared/game';
 import type { PeerInfo } from '@shared/net/protocol';
 import classNames from 'classnames';
@@ -149,6 +150,8 @@ const OpponentSide = ({
   seat = null,
   compact = false,
   showTurn = false,
+  hidden = false,
+  onToggleHidden,
 }: {
   peer: PeerInfo;
   view: PublicView | null;
@@ -156,52 +159,128 @@ const OpponentSide = ({
   compact?: boolean;
   // Follows the local turn tracking setting, not the opponent's.
   showTurn?: boolean;
+  // Board folded away, usually because this player is out of the game.
+  // Only the battlefield goes: the panel is how they are still tracked.
+  hidden?: boolean;
+  onToggleHidden?(): void;
 }) => {
   const [open, setOpen] = useState<Pile | null>(null);
   const bounds = view ? fieldBounds(view.zones.battlefield) : null;
+
+  const hideButton = onToggleHidden && (
+    <button
+      type="button"
+      data-testid="opponent-hide"
+      aria-label={`${hidden ? 'Show' : 'Hide'} ${peer.name}'s board`}
+      aria-pressed={hidden}
+      title={hidden ? 'Show this board' : 'Hide this board'}
+      className={classNames(
+        'shrink-0 rounded p-0.5 hover:bg-slate-500',
+        hidden && 'bg-slate-500 text-amber-300'
+      )}
+      onClick={onToggleHidden}
+    >
+      {hidden ? (
+        <EyeSlashIcon className="size-4" />
+      ) : (
+        <EyeIcon className="size-4" />
+      )}
+    </button>
+  );
+
+  const name = (
+    <div
+      data-testid="opponent-name"
+      className={classNames(
+        'min-w-0 font-semibold uppercase tracking-wide',
+        // Names are how seats are told apart, so a pod wraps rather than
+        // cutting one off after eight characters. It gets the panel's
+        // full width, or a long surname would break mid-word.
+        compact
+          ? 'break-words text-xs leading-tight'
+          : 'flex-1 truncate text-sm'
+      )}
+    >
+      {peer.name}
+    </div>
+  );
+
+  const life = view && (
+    <div className="shrink-0 text-right">
+      <span className="mr-1 text-xs uppercase text-slate-400">Life</span>
+      <span
+        data-testid="opponent-life"
+        className={classNames(
+          'font-black tabular-nums',
+          compact ? 'text-3xl' : 'text-4xl'
+        )}
+      >
+        {view.life}
+      </span>
+    </div>
+  );
+
+  const header = compact ? (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center justify-between gap-2">
+        {hideButton}
+        {life}
+      </div>
+      {name}
+    </div>
+  ) : (
+    <div className="flex items-center justify-between gap-2">
+      {hideButton}
+      {name}
+      {life}
+    </div>
+  );
 
   return (
     <div
       data-testid="opponent-side"
       data-player-name={peer.name}
       data-seat={seat ?? undefined}
+      data-hidden={hidden || undefined}
       className={classNames(
-        'flex h-full min-w-0 min-h-0 bg-stone-500',
+        'flex h-full w-full min-w-0 min-h-0 bg-stone-500',
         // A pod tells its seats apart by the dark alleys between them, so
         // the seat itself carries no frame; it only clips a field that
         // would otherwise spill into its neighbour.
         compact ? 'overflow-hidden' : 'border-b-4 border-slate-900'
       )}
     >
-      <div
-        className={classNames(
-          'relative flex-1 min-w-0 h-full',
-          compact ? 'px-2 py-2' : 'px-8 py-3'
-        )}
-      >
-        <RevealPanel
-          reveal={view?.revealed}
-          size={compact ? 'xs' : 'sm'}
-          testId="opponent-reveal-panel"
-        />
-        {view && bounds ? (
-          <ScaledField
-            testId="opponent-battlefield"
-            fitWidth={bounds.width}
-            offsetX={bounds.offsetX}
-          >
-            {() =>
-              stackOrder(view.zones.battlefield).map((card) => (
-                <OpponentCard key={card.instanceId} card={card} />
-              ))
-            }
-          </ScaledField>
-        ) : (
-          <div className="flex h-full items-center justify-center text-lg font-medium text-stone-200">
-            {peer.name} has no game open.
-          </div>
-        )}
-      </div>
+      {!hidden && (
+        <div
+          className={classNames(
+            'relative flex-1 min-w-0 h-full',
+            compact ? 'px-2 py-2' : 'px-8 py-3'
+          )}
+        >
+          <RevealPanel
+            reveal={view?.revealed}
+            size={compact ? 'xs' : 'sm'}
+            testId="opponent-reveal-panel"
+          />
+          {view && bounds ? (
+            <ScaledField
+              testId="opponent-battlefield"
+              fitWidth={bounds.width}
+              offsetX={bounds.offsetX}
+            >
+              {() =>
+                stackOrder(view.zones.battlefield).map((card) => (
+                  <OpponentCard key={card.instanceId} card={card} />
+                ))
+              }
+            </ScaledField>
+          ) : (
+            <div className="flex h-full items-center justify-center text-lg font-medium text-stone-200">
+              {peer.name} has no game open.
+            </div>
+          )}
+        </div>
+      )}
 
       <aside
         style={{ width: compact ? POD_PANEL_WIDTH : SIDE_PANEL_WIDTH }}
@@ -210,37 +289,7 @@ const OpponentSide = ({
           compact ? 'p-2' : 'p-3'
         )}
       >
-        <div className="flex items-center justify-between gap-2">
-          <div
-            data-testid="opponent-name"
-            className={classNames(
-              'min-w-0 font-semibold uppercase tracking-wide',
-              // Names are how seats are told apart, so a pod wraps rather
-              // than cutting one off after eight characters.
-              compact
-                ? 'flex-1 break-words text-xs leading-tight'
-                : 'truncate text-sm'
-            )}
-          >
-            {peer.name}
-          </div>
-          {view && (
-            <div className="shrink-0 text-right">
-              <span className="mr-1 text-xs uppercase text-slate-400">
-                Life
-              </span>
-              <span
-                data-testid="opponent-life"
-                className={classNames(
-                  'font-black tabular-nums',
-                  compact ? 'text-3xl' : 'text-4xl'
-                )}
-              >
-                {view.life}
-              </span>
-            </div>
-          )}
-        </div>
+        {header}
         {view && (
           <PlayerCounters
             counters={view.counters}

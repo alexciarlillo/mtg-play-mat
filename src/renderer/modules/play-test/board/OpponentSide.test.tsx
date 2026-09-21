@@ -91,6 +91,41 @@ describe('OpponentSide', () => {
     expect(name.className).not.toContain('truncate');
   });
 
+  it('keeps a pod name clear of the hide button and the life total', () => {
+    Object.assign(window, {
+      api: { dispatch: vi.fn(() => Promise.resolve()) },
+    });
+    const { unmount } = render(
+      <ContextMenuProvider>
+        <OpponentSide
+          peer={peer}
+          view={view}
+          compact
+          onToggleHidden={vi.fn()}
+        />
+      </ContextMenuProvider>
+    );
+    // The name has the panel's width to itself, so a long surname wraps
+    // on the space instead of breaking inside the word.
+    const name = screen.getByTestId('opponent-name');
+    const above = name.previousElementSibling as HTMLElement;
+    expect(within(above).getByTestId('opponent-hide')).toBeInTheDocument();
+    expect(within(above).getByTestId('opponent-life')).toBeInTheDocument();
+    expect(name.parentElement?.className).toContain('flex-col');
+
+    unmount();
+    render(
+      <ContextMenuProvider>
+        <OpponentSide peer={peer} view={view} onToggleHidden={vi.fn()} />
+      </ContextMenuProvider>
+    );
+    // A duel panel is wide enough to keep them on one line.
+    const duel = screen.getByTestId('opponent-name')
+      .parentElement as HTMLElement;
+    expect(within(duel).getByTestId('opponent-life')).toBeInTheDocument();
+    expect(within(duel).getByTestId('opponent-hide')).toBeInTheDocument();
+  });
+
   it('drops the card-sized piles in a pod, keeping counts and browsing', () => {
     const { unmount } = renderSide(true);
     const graveyard = screen.getByTestId('opponent-graveyard');
