@@ -30,6 +30,7 @@ import BattlefieldCard from './BattlefieldCard';
 import CommanderPrompt from './CommanderPrompt';
 import {
   commanderSources,
+  damageRowsFor,
   hasCommanders,
   useCommanderPrompts,
   visibleCommanders,
@@ -195,6 +196,10 @@ const Board = ({ store, opponent, hand }: Props) => {
   const duel = peers.length > 0;
   const pod = peers.length > 1;
   const commanderGame = view !== null && hasCommanders(view);
+  const damageSources = opponentCommanders(peers);
+  const damageRows =
+    view !== null &&
+    damageRowsFor(damageSources, view.commanderDamage).length > 0;
   // The command zone needs room too, so piles shrink to one row for it.
   const compactPiles = duel || commanderGame;
   const pileSize = compactPiles ? 'xs' : 'sm';
@@ -280,96 +285,109 @@ const Board = ({ store, opponent, hand }: Props) => {
 
           <aside
             style={{ width: SIDE_PANEL_WIDTH }}
-            className={classNames(
-              'h-full shrink-0 overflow-y-auto bg-slate-800 text-slate-100 flex flex-col p-3',
-              duel ? 'gap-2' : 'gap-3'
-            )}
+            className="h-full shrink-0 bg-slate-800 text-slate-100 flex flex-col"
           >
-            {view && (
-              <>
-                <LifeCounter
-                  playerId={view.playerId}
-                  life={view.life}
-                  compact={duel}
-                  onSetLife={() => setDialog('setLife')}
-                />
-                <PlayerCounters
-                  counters={view.counters}
-                  playerId={view.playerId}
-                />
-                {turnTracking && <TurnPanel view={view} compact={duel} />}
-                {!view.keptHand && (
-                  <div
-                    data-testid="mulligan-status"
-                    className="rounded bg-amber-200 px-2 py-1 text-center text-sm font-semibold text-slate-900"
-                  >
-                    Choosing opening hand · Mulligans {view.mulligans}
-                  </div>
-                )}
-                <div
-                  className={classNames(
-                    'grid gap-x-2',
-                    compactPiles ? 'grid-cols-4 gap-y-1' : 'grid-cols-2 gap-y-3'
-                  )}
-                >
-                  <Library
+            <div
+              className={classNames(
+                'min-h-0 flex-1 overflow-y-auto flex flex-col p-3',
+                duel ? 'gap-2' : 'gap-3'
+              )}
+            >
+              {view && (
+                <>
+                  <LifeCounter
                     playerId={view.playerId}
-                    count={view.libraryCount}
-                    size={pileSize}
-                    activity={view.libraryActivity}
-                    onDrawMany={() => setDialog('drawMany')}
-                    onMill={() => setDialog('mill')}
+                    life={view.life}
+                    compact={duel}
+                    onSetLife={() => setDialog('setLife')}
                   />
-                  <div
-                    data-testid="hand-count"
-                    data-drop-zone="hand"
-                    data-count={view.handCount}
-                    className="flex flex-col items-center gap-1"
-                  >
+                  <PlayerCounters
+                    counters={view.counters}
+                    playerId={view.playerId}
+                  />
+                  {turnTracking && <TurnPanel view={view} compact={duel} />}
+                  {!view.keptHand && (
                     <div
-                      className={classNames(
-                        'aspect-card rounded-lg border-2 border-dashed border-slate-500',
-                        'flex items-center justify-center font-bold tabular-nums',
-                        compactPiles ? 'text-2xl' : 'text-4xl',
-                        cardWidths[pileSize]
-                      )}
+                      data-testid="mulligan-status"
+                      className="rounded bg-amber-200 px-2 py-1 text-center text-sm font-semibold text-slate-900"
                     >
-                      {view.handCount}
+                      Choosing opening hand · Mulligans {view.mulligans}
                     </div>
-                    <div className="text-sm font-medium">
-                      Hand{' '}
-                      <span className="tabular-nums">{view.handCount}</span>
-                    </div>
-                  </div>
-                  <ZonePile
-                    zone="graveyard"
-                    label="Graveyard"
-                    cards={view.zones.graveyard}
-                    size={pileSize}
-                    onOpen={() => setDialog('graveyard')}
-                  />
-                  <ZonePile
-                    zone="exile"
-                    label="Exile"
-                    cards={view.zones.exile}
-                    size={pileSize}
-                    onOpen={() => setDialog('exile')}
-                  />
-                  {commanderGame && (
-                    <CommandZone view={view} size={duel ? 'xs' : 'sm'} />
                   )}
-                </div>
+                  <div
+                    className={classNames(
+                      'grid gap-x-2',
+                      compactPiles
+                        ? 'grid-cols-4 gap-y-1'
+                        : 'grid-cols-2 gap-y-3'
+                    )}
+                  >
+                    <Library
+                      playerId={view.playerId}
+                      count={view.libraryCount}
+                      size={pileSize}
+                      activity={view.libraryActivity}
+                      onDrawMany={() => setDialog('drawMany')}
+                      onMill={() => setDialog('mill')}
+                    />
+                    <div
+                      data-testid="hand-count"
+                      data-drop-zone="hand"
+                      data-count={view.handCount}
+                      className="flex flex-col items-center gap-1"
+                    >
+                      <div
+                        className={classNames(
+                          'aspect-card rounded-lg border-2 border-dashed border-slate-500',
+                          'flex items-center justify-center font-bold tabular-nums',
+                          compactPiles ? 'text-2xl' : 'text-4xl',
+                          cardWidths[pileSize]
+                        )}
+                      >
+                        {view.handCount}
+                      </div>
+                      <div className="text-sm font-medium">
+                        Hand{' '}
+                        <span className="tabular-nums">{view.handCount}</span>
+                      </div>
+                    </div>
+                    <ZonePile
+                      zone="graveyard"
+                      label="Graveyard"
+                      cards={view.zones.graveyard}
+                      size={pileSize}
+                      onOpen={() => setDialog('graveyard')}
+                    />
+                    <ZonePile
+                      zone="exile"
+                      label="Exile"
+                      cards={view.zones.exile}
+                      size={pileSize}
+                      onOpen={() => setDialog('exile')}
+                    />
+                    {commanderGame && (
+                      <CommandZone view={view} size={duel ? 'xs' : 'sm'} />
+                    )}
+                  </div>
+                  <DummyOpponents
+                    playerId={view.playerId}
+                    dummies={view.dummies}
+                    commanders={commanderSources(visibleCommanders(view))}
+                  />
+                </>
+              )}
+            </div>
+            {/* Pinned below the scrolling column: lethal commander damage
+                has to stay in sight however little board a docked hand
+                leaves. Half the panel at most, so the rest keeps room. */}
+            {view && damageRows && (
+              <div className="max-h-[50%] shrink-0 overflow-y-auto border-t border-slate-600 px-3 py-2">
                 <CommanderDamageTaken
                   playerId={view.playerId}
-                  sources={opponentCommanders(peers)}
+                  sources={damageSources}
                   taken={view.commanderDamage}
                 />
-                <DummyOpponents
-                  playerId={view.playerId}
-                  dummies={view.dummies}
-                  commanders={commanderSources(visibleCommanders(view))}
-                />
-              </>
+              </div>
             )}
           </aside>
         </div>

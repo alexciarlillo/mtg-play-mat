@@ -1,5 +1,6 @@
 import type {
   CardView,
+  CommanderDamage,
   CommanderMove,
   PublicView,
   PublicZoneId,
@@ -36,6 +37,20 @@ export const commanderSources = (cards: CardView[]): DamageSource[] =>
     source: card.instanceId,
     name: card.ref?.name ?? 'Commander',
   }));
+
+// Sources still worth a row: the given ones, plus any that already dealt
+// damage (e.g. an opponent who has since left).
+export const damageRowsFor = (
+  sources: DamageSource[],
+  taken: CommanderDamage[]
+): (DamageSource & { damage: number })[] => {
+  const damage = new Map(taken.map((entry) => [entry.source, entry.damage]));
+  const known = new Set(sources.map((s) => s.source));
+  return [
+    ...sources.map((s) => ({ ...s, damage: damage.get(s.source) ?? 0 })),
+    ...taken.filter((entry) => !known.has(entry.source)),
+  ];
+};
 
 export const logPromptError = (err: unknown) => {
   console.error('[play-test] commander prompt failed', err);

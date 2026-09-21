@@ -6,21 +6,7 @@ import {
 import classNames from 'classnames';
 
 import { dispatch } from '../viewStore';
-import type { DamageSource } from './commanders';
-
-// Sources still worth a row: the given ones, plus any that already dealt
-// damage (e.g. an opponent who has since left).
-const rowsFor = (
-  sources: DamageSource[],
-  taken: CommanderDamage[]
-): (DamageSource & { damage: number })[] => {
-  const damage = new Map(taken.map((entry) => [entry.source, entry.damage]));
-  const known = new Set(sources.map((s) => s.source));
-  return [
-    ...sources.map((s) => ({ ...s, damage: damage.get(s.source) ?? 0 })),
-    ...taken.filter((entry) => !known.has(entry.source)),
-  ];
-};
+import { type DamageSource, damageRowsFor } from './commanders';
 
 const stepButton =
   'w-7 rounded bg-slate-700 text-sm font-bold text-white hover:bg-slate-600';
@@ -99,7 +85,7 @@ export const CommanderDamageTaken = ({
   taken,
   testId = 'commander-damage-taken',
 }: TakenProps) => {
-  const rows = rowsFor(sources, taken);
+  const rows = damageRowsFor(sources, taken);
   if (rows.length === 0) return null;
   return (
     <section data-testid={testId} className="flex flex-col gap-0.5">
@@ -202,7 +188,7 @@ export const DummyOpponents = ({
               </button>
             ))}
           </div>
-          {rowsFor(commanders, dummy.commanderDamage).map((row) => (
+          {damageRowsFor(commanders, dummy.commanderDamage).map((row) => (
             <DamageRow
               key={row.source}
               name={row.name}
