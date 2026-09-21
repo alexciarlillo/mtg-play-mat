@@ -4,6 +4,7 @@ import classNames from 'classnames';
 import Card from '../../../ui/Card';
 import { type CardSize, cardWidths } from '../../../ui/cardSizes';
 import { moveMenu } from '../common/cardMenus';
+import ZoneCountBadge from './ZoneCountBadge';
 
 interface Props {
   zone: 'graveyard' | 'exile' | 'command';
@@ -41,7 +42,7 @@ const ZonePile = ({
         tabIndex={0}
         aria-label={`Browse ${readOnly ? "opponent's " : ''}${label.toLowerCase()}`}
         className={classNames(
-          'aspect-card rounded-lg hover:cursor-pointer',
+          'relative aspect-card rounded-lg hover:cursor-pointer',
           cardWidths[size],
           top ? 'block' : 'border-2 border-dashed border-slate-500'
         )}
@@ -53,10 +54,9 @@ const ZonePile = ({
         {top && (
           <Card card={top} size={size} menu={readOnly ? [] : moveMenu(top)} />
         )}
+        <ZoneCountBadge count={cards.length} size={size} />
       </div>
-      <div className="text-sm font-medium">
-        {label} <span className="tabular-nums">{cards.length}</span>
-      </div>
+      <div className="text-sm font-medium">{label}</div>
     </div>
   );
 };

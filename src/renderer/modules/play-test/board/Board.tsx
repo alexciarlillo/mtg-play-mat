@@ -332,10 +332,7 @@ const Board = ({ store, opponent, hand }: Props) => {
                       >
                         {view.handCount}
                       </div>
-                      <div className="text-sm font-medium">
-                        Hand{' '}
-                        <span className="tabular-nums">{view.handCount}</span>
-                      </div>
+                      <div className="text-sm font-medium">Hand</div>
                     </div>
                     <ZonePile
                       zone="graveyard"

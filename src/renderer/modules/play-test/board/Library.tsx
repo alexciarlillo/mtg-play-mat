@@ -7,6 +7,7 @@ import CardImg from '../../../ui/CardImg';
 import { useContextMenu } from '../../../ui/ContextMenuProvider';
 import { dispatch } from '../viewStore';
 import LibraryActivityBadge from './LibraryActivityBadge';
+import ZoneCountBadge from './ZoneCountBadge';
 
 interface Props {
   playerId?: string;
@@ -92,10 +93,9 @@ const Library = ({
           compact={size === 'xs'}
           testId="library-activity"
         />
+        <ZoneCountBadge count={count} size={size} />
       </div>
-      <div className="text-sm font-medium">
-        Library <span className="tabular-nums">{count}</span>
-      </div>
+      <div className="text-sm font-medium">Library</div>
     </div>
   );
 };

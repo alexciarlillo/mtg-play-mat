@@ -21,6 +21,7 @@ import PlayerCounters from './PlayerCounters';
 import RevealPanel from './RevealPanel';
 import ScaledField from './ScaledField';
 import ZoneBrowser from './ZoneBrowser';
+import ZoneCountBadge from './ZoneCountBadge';
 import ZonePile from './ZonePile';
 
 type Pile = 'graveyard' | 'exile';
@@ -122,19 +123,20 @@ const Count = ({
         cardWidths.xs,
         back && count > 0
           ? 'overflow-hidden'
-          : 'border-2 border-dashed border-slate-500 text-2xl font-bold tabular-nums'
+          : 'border-2 border-dashed border-slate-500',
+        // A hand has no art to badge, so its count stays the tile.
+        !back && 'text-2xl font-bold tabular-nums'
       )}
     >
-      {back && count > 0 ? <CardImg name={label} /> : count}
+      {back ? count > 0 && <CardImg name={label} /> : count}
       <LibraryActivityBadge
         activity={activity}
         compact
         testId={`${testId}-activity`}
       />
+      {back && <ZoneCountBadge count={count} size="xs" />}
     </div>
-    <div className="text-xs font-medium">
-      {label} <span className="tabular-nums">{count}</span>
-    </div>
+    <div className="text-xs font-medium">{label}</div>
   </div>
 );
 
