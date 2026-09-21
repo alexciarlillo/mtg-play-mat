@@ -58,3 +58,66 @@ describe('fieldDropPosition', () => {
     ).toBeNull();
   });
 });
+
+// The player panel now makes the field scale to fit its cards, so the
+// same screen box is a different number of logical units at each scale.
+const scaled = (scale: number) => ({
+  field,
+  scale,
+  fieldSize: { width: 800 / scale, height: 600 / scale },
+  cardSize: { width: 160, height: 224 },
+});
+
+// Where the dropped card's left edge is drawn on screen.
+const screenLeft = (x: number, offsetX: number, scale: number) =>
+  field.left + (offsetX + x) * scale;
+
+describe('fieldDropPosition under a scaled field', () => {
+  const offsetX = 32;
+  const grab = { x: 80, y: 112 };
+  const pointer = { x: 520, y: 400 };
+
+  it('holds the grab point under the pointer at every scale', () => {
+    for (const scale of [1, 0.75, 0.5, 0.31]) {
+      const drop = fieldDropPosition({
+        ...scaled(scale),
+        pointer,
+        grab,
+        offsetX,
+      });
+      expect(drop).not.toBeNull();
+      // A logical unit is rounded, so the card can sit half a unit off.
+      expect(
+        screenLeft(drop!.x, offsetX, scale) + grab.x * scale - pointer.x
+      ).toBeLessThanOrEqual(scale);
+      expect(
+        field.top + (drop!.y + grab.y) * scale - pointer.y
+      ).toBeLessThanOrEqual(scale);
+    }
+  });
+
+  it('lands under the pointer again once a resize has rescaled it', () => {
+    const before = fieldDropPosition({ ...scaled(1), pointer, grab, offsetX });
+    const after = fieldDropPosition({ ...scaled(0.4), pointer, grab, offsetX });
+    // The same point on screen is a different position on a rescaled
+    // field, and both still land the grab point under the pointer.
+    expect(after!.x).not.toBe(before!.x);
+    expect(screenLeft(after!.x, offsetX, 0.4) + grab.x * 0.4).toBeCloseTo(
+      pointer.x,
+      0
+    );
+  });
+
+  it('keeps a card off the player panel at every scale', () => {
+    for (const scale of [1, 0.6, 0.35]) {
+      const drop = fieldDropPosition({
+        ...scaled(scale),
+        pointer: { x: field.right, y: field.bottom },
+        grab: { x: 0, y: 0 },
+        offsetX,
+      });
+      const right = screenLeft(drop!.x, offsetX, scale) + 160 * scale;
+      expect(right).toBeLessThanOrEqual(field.right);
+    }
+  });
+});

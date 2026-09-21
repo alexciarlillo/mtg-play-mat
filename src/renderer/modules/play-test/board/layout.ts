@@ -1,19 +1,20 @@
 import type { Position } from '@shared/game';
 
-// The board's right-hand panel (life, tools, zone piles), in px.
-export const SIDE_PANEL_WIDTH = 320;
+// The player panel, and an opponent panel outside a pod, at their full
+// width in px. Both hold life, counters, zone piles and the command zone.
+export const FULL_PANEL_WIDTH = 320;
 
 // The battlefield's logical height. Card positions are in these units, and
 // a shorter field (e.g. half a board shared with an opponent) scales down,
 // so positions mean the same thing on every screen and to every peer.
 export const FIELD_HEIGHT = 640;
 
-// The narrower panel beside each opponent in a pod of three or four.
+// The narrower opponent panel used in a pod of three or four.
 export const POD_PANEL_WIDTH = 184;
 
-// A duel panel shorter than this cannot hold card-sized zone piles and a
-// command zone at once, so its counts drop to the pod's name-and-count
-// tiles rather than under a fold.
+// A duel's opponent panel shorter than this cannot hold card-sized zone
+// piles and a command zone at once, so its counts drop to the pod's
+// name-and-count tiles rather than under a fold.
 export const TIGHT_PANEL_HEIGHT = 300;
 
 // Logical width that holds every card of a battlefield, so a narrow

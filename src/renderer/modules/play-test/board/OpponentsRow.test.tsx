@@ -13,8 +13,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { ContextMenuProvider } from '../../../ui/ContextMenuProvider';
 import {
+  FULL_PANEL_WIDTH,
   POD_PANEL_WIDTH,
-  SIDE_PANEL_WIDTH,
   TIGHT_PANEL_HEIGHT,
 } from './layout';
 import OpponentsRow from './OpponentsRow';
@@ -156,7 +156,7 @@ describe('OpponentsRow hidden boards', () => {
   it('hides a duel opponent too, folding to the wider panel', async () => {
     renderRow(['Bob']);
     await toggle('Bob');
-    expect(sizes('Bob')).toBe(`0/${SIDE_PANEL_WIDTH}px`);
+    expect(sizes('Bob')).toBe(`0/${FULL_PANEL_WIDTH}px`);
     expect(screen.queryByTestId('opponent-battlefield')).toBeNull();
     expect(within(seat('Bob')).getByTestId('opponent-life')).toHaveTextContent(
       '40'

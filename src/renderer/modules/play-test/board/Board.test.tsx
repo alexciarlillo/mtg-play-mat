@@ -241,7 +241,7 @@ describe('Board library activity', () => {
 });
 
 describe('Board tools', () => {
-  it('has no tool buttons in the side panel', async () => {
+  it('has no tool buttons in the player panel', async () => {
     renderBoard(defaultSettings);
     await act(async () => {});
     [

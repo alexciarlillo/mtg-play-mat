@@ -5,7 +5,7 @@ import type { OpponentState } from '@shared/net/remoteViews';
 import { createRoot } from 'react-dom/client';
 
 import Board from '../modules/play-test/board/Board';
-import { SIDE_PANEL_WIDTH } from '../modules/play-test/board/layout';
+import { FULL_PANEL_WIDTH } from '../modules/play-test/board/layout';
 import {
   createViewStore,
   type ViewStore,
@@ -28,7 +28,7 @@ if (container) {
   const render = (hand?: ViewStore<PrivateView>) =>
     root.render(
       <ContextMenuProvider>
-        <CardPreviewProvider reserveRight={SIDE_PANEL_WIDTH}>
+        <CardPreviewProvider reserveRight={FULL_PANEL_WIDTH}>
           <Board store={store} opponent={opponent} hand={hand} />
         </CardPreviewProvider>
       </ContextMenuProvider>

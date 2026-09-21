@@ -490,7 +490,7 @@ test('the Game menu follows the play test and drives the board', async () => {
   const hand = await windowByPage('hand.html');
   await hand.getByRole('button', { name: 'Keep' }).click();
 
-  // The side panel has no tool buttons left.
+  // The player panel has no tool buttons left.
   for (const name of ['Untap all', 'Shuffle', 'Token…', 'Restart', 'Undo']) {
     await expect(board.getByRole('button', { name })).toHaveCount(0);
   }

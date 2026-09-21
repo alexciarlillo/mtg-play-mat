@@ -12,8 +12,8 @@ import { CommanderDamageTaken } from './CommanderTracker';
 import CommandZone from './CommandZone';
 import {
   fieldBounds,
+  FULL_PANEL_WIDTH,
   POD_PANEL_WIDTH,
-  SIDE_PANEL_WIDTH,
   stackOrder,
 } from './layout';
 import LibraryActivityBadge from './LibraryActivityBadge';
@@ -294,7 +294,7 @@ const OpponentSide = ({
       )}
 
       <aside
-        style={{ width: compact ? POD_PANEL_WIDTH : SIDE_PANEL_WIDTH }}
+        style={{ width: compact ? POD_PANEL_WIDTH : FULL_PANEL_WIDTH }}
         className="h-full shrink-0 bg-slate-700 text-slate-100 flex flex-col"
       >
         <div

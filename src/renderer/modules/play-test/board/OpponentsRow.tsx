@@ -7,8 +7,8 @@ import classNames from 'classnames';
 import { type PointerEvent, useLayoutEffect, useRef, useState } from 'react';
 
 import {
+  FULL_PANEL_WIDTH,
   POD_PANEL_WIDTH,
-  SIDE_PANEL_WIDTH,
   TIGHT_PANEL_HEIGHT,
 } from './layout';
 import OpponentSide from './OpponentSide';
@@ -53,7 +53,7 @@ const OpponentsRow = ({
   const [resize, setResize] = useState<Resize | null>(null);
   const [hiddenIds, setHiddenIds] = useState<string[]>([]);
   const pod = peers.length > 1;
-  const panelWidth = pod ? POD_PANEL_WIDTH : SIDE_PANEL_WIDTH;
+  const panelWidth = pod ? POD_PANEL_WIDTH : FULL_PANEL_WIDTH;
   const isHidden = (playerId: string) => hiddenIds.includes(playerId);
   const shown = resize?.height ?? rowHeight(height);
   // What the row ends up with, which is not what it asked for: a tall

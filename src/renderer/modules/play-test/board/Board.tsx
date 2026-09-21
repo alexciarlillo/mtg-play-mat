@@ -40,7 +40,7 @@ import CommandZone from './CommandZone';
 import CounterDialog from './CounterDialog';
 import HandTray from './HandTray';
 import Library from './Library';
-import { fieldBounds, SIDE_PANEL_WIDTH, stackOrder } from './layout';
+import { fieldBounds, FULL_PANEL_WIDTH, stackOrder } from './layout';
 import LifeCounter from './LifeCounter';
 import OpponentsRow from './OpponentsRow';
 import { opponentCommanders, requestRoll, seatOrder } from './pod';
@@ -201,10 +201,10 @@ const Board = ({ store, opponent, hand }: Props) => {
     damageRowsFor(damageSources, view.commanderDamage).length > 0;
   // The command zone needs room too, so piles shrink to one row for it.
   const compactPiles = duel || commanderGame;
-  // The field reserves room for a tapped card's overhang the way an
-  // opponent's does; only the shift is taken, so spreading out to the
-  // right never shrinks the board the player is playing on.
-  const offsetX = view ? fieldBounds(view.zones.battlefield).offsetX : 0;
+  // The field fits every card the way an opponent's does, so a window
+  // narrow enough to squeeze it scales the cards down instead of sliding
+  // them out over the player panel.
+  const bounds = fieldBounds(view ? view.zones.battlefield : []);
   const pileSize = compactPiles ? 'xs' : 'sm';
 
   return (
@@ -239,8 +239,8 @@ const Board = ({ store, opponent, hand }: Props) => {
                 }
               />
             )}
-            {/* Over the field, not in the side panel, which is full in a
-              commander pod; it waits for settings so it doesn't jump. */}
+            {/* Over the field, not in the player panel, which is full in
+              a commander pod; it waits for settings so it doesn't jump. */}
             {settingsLoaded && (
               <FloatingPanel
                 title="Table"
@@ -257,7 +257,11 @@ const Board = ({ store, opponent, hand }: Props) => {
               </FloatingPanel>
             )}
             {/* Positions are relative to this box, in logical field units. */}
-            <ScaledField testId="battlefield" offsetX={offsetX}>
+            <ScaledField
+              testId="battlefield"
+              fitWidth={bounds.width}
+              offsetX={bounds.offsetX}
+            >
               {(scale) =>
                 view &&
                 stackOrder(view.zones.battlefield).map((card) => (
@@ -265,7 +269,7 @@ const Board = ({ store, opponent, hand }: Props) => {
                     key={card.instanceId}
                     card={card}
                     scale={scale}
-                    offsetX={offsetX}
+                    offsetX={bounds.offsetX}
                     onAddCounter={onAddCounter}
                     onAttach={onAttach}
                   />
@@ -275,7 +279,7 @@ const Board = ({ store, opponent, hand }: Props) => {
           </div>
 
           <aside
-            style={{ width: SIDE_PANEL_WIDTH }}
+            style={{ width: FULL_PANEL_WIDTH }}
             className="h-full shrink-0 bg-slate-800 text-slate-100 flex flex-col"
           >
             <div

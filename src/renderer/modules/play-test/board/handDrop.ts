@@ -48,18 +48,16 @@ export const fieldDropPosition = ({
     pointer.y >= field.top &&
     pointer.y <= field.bottom;
   if (!inside || scale <= 0) return null;
+  // Rounded before the clamp, so a whole-unit position can never land a
+  // fraction of a unit past the edge a fitted field is scaled to.
   return {
-    x: Math.round(
-      clamp(
-        (pointer.x - field.left) / scale - grab.x - offsetX,
-        fieldSize.width - offsetX - cardSize.width
-      )
+    x: clamp(
+      Math.round((pointer.x - field.left) / scale - grab.x - offsetX),
+      Math.floor(fieldSize.width - offsetX - cardSize.width)
     ),
-    y: Math.round(
-      clamp(
-        (pointer.y - field.top) / scale - grab.y,
-        fieldSize.height - cardSize.height
-      )
+    y: clamp(
+      Math.round((pointer.y - field.top) / scale - grab.y),
+      Math.floor(fieldSize.height - cardSize.height)
     ),
   };
 };
