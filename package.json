@@ -1,7 +1,7 @@
 {
   "name": "mtg-play-mat",
   "productName": "MTG Play Mat",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Multi-window Magic: The Gathering playtest table",
   "license": "MIT",
   "author": "Alexander Ciarlillo",
