@@ -10,6 +10,7 @@ import { type FormEvent, type ReactNode, useRef, useState } from 'react';
 import { Link } from 'react-router';
 
 import useSettings from '../../hooks/useSettings';
+import DebugLogPanel from './DebugLogPanel';
 import GameSetup from './GameSetup';
 import useNetState from './useNetState';
 import usePlayTestStatus from './usePlayTestStatus';
@@ -711,6 +712,8 @@ const PlayOnline = () => {
         gameOpen={playTest.open}
         onNeedDeck={() => deckSelect.current?.focus()}
       />
+
+      <DebugLogPanel />
     </div>
   );
 };

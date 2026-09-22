@@ -2,6 +2,7 @@ import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 
 import { CARD_SCHEME } from '@shared/cardImages';
+import { relayHost } from '@shared/debug';
 import { app, BrowserWindow, protocol } from 'electron';
 
 import CardDataService from './cardData/CardDataService';
@@ -12,13 +13,16 @@ import {
   createCardImageHandler,
 } from './imageCache/cardProtocol';
 import { registerDeepLinkScheme, watchDeepLinks } from './deepLink';
+import DebugLog from './debugLog';
 import { registerRequestHandlers, sendEvent } from './ipc';
 import MenuBuilder from './menu';
 import createCardDataHandlers from './modules/card-data/cardDataHandlers';
+import createDebugHandlers from './modules/debug/debugHandlers';
 import createCollectionHandlers from './modules/collection/collectionHandlers';
 import createDeckHandlers from './modules/decks/deckHandlers';
 import type Netplay from './modules/netplay/Netplay';
 import ProfileStore from './modules/netplay/ProfileStore';
+import { relaySettings } from './modules/netplay/relayConfig';
 import { setupNetplay } from './modules/netplay/setupNetplay';
 import PlayTest from './modules/play-test/PlayTest';
 import createTokenHandlers from './modules/play-test/tokenHandlers';
@@ -44,6 +48,34 @@ let menu: MenuBuilder | null = null;
 // so the menu reads the instance through this holder instead of taking
 // it as a parameter.
 let netplay: Netplay | null = null;
+
+// Set once the app is ready; the exception handlers below are installed
+// before that, so they check it.
+let debugLog: DebugLog | null = null;
+
+// Every window logs into one buffer, and the Play online page renders
+// it. Pushes are coalesced: a busy pod would otherwise push per message.
+let debugPush: ReturnType<typeof setTimeout> | null = null;
+
+const pushDebugLog = () => {
+  if (debugPush) return;
+  debugPush = setTimeout(() => {
+    debugPush = null;
+    if (debugLog) sendEvent(appWindow, 'debugLog', debugLog.snapshot());
+  }, 150);
+};
+
+// Multiplayer is what the log is for, but an exception anywhere else is
+// worth catching too: it is usually the reason multiplayer stopped.
+process.on('uncaughtException', (err) => {
+  if (debugLog) debugLog.caught('app', 'uncaught exception', err);
+  else console.error(err);
+});
+
+process.on('unhandledRejection', (reason) => {
+  if (debugLog) debugLog.caught('app', 'unhandled rejection', reason);
+  else console.error(reason);
+});
 
 const testHooksEnabled = process.env.MTG_PLAY_MAT_TEST_HOOKS === '1';
 
@@ -106,6 +138,24 @@ const start = (onDeepLink: ReturnType<typeof watchDeepLinks>) => {
   const settings = new SettingsStore(
     path.join(app.getPath('userData'), 'settings.json')
   );
+  debugLog = new DebugLog({
+    // The relay as it will actually be used, which an environment
+    // variable can override.
+    env: () => {
+      const relay = relaySettings(settings.settings);
+      return {
+        appVersion,
+        platform:
+          `${process.platform} ${process.arch} ` +
+          `electron ${process.versions.electron}`,
+        relayHost: relayHost(relay.baseUrl),
+        relayKeySet: relay.appKey.trim() !== '',
+      };
+    },
+    onChange: pushDebugLog,
+  });
+  const log = debugLog;
+  log.scoped('app').info('app started', { version: appVersion });
   settings.onChange((next) => {
     BrowserWindow.getAllWindows().forEach((window) => {
       sendEvent(window, 'settingsChanged', next);
@@ -126,6 +176,7 @@ const start = (onDeepLink: ReturnType<typeof watchDeepLinks>) => {
     playTest,
     getAppWindow: () => appWindow,
     testHooks: testHooksEnabled,
+    log,
   });
   netplay = online.netplay;
 
@@ -162,6 +213,7 @@ const start = (onDeepLink: ReturnType<typeof watchDeepLinks>) => {
       ...createTokenHandlers({ cardDb }),
       ...online.handlers,
       ...createSettingsHandlers({ settings }),
+      ...createDebugHandlers({ log }),
     },
     {
       ...online.guards,

@@ -1,3 +1,4 @@
+import type { DebugInput, DebugSnapshot } from '../debug';
 import type {
   CardView,
   CommanderMove,
@@ -116,6 +117,11 @@ export const requests = {
   searchTokens: request<[query: string], TokenSearchResult[]>(),
   // App preferences. Main drops invalid keys and values from a patch, and
   // every window hears about the change as settingsChanged.
+  // A shareable trace of the networked paths, plus any exception the
+  // app hit. Every window may add a line; main keeps the buffer.
+  getDebugLog: request<[], DebugSnapshot>(),
+  clearDebugLog: request<[], DebugSnapshot>(),
+  logDebug: request<[entry: DebugInput]>(),
   getSettings: request<[], Settings>(),
   updateSettings: request<[patch: SettingsPatch], Settings>(),
 };
@@ -138,6 +144,7 @@ export const events = {
   boardMenuCommand: event<BoardMenuCommand>(),
   // To the app window.
   navigate: event<AppRoute>(),
+  debugLog: event<DebugSnapshot>(),
 };
 
 type SpecType<S> = S extends Spec<infer T> ? T : never;

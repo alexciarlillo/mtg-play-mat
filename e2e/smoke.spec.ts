@@ -211,6 +211,10 @@ test('window.api is a narrow typed bridge', async () => {
       'onPlayTestStatus',
       'onBoardMenuCommand',
       'onNavigate',
+      'getDebugLog',
+      'clearDebugLog',
+      'logDebug',
+      'onDebugLog',
     ].sort()
   );
   expect(surface.allFunctions).toBe(true);

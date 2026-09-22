@@ -205,6 +205,22 @@ test('a guest told the wrong code is told why', async () => {
   );
 });
 
+test('the debug log says what the relay did, without the key', async () => {
+  const guestApp = await page(guest, 'app.html');
+  await guestApp.getByRole('button', { name: 'Show debug log' }).click();
+
+  await expect(guestApp.getByTestId('debug-env')).toContainText(
+    `relay 127.0.0.1:${new URL(baseUrl).port} (key set)`
+  );
+  const entries = guestApp.getByTestId('debug-entries');
+  await expect(entries).toContainText('dialling the relay');
+  // The attempt that was just refused, as the player would screenshot it.
+  await expect(entries).toContainText('the relay refused us');
+  await expect(entries).not.toContainText(APP_KEY);
+
+  await guestApp.getByRole('button', { name: 'Hide debug log' }).click();
+});
+
 test('the pod ends for everyone when the host leaves', async () => {
   const hostApp = await page(host, 'app.html');
   const guestApp = await page(guest, 'app.html');

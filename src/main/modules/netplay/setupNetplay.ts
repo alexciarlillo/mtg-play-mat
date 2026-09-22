@@ -1,6 +1,8 @@
 import type { IceServer, NetConfig } from '@shared/net/lobby';
+import { relayHost } from '@shared/debug';
 import { app, BrowserWindow, screen } from 'electron';
 
+import type DebugLog from '../../debugLog';
 import { type RequestHandlers, type SenderGuards, sendEvent } from '../../ipc';
 import type PlayTest from '../play-test/PlayTest';
 import type SettingsStore from '../settings/SettingsStore';
@@ -86,12 +88,14 @@ export const setupNetplay = ({
   playTest,
   getAppWindow,
   testHooks,
+  log,
 }: {
   profile: ProfileStore;
   settings: SettingsStore;
   playTest: PlayTest;
   getAppWindow(): BrowserWindow | null;
   testHooks: boolean;
+  log: DebugLog;
 }) => {
   const config: NetConfig = {
     iceServers: iceServers(testHooks),
@@ -100,11 +104,12 @@ export const setupNetplay = ({
 
   const netWindow = new NetWindow(() => {
     netplay.transportLost();
-  });
+  }, log.scoped('peer'));
 
   const relay = new RelayTransport({
     settings: () => relaySettings(settings.settings),
     report: (report) => netplay.handleReport(report),
+    log,
   });
 
   const netplay: Netplay = new Netplay({
@@ -119,6 +124,7 @@ export const setupNetplay = ({
       const { baseUrl, appKey } = relaySettings(settings.settings);
       return baseUrl.trim() !== '' && appKey.trim() !== '';
     },
+    log,
     pushOpponent: (state) => {
       growForTable(playTest.boardWindow, state.peers.length);
       sendEvent(playTest.boardWindow, 'opponentView', state);
@@ -140,6 +146,10 @@ export const setupNetplay = ({
       next.relayUrl !== previous.relayUrl ||
       next.relayKey !== previous.relayKey
     ) {
+      log.scoped('relay').info('the relay settings changed', {
+        server: relayHost(relaySettings(next).baseUrl) ?? 'not set',
+        key: relaySettings(next).appKey.trim() === '' ? 'not set' : 'set',
+      });
       netplay.settingsChanged();
     }
   });

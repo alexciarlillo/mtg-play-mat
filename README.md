@@ -227,6 +227,23 @@ and validates every message (`src/shared/net/protocol.ts`, protocol version 2) a
 forwards the other players' views to the board. The host's net window holds one peer
 connection per guest seat.
 
+### Debug log
+
+**Show debug log** at the bottom of **Play online** opens a running trace of the
+networked paths: settings checked, lobbies asked for and answered, sockets dialled,
+opened and closed (with the close code), seats taken, hellos, message kinds and sizes,
+and every failure with its reason. Any uncaught exception or unhandled rejection in
+main or in any window lands there too, since that is usually why multiplayer stopped.
+
+It is meant to be screenshotted or copied and sent on, so it is short and safe:
+the header names the build, the platform and the relay host, repeated lines collapse
+to one with a count, and payloads are never recorded — only kinds, sizes and seats.
+The relay key and the host token are redacted out of every URL. **Clear**, retry, then
+screenshot, and the log holds that attempt alone.
+
+Main owns the one buffer (`src/main/debugLog.ts`, the last 300 lines); every window
+logs into it over `logDebug` and the page renders the pushes.
+
 Invite links: packaged builds register the `mtgplaymat://` scheme. In development
 nothing is registered unless you set `MTG_PLAY_MAT_REGISTER_PROTOCOL=1`, which
 registers the dev Electron binary plus this checkout (undo it by running a packaged

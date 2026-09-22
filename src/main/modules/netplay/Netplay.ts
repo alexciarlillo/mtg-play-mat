@@ -1,5 +1,11 @@
 import { randomInt } from 'node:crypto';
 
+import {
+  type DebugSink,
+  describeError,
+  type ScopedLog,
+  scopedLog,
+} from '@shared/debug';
 import { type PlayerId, type PublicView, startingLife } from '@shared/game';
 import {
   CodeError,
@@ -72,6 +78,8 @@ export interface NetplayDeps {
   // Whether a relay server and key are configured.
   relayReady?(): boolean;
   pushOpponent(state: OpponentState): void;
+  // Where the networked paths narrate themselves, for the debug log.
+  log?: DebugSink;
   // How long the host waits for a channel after pasting a reply.
   connectTimeoutMs?: number;
   // An integer in [0, max).
@@ -198,8 +206,11 @@ export default class Netplay {
   // moves it forward for the board.
   private fakeRev = 0;
 
+  private readonly log: ScopedLog;
+
   constructor(private readonly deps: NetplayDeps) {
     this.remote = new RemoteViews(() => this.deps.profile().playerId);
+    this.log = scopedLog(deps.log, 'netplay');
   }
 
   readonly handlers: NetplayHandlers = {
@@ -270,6 +281,7 @@ export default class Netplay {
 
   // The net window crashed: every link went with it.
   transportLost = () => {
+    this.log.error('the connection window went away; every link with it');
     if (this.state.role === 'guest') {
       this.handleReport({ type: 'closed', seat: HOST_SEAT });
     } else if (this.state.role === 'host') {
@@ -344,6 +356,7 @@ export default class Netplay {
   };
 
   host = async () => {
+    this.log.info('hosting with invite codes');
     const session = this.reset(
       { role: 'host', status: 'Gathering routes…' },
       'p2p'
@@ -352,6 +365,7 @@ export default class Netplay {
     this.remote.setRoster(this.roster());
     this.update({ players: this.roster() });
     if (!(await this.transport.open()) || session !== this.session) {
+      this.log.warn('gave up hosting: the transport went away');
       return;
     }
     this.startInvite(guestSeats[0]);
@@ -360,6 +374,7 @@ export default class Netplay {
   // Relay: open a lobby and wait. There is no invite to gather and no
   // reply to paste; seats fill themselves as people type the code.
   hostLobby = async () => {
+    this.log.info('opening a relay lobby', { slots: MAX_SEATS });
     const session = this.reset(
       { role: 'host', phase: 'creatingInvite', status: 'Opening a lobby…' },
       'relay'
@@ -367,7 +382,10 @@ export default class Netplay {
     this.seats = new Map(guestSeats.map((seat) => [seat, emptySeat(seat)]));
     this.remote.setRoster(this.roster());
     this.update({ players: this.roster() });
-    if (!(await this.transport.open()) || session !== this.session) return;
+    if (!(await this.transport.open()) || session !== this.session) {
+      this.log.warn('gave up hosting: the transport went away');
+      return;
+    }
     this.transport.send({ op: 'hostLobby', slots: MAX_SEATS });
   };
 
@@ -375,11 +393,13 @@ export default class Netplay {
   joinLobby = async (input: unknown) => {
     const code = normalizeLobbyCode(input);
     if (!code) {
+      this.log.warn('refused a lobby code that is not six characters');
       this.update({
         error: 'That is not a lobby code. They are six characters long.',
       });
       return;
     }
+    this.log.info('joining a relay lobby', { code });
     const session = this.reset(
       {
         role: 'guest',
@@ -390,7 +410,10 @@ export default class Netplay {
       },
       'relay'
     );
-    if (!(await this.transport.open()) || session !== this.session) return;
+    if (!(await this.transport.open()) || session !== this.session) {
+      this.log.warn('gave up joining: the transport went away');
+      return;
+    }
     this.transport.send({ op: 'joinLobby', code });
   };
 
@@ -400,6 +423,7 @@ export default class Netplay {
     const seat = this.hostSeat(input);
     if (!seat || seat.phase !== 'empty') return;
     const session = this.session;
+    this.log.info('making an invite', { seat: seat.seat });
     this.updateSeat(seat, { phase: 'creatingInvite', error: null });
     // Starts a new net window if the old one went away.
     if (!(await this.transport.open()) || session !== this.session) {
@@ -418,11 +442,13 @@ export default class Netplay {
       return;
     }
 
+    this.log.info('taking a reply', { seat: seat.seat });
     this.updateSeat(seat, { phase: 'connecting', error: null });
     this.transport.send({ op: 'acceptReply', seat: seat.seat, code });
     this.clearSeatTimer(seat);
     seat.timer = setTimeout(() => {
       if (session === this.session && seat.phase === 'connecting') {
+        this.log.error('no route found in time', { seat: seat.seat });
         this.updateSeat(seat, { phase: 'awaitingReply', error: NO_ROUTE });
       }
     }, this.deps.connectTimeoutMs ?? 30_000);
@@ -439,6 +465,7 @@ export default class Netplay {
     const code = typeof input === 'string' ? extractCode(input) : '';
     const desc = await this.check(code, 'offer');
     if (!desc) return;
+    this.log.info('joining with an invite code');
 
     const session = this.reset(
       {
@@ -450,17 +477,20 @@ export default class Netplay {
       'p2p'
     );
     if (!(await this.transport.open()) || session !== this.session) {
+      this.log.warn('gave up joining: the transport went away');
       return;
     }
     this.transport.send({ op: 'join', code, config: this.deps.config });
   };
 
   leave = () => {
+    this.log.info('leaving the pod');
     this.send({ kind: 'bye' });
     this.reset({});
   };
 
   resend = () => {
+    this.log.info('resending state');
     this.send({ kind: 'hello', ...this.helloInfo() });
     this.send({ kind: 'public', view: this.deps.localView() });
     // The roster carries the host's name too.
@@ -484,7 +514,35 @@ export default class Netplay {
     this.rollFor(playerId, displayName, request);
   };
 
+  // Every report a transport makes, so a failed join reads as the
+  // sequence it was rather than one error at the end of it.
+  private logReport = (report: NetReport) => {
+    const where = { seat: report.seat, mode: this.mode, role: this.state.role };
+    switch (report.type) {
+      case 'message':
+        // Logged once it parses, by kind; see receiveFrom*.
+        return;
+      case 'connection':
+        this.log.debug(`link is ${report.state}`, where);
+        return;
+      case 'error':
+      case 'lobbyFailed':
+        this.log.error(report.type, { ...where, why: report.message });
+        return;
+      case 'invite':
+      case 'reply':
+        this.log.info(`${report.type} ready`, where);
+        return;
+      case 'lobby':
+        this.log.info('lobby is open', { ...where, code: report.code });
+        return;
+      default:
+        this.log.info(`link ${report.type}`, where);
+    }
+  };
+
   handleReport = (report: NetReport) => {
+    this.logReport(report);
     if (report.type === 'lobby') {
       this.update({ lobbyCode: report.code });
       if (this.state.role === 'host') this.refreshHost();
@@ -602,8 +660,17 @@ export default class Netplay {
     try {
       return parseNetMessage(raw);
     } catch (err) {
-      if (err instanceof VersionError) onVersion(err);
-      else console.warn('[netplay] dropped message', String(err));
+      if (err instanceof VersionError) {
+        this.log.error('the other player speaks another protocol', {
+          theirs: String(err.version),
+          ours: PROTOCOL_VERSION,
+        });
+        onVersion(err);
+      } else {
+        this.log.warn('dropped an unreadable message', {
+          why: describeError(err),
+        });
+      }
       return null;
     }
   };
@@ -615,6 +682,11 @@ export default class Netplay {
       this.rejectSeat(seat, versionMismatch(err.version))
     );
     if (!message) return;
+    // Kinds and sizes only: what a player holds never goes in the log.
+    this.log.debug(`in ${message.kind}`, {
+      seat: seat.seat,
+      bytes: raw.length,
+    });
 
     if (!seat.playerId) {
       if (message.kind !== 'hello') return;
@@ -622,19 +694,29 @@ export default class Netplay {
         message.from === this.deps.profile().playerId ||
         [...this.seats.values()].some((s) => s.playerId === message.from);
       if (taken) {
+        this.log.error('two players share one id', { seat: seat.seat });
         this.rejectSeat(seat, 'That player is already in the pod.');
         return;
       }
       seat.playerId = message.from;
     } else if (message.from !== seat.playerId) {
-      console.warn('[netplay] dropped message sent as another player');
+      this.log.warn('dropped a message sent as another player', {
+        seat: seat.seat,
+      });
       return;
     }
 
     switch (message.kind) {
       case 'hello': {
         const first = seat.hello === null;
-        if (first) this.notice = null;
+        if (first) {
+          this.notice = null;
+          this.log.info('a player said hello', {
+            seat: seat.seat,
+            name: message.name,
+            version: message.appVersion,
+          });
+        }
         this.remote.receive(message);
         seat.hello = raw;
         this.updateSeat(seat, { player: this.remote.peer(message.from) });
@@ -680,6 +762,7 @@ export default class Netplay {
       this.end('Could not join the pod.', versionMismatch(err.version))
     );
     if (!message) return;
+    this.log.debug(`in ${message.kind}`, { bytes: raw.length });
     if (message.from === this.deps.profile().playerId) return;
     if (!this.hostId && message.kind === 'hello') this.hostId = message.from;
     const fromHost = message.from === this.hostId;
@@ -790,6 +873,11 @@ export default class Netplay {
     const name = seat.playerId
       ? this.remote.peer(seat.playerId)?.name
       : undefined;
+    this.log.info('seat dropped', {
+      seat: seat.seat,
+      name,
+      why: reason ?? 'closed here',
+    });
     this.transport.send({ op: 'close', seat: seat.seat });
     this.clearSeatTimer(seat);
     const wasBound = seat.playerId !== null;
@@ -836,9 +924,18 @@ export default class Netplay {
     } as NetMessage;
     const data = encodeNetMessage(message);
     if (data.length > MAX_MESSAGE_BYTES) {
-      console.error('[netplay] message too large to send', data.length);
+      this.log.error('a message was too large to send', {
+        kind: payload.kind,
+        bytes: data.length,
+        limit: MAX_MESSAGE_BYTES,
+      });
       return;
     }
+    this.log.debug(`out ${payload.kind}`, {
+      to: seats.join('/'),
+      bytes:
+        data.length > 1024 ? `${Math.round(data.length / 1024)}k` : data.length,
+    });
     this.sendRaw(data, seats);
   };
 
@@ -896,6 +993,7 @@ export default class Netplay {
   // that is the whole session; for a guest it is the same as losing the
   // host.
   private lobbyFailed = (text: string) => {
+    this.log.error('the lobby failed', { why: text, role: this.state.role });
     if (this.state.role === 'guest') {
       if (this.hostOpen) this.end('The lobby ended.', text);
       else this.update({ phase: 'ended', status: '', error: text });
@@ -912,6 +1010,7 @@ export default class Netplay {
   private end = (status: string, error: string | null = null) => {
     // The first reason wins: a goodbye is followed by the channel closing.
     if (this.state.phase === 'idle' || this.state.phase === 'ended') return;
+    this.log.info('the pod ended', { why: error ?? status });
     this.hostOpen = false;
     this.clearConnectTimer();
     if (this.remote.clear()) this.pushOpponent();

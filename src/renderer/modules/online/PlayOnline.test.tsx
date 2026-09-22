@@ -1,3 +1,4 @@
+import { emptyDebugSnapshot } from '@shared/debug';
 import type { NetState } from '@shared/net/lobby';
 import { idleNetState } from '@shared/net/lobby';
 import { defaultSettings } from '@shared/settings';
@@ -57,6 +58,9 @@ const makeApi = (status: PlayTestStatus, decks: DeckSummary[]) => ({
   netCloseSeat: vi.fn(async () => {}),
   netResend: vi.fn(async () => {}),
   netLeave: vi.fn(async () => {}),
+  getDebugLog: vi.fn(async () => emptyDebugSnapshot),
+  onDebugLog: vi.fn(() => () => {}),
+  clearDebugLog: vi.fn(async () => emptyDebugSnapshot),
 });
 
 let api: ReturnType<typeof makeApi>;

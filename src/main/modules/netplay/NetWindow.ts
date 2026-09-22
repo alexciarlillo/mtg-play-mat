@@ -1,3 +1,4 @@
+import { nullLog, type ScopedLog } from '@shared/debug';
 import type { NetCommand } from '@shared/net/lobby';
 import type { BrowserWindow, WebContents } from 'electron';
 
@@ -13,7 +14,10 @@ const RETIRE_GRACE_MS = 1500;
 export default class NetWindow implements Transport {
   private window: BrowserWindow | null = null;
 
-  constructor(private readonly onCrash: () => void) {}
+  constructor(
+    private readonly onCrash: () => void,
+    private readonly log: ScopedLog = nullLog
+  ) {}
 
   // Main only accepts net reports from the current net window.
   isNetSender = (sender: WebContents): boolean =>
@@ -29,6 +33,7 @@ export default class NetWindow implements Transport {
 
   open = async (): Promise<boolean> => {
     if (!this.window || this.window.isDestroyed()) {
+      this.log.info('opening the connection window');
       const window = createWindow({
         html: 'net.html',
         width: 400,
@@ -38,7 +43,11 @@ export default class NetWindow implements Transport {
         backgroundThrottling: false,
       });
       this.window = window;
-      window.webContents.on('render-process-gone', () => {
+      window.webContents.on('render-process-gone', (_event, details) => {
+        this.log.error('the connection window died', {
+          why: details.reason,
+          code: details.exitCode,
+        });
         if (this.window === window) this.onCrash();
       });
       window.on('closed', () => {

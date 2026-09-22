@@ -1,3 +1,4 @@
+import { nullLog, type ScopedLog } from '@shared/debug';
 import { packDescription, unpackDescription } from '@shared/net/codec';
 import type { NetCommand, NetConfig, NetReport } from '@shared/net/lobby';
 import { HOST_SEAT } from '@shared/net/protocol';
@@ -6,6 +7,7 @@ interface Deps {
   report(report: NetReport): void;
   createPeerConnection(config: RTCConfiguration): RTCPeerConnection;
   gatherTimeoutMs?: number;
+  log?: ScopedLog;
 }
 
 const CHANNEL_LABEL = 'mtgplaymat';
@@ -46,6 +48,7 @@ export const createNetTransport = ({
   report,
   createPeerConnection,
   gatherTimeoutMs = 3000,
+  log = nullLog,
 }: Deps) => {
   const links = new Map<number, Link>();
   let recordWire = false;
@@ -58,10 +61,14 @@ export const createNetTransport = ({
     link.channel = chan;
     const live = () => links.get(seat) === link && link.channel === chan;
     chan.addEventListener('open', () => {
-      if (live()) report({ type: 'open', seat });
+      if (!live()) return;
+      log.info('the data channel is open', { seat });
+      report({ type: 'open', seat });
     });
     chan.addEventListener('close', () => {
-      if (live()) report({ type: 'closed', seat });
+      if (!live()) return;
+      log.info('the data channel closed', { seat });
+      report({ type: 'closed', seat });
     });
     chan.addEventListener('message', (event: MessageEvent) => {
       if (live() && typeof event.data === 'string') {
@@ -77,8 +84,16 @@ export const createNetTransport = ({
     const link: Link = { pc, channel: null };
     links.set(seat, link);
     pc.addEventListener('connectionstatechange', () => {
-      if (current(seat, pc)) {
-        report({ type: 'connection', seat, state: pc.connectionState });
+      if (!current(seat, pc)) return;
+      log.info(`the link is ${pc.connectionState}`, { seat });
+      report({ type: 'connection', seat, state: pc.connectionState });
+    });
+    // Which kinds of route were found at all: a link that only ever
+    // gathers host candidates will not cross the internet.
+    pc.addEventListener('icecandidate', (event) => {
+      const candidate = event.candidate;
+      if (current(seat, pc) && candidate?.type) {
+        log.debug(`found a ${candidate.type} route`, { seat });
       }
     });
     return link;
@@ -86,6 +101,9 @@ export const createNetTransport = ({
 
   const localCode = async (conn: RTCPeerConnection) => {
     await gatherComplete(conn, gatherTimeoutMs);
+    log.info('finished looking for routes', {
+      gathering: conn.iceGatheringState,
+    });
     const desc = conn.localDescription;
     if (!desc || (desc.type !== 'offer' && desc.type !== 'answer')) {
       throw new Error('no local description');
@@ -94,6 +112,10 @@ export const createNetTransport = ({
   };
 
   const host = async (seat: number, config: NetConfig) => {
+    log.info('making an invite', {
+      seat,
+      stun: config.iceServers.length,
+    });
     try {
       const link = start(seat, config);
       // The channel must exist before the offer so the offer includes it.
@@ -106,6 +128,7 @@ export const createNetTransport = ({
       const code = await localCode(link.pc);
       if (links.get(seat) === link) report({ type: 'invite', seat, code });
     } catch (err) {
+      log.error('could not make an invite', { seat, why: message(err) });
       report({
         type: 'error',
         seat,
@@ -120,6 +143,7 @@ export const createNetTransport = ({
       if (!link) throw new Error('no invite for that seat');
       await link.pc.setRemoteDescription(await unpackDescription(code));
     } catch (err) {
+      log.error('could not use that reply', { seat, why: message(err) });
       report({
         type: 'error',
         seat,
@@ -130,6 +154,7 @@ export const createNetTransport = ({
 
   const join = async (code: string, config: NetConfig) => {
     const seat = HOST_SEAT;
+    log.info('answering an invite', { stun: config.iceServers.length });
     try {
       const desc = await unpackDescription(code);
       const link = start(seat, config);
@@ -143,6 +168,7 @@ export const createNetTransport = ({
         report({ type: 'reply', seat, code: reply });
       }
     } catch (err) {
+      log.error('could not answer that invite', { why: message(err) });
       report({
         type: 'error',
         seat,
@@ -154,11 +180,18 @@ export const createNetTransport = ({
   const send = (seats: number[], data: string) => {
     for (const seat of seats) {
       const channel = links.get(seat)?.channel;
-      if (channel?.readyState !== 'open') continue;
+      if (channel?.readyState !== 'open') {
+        log.warn('dropped a message: the channel is not open', {
+          seat,
+          state: channel?.readyState ?? 'no channel',
+        });
+        continue;
+      }
       try {
         channel.send(data);
         if (recordWire) wire.push(data);
       } catch (err) {
+        log.error('could not send', { seat, why: message(err) });
         report({
           type: 'error',
           seat,

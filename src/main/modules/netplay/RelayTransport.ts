@@ -1,3 +1,9 @@
+import {
+  type DebugSink,
+  redactUrl,
+  type ScopedLog,
+  scopedLog,
+} from '@shared/debug';
 import { normalizeLobbyCode } from '@shared/net/lobbyCode';
 import type { NetCommand, NetReport } from '@shared/net/lobby';
 import { HOST_SEAT, MAX_SEATS } from '@shared/net/protocol';
@@ -39,6 +45,7 @@ export interface RelayTransportDeps {
   report(report: NetReport): void;
   fetch?: typeof globalThis.fetch;
   createSocket?(url: string): SocketLike;
+  log?: DebugSink;
 }
 
 const OPEN = 1;
@@ -71,7 +78,11 @@ export default class RelayTransport implements Transport {
   // ignored when it finally lands.
   private session = 0;
 
-  constructor(private readonly deps: RelayTransportDeps) {}
+  private readonly log: ScopedLog;
+
+  constructor(private readonly deps: RelayTransportDeps) {
+    this.log = scopedLog(deps.log, 'relay');
+  }
 
   open = async (): Promise<boolean> => true;
 
@@ -103,6 +114,7 @@ export default class RelayTransport implements Transport {
   };
 
   retire = (): void => {
+    if (this.socket) this.log.info('closing the relay connection');
     this.session += 1;
     const socket = this.socket;
     this.socket = null;
@@ -123,7 +135,12 @@ export default class RelayTransport implements Transport {
     const settings = this.deps.settings();
     if (!this.checkSettings(settings)) return;
     try {
-      const res = await this.fetch(createLobbyUrl(settings), {
+      const url = createLobbyUrl(settings);
+      this.log.info('asking the relay for a lobby', {
+        url: redactUrl(url),
+        slots,
+      });
+      const res = await this.fetch(url, {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
@@ -134,6 +151,7 @@ export default class RelayTransport implements Transport {
       });
       const text = await res.text();
       if (session !== this.session) return;
+      this.log.info('the relay answered', { status: res.status });
       if (!res.ok) {
         this.fail(lobbyHttpError(res.status));
         return;
@@ -142,6 +160,7 @@ export default class RelayTransport implements Transport {
       this.connect(settings, lobby.code, lobby.hostToken, session);
     } catch (err) {
       if (session === this.session) {
+        this.log.error('could not reach the relay', { why: message(err) });
         this.fail(`Could not reach the relay server. (${message(err)})`);
       }
     }
@@ -152,6 +171,7 @@ export default class RelayTransport implements Transport {
     if (!this.checkSettings(settings)) return;
     const code = normalizeLobbyCode(input);
     if (!code) {
+      this.log.warn('refused a lobby code that is not six characters');
       this.fail('That is not a lobby code. They are six characters long.');
       return;
     }
@@ -160,12 +180,14 @@ export default class RelayTransport implements Transport {
 
   private checkSettings = (settings: RelaySettings): boolean => {
     if (settings.baseUrl.trim() === '') {
+      this.log.error('no relay server is set');
       this.fail(
         'No relay server is set. Add one in Settings to use lobby codes.'
       );
       return false;
     }
     if (settings.appKey.trim() === '') {
+      this.log.error('no relay key is set');
       this.fail('No relay key is set. Add one in Settings to use lobby codes.');
       return false;
     }
@@ -182,10 +204,16 @@ export default class RelayTransport implements Transport {
     try {
       url = relayWebSocketUrl({ ...settings, code, token });
     } catch (err) {
+      this.log.error('the relay address is not a URL', { why: message(err) });
       this.fail(`That relay address is not a URL. (${message(err)})`);
       return;
     }
 
+    this.log.info('dialling the relay', {
+      url: redactUrl(url),
+      as: token ? 'host' : 'guest',
+      code,
+    });
     const socket = this.createSocket(url);
     this.socket = socket;
     this.isHost = token !== undefined;
@@ -195,15 +223,22 @@ export default class RelayTransport implements Transport {
     let seated = false;
     let closeMessage: string | null = null;
 
+    socket.addEventListener('open', () => {
+      if (live()) this.log.info('the relay connection is open');
+    });
+
     socket.addEventListener('message', (event: MessageEvent) => {
       if (!live() || typeof event.data !== 'string') return;
       try {
         const frame = parseRelayServerFrame(event.data);
         if (frame.ev === 'error') closeMessage = frame.message;
         else seated = seated || frame.ev === 'seated';
+        this.logFrame(frame, event.data.length);
         this.receive(frame, code);
-      } catch {
-        // The relay is ours; an unreadable frame is not worth a dialog.
+      } catch (err) {
+        // The relay is ours; an unreadable frame is not worth a dialog,
+        // but it belongs in the log.
+        this.log.warn('dropped an unreadable frame', { why: message(err) });
       }
     });
 
@@ -211,6 +246,11 @@ export default class RelayTransport implements Transport {
       if (!live()) return;
       this.socket = null;
       const reason = closeMessage ?? CLOSE_REASONS[event.code] ?? null;
+      this.log.info('the relay connection closed', {
+        code: event.code,
+        seated,
+        why: reason ?? event.reason ?? undefined,
+      });
       if (seated) {
         this.report({ type: 'closed', seat: HOST_SEAT });
         if (reason) this.fail(reason);
@@ -221,6 +261,7 @@ export default class RelayTransport implements Transport {
 
     socket.addEventListener('error', () => {
       // A failed handshake only ever surfaces as a close, so wait for it.
+      this.log.warn('the relay socket reported an error');
     });
   };
 
@@ -257,6 +298,35 @@ export default class RelayTransport implements Transport {
       this.report({ type: 'message', seat: from, data: frame.data });
   };
 
+  // What the relay said, by kind. Payloads are never logged: only their
+  // size, and who they came from.
+  private logFrame = (
+    frame: ReturnType<typeof parseRelayServerFrame>,
+    bytes: number
+  ) => {
+    switch (frame.ev) {
+      case 'seated':
+        this.log.info('seated in the lobby', {
+          seat: frame.seat,
+          code: frame.code,
+          slots: frame.slots,
+          peers: frame.peers.join('/') || 'none',
+        });
+        return;
+      case 'peer':
+        this.log.info(`relay seat ${frame.state}`, { seat: frame.seat });
+        return;
+      case 'error':
+        this.log.error('the relay refused us', {
+          code: frame.code,
+          why: frame.message,
+        });
+        return;
+      default:
+        this.log.debug('relay data', { from: frame.from, bytes });
+    }
+  };
+
   // A relay seat as this side of the app names it, or null to ignore.
   private localSeat = (seat: number): number | null => {
     if (!this.isHost) return seat === HOST_RELAY_SEAT ? HOST_SEAT : null;
@@ -269,10 +339,18 @@ export default class RelayTransport implements Transport {
 
   private frame = (frame: RelayClientFrame) => {
     const socket = this.socket;
-    if (!socket || socket.readyState !== OPEN) return;
+    if (!socket || socket.readyState !== OPEN) {
+      this.log.warn('dropped a frame: the relay connection is not open', {
+        op: frame.op,
+      });
+      return;
+    }
     try {
-      socket.send(encodeRelayFrame(frame));
+      const raw = encodeRelayFrame(frame);
+      if (frame.op !== 'send') this.log.info(`sent ${frame.op}`);
+      socket.send(raw);
     } catch (err) {
+      this.log.error('could not send to the relay', { why: message(err) });
       this.fail(`Could not send. (${message(err)})`);
     }
   };

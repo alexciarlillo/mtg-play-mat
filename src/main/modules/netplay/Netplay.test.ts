@@ -79,6 +79,7 @@ const setup = (me = 'alice') => {
     send: (command: NetCommand) => commands.push(command),
     retire: vi.fn(),
   };
+  const logged: string[] = [];
   let local: PublicView | null = view(me);
   let format: DeckFormat = 'constructed';
   const rolls: number[] = [];
@@ -91,6 +92,7 @@ const setup = (me = 'alice') => {
     localFormat: () => format,
     pushState: (s) => states.push(s),
     pushOpponent: (s) => opponents.push(s),
+    log: { record: (level, _scope, text) => logged.push(`${level} ${text}`) },
     connectTimeoutMs: 50,
     randomInt: (max) => {
       rolls.push(max);
@@ -111,6 +113,7 @@ const setup = (me = 'alice') => {
     sends,
     sentTo,
     opponents,
+    logged,
     rolls,
     opponent: () => opponents.at(-1),
     state: () => netplay.netState,
@@ -331,7 +334,6 @@ describe('Netplay host', () => {
 
   it('drops messages a guest sends as another player', async () => {
     const t = await hostWith({ 2: 'bob', 3: 'carol' });
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const count = t.sends().length;
     const opponents = t.opponents.length;
     const spoof = raw('carol', 50, {
@@ -352,10 +354,9 @@ describe('Netplay host', () => {
     );
     expect(t.sends()).toHaveLength(count);
     expect(t.opponents).toHaveLength(opponents);
-    expect(warn).toHaveBeenCalledWith(
-      '[netplay] dropped message sent as another player'
+    expect(t.logged).toContain(
+      'warn dropped a message sent as another player seat=2'
     );
-    warn.mockRestore();
   });
 
   it('only accepts rosters and results from itself', async () => {
@@ -781,7 +782,6 @@ describe('Netplay guest', () => {
     expect(t.opponent()?.peers[0].view?.life).toBe(12);
 
     const before = t.opponents.length;
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     for (const data of [
       raw('alice', 3, { kind: 'public', view: view('alice', 1) }),
       raw('alice', 4, { kind: 'public', view: { life: 'lots' } }),
@@ -789,7 +789,12 @@ describe('Netplay guest', () => {
     ]) {
       say(t, 1, data);
     }
-    warn.mockRestore();
+    // The stale one is simply ignored; the other two cannot be read.
+    expect(
+      t.logged.filter((line) =>
+        line.startsWith('warn dropped an unreadable message')
+      )
+    ).toHaveLength(2);
     expect(t.opponents).toHaveLength(before);
   });
 

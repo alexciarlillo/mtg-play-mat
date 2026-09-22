@@ -4,6 +4,7 @@ import type { PrivateView, PublicView } from '@shared/game';
 import type { OpponentState } from '@shared/net/remoteViews';
 import { createRoot } from 'react-dom/client';
 
+import { watchForErrors } from '../debug';
 import Board from '../modules/play-test/board/Board';
 import { FULL_PANEL_WIDTH } from '../modules/play-test/board/layout';
 import {
@@ -12,6 +13,8 @@ import {
 } from '../modules/play-test/viewStore';
 import { CardPreviewProvider } from '../ui/CardPreview';
 import { ContextMenuProvider } from '../ui/ContextMenuProvider';
+
+watchForErrors('board');
 
 const container = document.getElementById('board');
 

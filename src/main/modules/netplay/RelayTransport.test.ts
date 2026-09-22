@@ -70,6 +70,7 @@ const setup = (
   response: { status: number; body: unknown } = { status: 201, body: LOBBY }
 ) => {
   const reports: NetReport[] = [];
+  const logged: string[] = [];
   const fetchMock = vi.fn(() =>
     Promise.resolve({
       ok: response.status >= 200 && response.status < 300,
@@ -86,8 +87,15 @@ const setup = (
       sockets.push(socket);
       return socket;
     },
+    log: { record: (level, _scope, text) => logged.push(`${level} ${text}`) },
   });
-  return { transport, reports, fetchMock, socket: () => sockets.at(-1) };
+  return {
+    transport,
+    reports,
+    fetchMock,
+    logged,
+    socket: () => sockets.at(-1),
+  };
 };
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -416,5 +424,41 @@ describe('retiring', () => {
     });
     t.transport.send({ op: 'acceptReply', seat: 2, code: 'MPM1:x' });
     expect(t.socket()!.sent).toEqual([]);
+  });
+});
+
+describe('the debug log', () => {
+  it('never writes the key or the host token into it', async () => {
+    const t = await hosting();
+    const urls = t.logged.filter((line) => line.includes('url='));
+    expect(urls).toHaveLength(2);
+    urls.forEach((line) => {
+      expect(line).toContain('relay.example.com');
+      expect(line).not.toContain('app-key');
+      expect(line).not.toContain('host-token');
+    });
+  });
+
+  it('records the close code, and whether we ever got a seat', async () => {
+    const t = await joining();
+    t.socket()?.hangUp(RelayClose.lobbyFull);
+    expect(t.logged).toContain(
+      'info the relay connection closed code=4003 seated=false ' +
+        'why="That game is already full."'
+    );
+  });
+
+  it('keeps the payload of a data frame out of it', async () => {
+    const t = await joining();
+    t.socket()?.deliver({
+      ev: 'seated',
+      seat: 2,
+      code: 'ABC123',
+      slots: 4,
+      peers: [1],
+    });
+    t.socket()?.deliver({ ev: 'data', from: 1, data: 'Black Lotus' });
+    expect(t.logged.join('\n')).not.toContain('Black Lotus');
+    expect(t.logged).toContain('debug relay data from=1 bytes=43');
   });
 });

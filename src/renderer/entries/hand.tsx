@@ -3,10 +3,13 @@ import '../styles.css';
 import type { PrivateView } from '@shared/game';
 import { createRoot } from 'react-dom/client';
 
+import { watchForErrors } from '../debug';
 import Hand from '../modules/play-test/hand/Hand';
 import { createViewStore } from '../modules/play-test/viewStore';
 import { CardPreviewProvider } from '../ui/CardPreview';
 import { ContextMenuProvider } from '../ui/ContextMenuProvider';
+
+watchForErrors('hand');
 
 const container = document.getElementById('hand');
 

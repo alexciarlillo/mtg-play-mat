@@ -5,7 +5,10 @@ import { createRoot } from 'react-dom/client';
 import { createHashRouter } from 'react-router';
 import { RouterProvider } from 'react-router/dom';
 
+import { watchForErrors } from '../debug';
 import { routes } from '../routes';
+
+watchForErrors('app');
 
 const router = createHashRouter(routes);
 
