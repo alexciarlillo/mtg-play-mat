@@ -117,6 +117,17 @@ export const setupNetplay = ({
     log,
   });
 
+  // The share copy is the one the picture's id names, so both ends of
+  // the pod agree on what it is called.
+  const sharePicture = async (id: string) => {
+    if (!id) return null;
+    const bytes = await mats.shareBytes(id);
+    return bytes ? { id, data: bytes.toString('base64') } : null;
+  };
+
+  const keepPicture = (id: string, data: string) =>
+    mats.receive(id, Buffer.from(data, 'base64'));
+
   const netplay: Netplay = new Netplay({
     transports: { p2p: netWindow, relay },
     config,
@@ -130,15 +141,11 @@ export const setupNetplay = ({
       return baseUrl.trim() !== '' && appKey.trim() !== '';
     },
     log,
-    // The share copy is the one the mat's id names, so both ends of the
-    // pod agree on what it is called.
-    localMat: async () => {
-      const id = settings.settings.matImage;
-      if (!id) return null;
-      const bytes = await mats.shareBytes(id);
-      return bytes ? { id, data: bytes.toString('base64') } : null;
-    },
-    receiveMat: (id, data) => mats.receive(id, Buffer.from(data, 'base64')),
+    localMat: () => sharePicture(settings.settings.matImage),
+    receiveMat: keepPicture,
+    // Card backs live in the same store, named the same way.
+    localBack: () => sharePicture(settings.settings.cardBack),
+    receiveBack: keepPicture,
     receiveControl: playTest.receiveControl,
     peerGone: playTest.peerGone,
     pushOpponent: (state) => {
@@ -164,6 +171,7 @@ export const setupNetplay = ({
   settings.onChange((next, previous) => {
     if (next.displayName !== previous.displayName) netplay.resend();
     if (next.matImage !== previous.matImage) netplay.matChanged();
+    if (next.cardBack !== previous.cardBack) netplay.backChanged();
     if (
       next.relayUrl !== previous.relayUrl ||
       next.relayKey !== previous.relayKey

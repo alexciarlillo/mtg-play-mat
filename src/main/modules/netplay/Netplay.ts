@@ -93,6 +93,9 @@ export interface NetplayDeps {
   // bytes are only ever trusted once they hash to the id they came
   // under, which is the store's job.
   receiveMat?(id: string, data: string): Promise<boolean>;
+  // The same pair for the back of the local player's cards.
+  localBack?(): Promise<{ id: string; data: string } | null>;
+  receiveBack?(id: string, data: string): Promise<boolean>;
   // A permanent changing hands, sent to this player by another.
   receiveControl?(
     from: PlayerId,
@@ -140,6 +143,7 @@ interface Seat {
   hello: string | null;
   public: string | null;
   mat: string | null;
+  back: string | null;
   error: string | null;
   timer: ReturnType<typeof setTimeout> | null;
 }
@@ -165,6 +169,7 @@ const emptySeat = (seat: number): Seat => ({
   hello: null,
   public: null,
   mat: null,
+  back: null,
   error: null,
   timer: null,
 });
@@ -182,6 +187,14 @@ const roll = (request: RollRequest, random: (max: number) => number) =>
       }) as RollResult;
 
 const listNames = (names: string[]) => names.join(', ');
+
+// Pictures a player shares with the pod, each sent the same way.
+type Picture = 'mat' | 'back';
+
+const pictureNames: Record<Picture, string> = {
+  mat: 'play area background',
+  back: 'card back',
+};
 
 // Fixed, so the same fake pod comes back every time it is asked for.
 const FAKE_SEED = 20_260_921;
@@ -219,7 +232,7 @@ export default class Netplay {
   // Whether this session has told anyone about a background. A player
   // with a bare table says nothing at all; only one who had a mat needs
   // to announce that it is gone.
-  private matAnnounced = false;
+  private announced: Record<Picture, boolean> = { mat: false, back: false };
 
   // Which transport this session runs on; also what NetState reports.
   private mode: NetMode = 'p2p';
@@ -558,7 +571,7 @@ export default class Netplay {
     this.log.info('resending state');
     this.send({ kind: 'hello', ...this.helloInfo() });
     this.send({ kind: 'public', view: this.deps.localView() });
-    void this.sendMat();
+    this.sendPictures();
     // The roster carries the host's name too.
     if (this.state.role === 'host') this.sendRoster();
   };
@@ -566,28 +579,39 @@ export default class Netplay {
   // The player picked another background (or none): the pod sees it
   // without waiting for anyone to reconnect.
   matChanged = () => {
-    void this.sendMat();
+    void this.sendPicture('mat');
   };
 
-  // The local mat, to everyone or to one seat that has just opened.
-  // Reading it is async, so a session that ended meanwhile drops it.
-  private sendMat = async (to?: number[]) => {
-    if (!this.deps.localMat) return;
+  backChanged = () => {
+    void this.sendPicture('back');
+  };
+
+  private sendPictures = (to?: number[]) => {
+    void this.sendPicture('mat', to);
+    void this.sendPicture('back', to);
+  };
+
+  // The local mat or back, to everyone or to one seat that has just
+  // opened. Reading it is async, so a session that ended meanwhile
+  // drops it.
+  private sendPicture = async (kind: Picture, to?: number[]) => {
+    const local = kind === 'mat' ? this.deps.localMat : this.deps.localBack;
+    if (!local) return;
     const session = this.session;
-    let mat: { id: string; data: string } | null;
+    let picture: { id: string; data: string } | null;
     try {
-      mat = await this.deps.localMat();
+      picture = await local();
     } catch (err) {
-      this.log.warn('could not read the play area background', {
+      this.log.warn(`could not read the ${pictureNames[kind]}`, {
         why: describeError(err),
       });
       return;
     }
     if (session !== this.session) return;
-    if (!mat && !this.matAnnounced) return;
-    this.matAnnounced = mat !== null;
+    if (!picture && !this.announced[kind]) return;
+    this.announced[kind] = picture !== null;
     this.send(
-      { kind: 'mat', id: mat?.id ?? null, data: mat?.data ?? null },
+      { kind, id: picture?.id ?? null, data: picture?.data ?? null },
       to
     );
   };
@@ -672,7 +696,7 @@ export default class Netplay {
         this.updateSeat(seat, { phase: 'connected', error: null });
         this.send({ kind: 'hello', ...this.helloInfo() }, [seat.seat]);
         this.send({ kind: 'public', view: this.deps.localView() }, [seat.seat]);
-        void this.sendMat([seat.seat]);
+        this.sendPictures([seat.seat]);
         return;
       case 'message':
         if (seat.open) this.receiveFromSeat(seat, report.data);
@@ -820,7 +844,12 @@ export default class Netplay {
         // A newcomer learns about everyone already here.
         if (first) {
           const others = this.otherSeats(seat);
-          const backlog = others.flatMap((s) => [s.hello, s.public, s.mat]);
+          const backlog = others.flatMap((s) => [
+            s.hello,
+            s.public,
+            s.mat,
+            s.back,
+          ]);
           backlog.forEach((data) => data && this.sendRaw(data, [seat.seat]));
         }
         this.relay(raw, seat);
@@ -834,11 +863,17 @@ export default class Netplay {
         this.pushOpponent();
         return;
       case 'mat':
+      case 'back':
         // Kept verbatim like a hello, so a player who joins later gets
-        // the mat without anyone having to send it again.
-        seat.mat = message.id === null ? null : raw;
+        // it without anyone having to send it again.
+        seat[message.kind] = message.id === null ? null : raw;
         this.relay(raw, seat);
-        void this.applyMat(message.from, message.id, message.data);
+        void this.applyPicture(
+          message.kind,
+          message.from,
+          message.id,
+          message.data
+        );
         return;
       case 'log':
         if (!this.remote.receive(message)) return;
@@ -909,7 +944,13 @@ export default class Netplay {
         if (this.remote.receive(message)) this.pushOpponent();
         return;
       case 'mat':
-        void this.applyMat(message.from, message.id, message.data);
+      case 'back':
+        void this.applyPicture(
+          message.kind,
+          message.from,
+          message.id,
+          message.data
+        );
         return;
       case 'control':
         if (message.to === this.deps.profile().playerId) {
@@ -947,35 +988,42 @@ export default class Netplay {
     this.deps.receiveControl?.(from, name, change);
   };
 
-  // A peer's background: the bytes are written before the board is told
-  // about them, so it never points at a mat that is not there yet.
-  private applyMat = async (
+  // A peer's mat or back: the bytes are written before the board is
+  // told about them, so it never points at a picture not there yet.
+  private applyPicture = async (
+    kind: Picture,
     from: PlayerId,
     id: string | null,
     data: string | null
   ) => {
     const session = this.session;
+    const keep = kind === 'mat' ? this.deps.receiveMat : this.deps.receiveBack;
     if (id !== null) {
-      if (!this.deps.receiveMat || data === null) return;
+      if (!keep || data === null) return;
       let kept: boolean;
       try {
-        kept = await this.deps.receiveMat(id, data);
+        kept = await keep(id, data);
       } catch (err) {
-        this.log.warn('could not keep a play area background', {
+        this.log.warn(`could not keep a ${pictureNames[kind]}`, {
           why: describeError(err),
         });
         return;
       }
       if (!kept) {
-        this.log.warn('refused a play area background', { from });
+        this.log.warn(`refused a ${pictureNames[kind]}`, { from });
         return;
       }
     }
     if (session !== this.session) return;
-    this.log.info(id ? 'a player changed their mat' : 'a player cleared it', {
-      from,
-    });
-    if (this.remote.setMat(from, id)) this.pushOpponent();
+    this.log.info(
+      id ? `a player changed their ${kind}` : `a player cleared their ${kind}`,
+      { from }
+    );
+    const changed =
+      kind === 'mat'
+        ? this.remote.setMat(from, id)
+        : this.remote.setBack(from, id);
+    if (changed) this.pushOpponent();
   };
 
   private rollFor = (by: PlayerId, byName: string, request: RollRequest) => {
@@ -1196,7 +1244,7 @@ export default class Netplay {
     this.hostId = null;
     this.seq = 0;
     this.eventId = 0;
-    this.matAnnounced = false;
+    this.announced = { mat: false, back: false };
     this.notice = null;
     this.clearConnectTimer();
     this.seats.forEach((seat) => this.clearSeatTimer(seat));

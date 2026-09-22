@@ -219,6 +219,9 @@ test('window.api is a narrow typed bridge', async () => {
       'onDebugLog',
       'chooseMatImage',
       'clearMatImage',
+      'chooseCardBack',
+      'clearCardBack',
+      'openCardBackGallery',
     ].sort()
   );
   expect(surface.allFunctions).toBe(true);

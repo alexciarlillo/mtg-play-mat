@@ -3,6 +3,7 @@ import classNames from 'classnames';
 import type { MouseEvent } from 'react';
 
 import { type CardSize, cardWidths } from '../../../ui/cardSizes';
+import { useCardBack } from '../../../ui/CardBackProvider';
 import CardImg from '../../../ui/CardImg';
 import { useContextMenu } from '../../../ui/ContextMenuProvider';
 import { dispatch } from '../viewStore';
@@ -28,6 +29,7 @@ const Library = ({
 }: Props) => {
   const menu = useContextMenu();
   const canDraw = playerId !== undefined && count > 0;
+  const back = useCardBack(playerId);
 
   const drawCard = () => {
     if (playerId) dispatch({ type: 'draw', playerId, count: 1 });
@@ -87,7 +89,7 @@ const Library = ({
         )}
         onClick={canDraw ? drawCard : undefined}
       >
-        {count > 0 && <CardImg name="Library" />}
+        {count > 0 && <CardImg name="Library" back={back} />}
         <LibraryActivityBadge
           activity={activity}
           compact={size === 'xs'}

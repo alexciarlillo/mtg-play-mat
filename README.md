@@ -155,6 +155,14 @@ if they hash to the id they came under, so a peer can only ever add the mat it a
 sent. If someone's picture is more distracting than fun, the photo button on their seat
 hides it on your board alone.
 
+**Card back:** pick a PNG or JPEG under **Settings → Card back** and it goes on the back of
+every card you own: your library, and your face-down permanents, including ones someone else
+controls. The middle of the picture is cut to the 63x88 shape of a card. It is kept in the
+same store as mats, named the same way, and sent to the pod as a `back` message exactly like
+a mat, so every board draws each player's cards with that player's back. The settings page
+links to [MPC Autofill](https://mpcfill.com/explore)'s community collection of card backs
+(choose Cardbacks under card type); download one there, then pick it here.
+
 Card manipulation (right-click a permanent unless noted):
 
 - **Counters:** add +1/+1 or -1/-1 (they cancel in pairs), loyalty ± on planeswalkers

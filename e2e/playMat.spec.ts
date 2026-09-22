@@ -17,6 +17,7 @@ test.describe.configure({ mode: 'serial' });
 interface TestHooks {
   openSamplePlayTest(seed?: number): Promise<void>;
   chooseMatFile(file: string): void;
+  openedUrls(): string[];
 }
 
 type Hooks = { testHooks: TestHooks };
@@ -162,6 +163,58 @@ test('removing it puts the bare table back', async () => {
   await appPage.getByRole('button', { name: 'Remove' }).click();
   await expect(appPage.getByTestId('mat-preview')).toHaveText('Bare table');
   await expect(mat()).toHaveCount(0);
+});
+
+test('a card back goes on the library and on face-down cards', async () => {
+  const preview = appPage.getByTestId('card-back-preview');
+  await expect(preview).not.toHaveAttribute('data-back', /.*/);
+
+  await app.evaluate(
+    (_electron, picture) =>
+      (globalThis as unknown as Hooks).testHooks.chooseMatFile(picture),
+    PICTURE
+  );
+  await appPage.getByRole('button', { name: 'Choose a card back…' }).click();
+  await expect(preview).toHaveAttribute('data-back', /^[0-9a-f]{64}$/, {
+    timeout: 15_000,
+  });
+  const id = await preview.getAttribute('data-back');
+  // The mat is a separate picture, left as it was.
+  await expect(appPage.getByTestId('mat-preview')).toHaveText('Bare table');
+
+  const library = board.getByTestId('library').getByRole('img');
+  await expect(library).toHaveAttribute('src', `mat://${id}`);
+  const card = board.getByTestId('battlefield').getByTestId('card').first();
+  await card.click({ button: 'right' });
+  await board.getByRole('menuitem', { name: 'Turn face down' }).click();
+  await expect(card.getByRole('img')).toHaveAttribute('src', `mat://${id}`);
+  // The drawn back really loaded, rather than falling back.
+  await expect
+    .poll(() =>
+      card
+        .getByRole('img')
+        .evaluate((img: HTMLImageElement) => img.naturalWidth)
+    )
+    .toBeGreaterThan(0);
+
+  await card.click({ button: 'right' });
+  await board.getByRole('menuitem', { name: 'Turn face up' }).click();
+  await appPage.getByRole('button', { name: 'Use the standard back' }).click();
+  await expect(preview).not.toHaveAttribute('data-back', /.*/);
+  await expect(library).not.toHaveAttribute('src', /^mat:/);
+});
+
+test('the card back gallery opens in the browser', async () => {
+  await appPage
+    .getByRole('button', { name: 'browse card backs on mpcfill.com' })
+    .click();
+  await expect
+    .poll(() =>
+      app.evaluate(() =>
+        (globalThis as unknown as Hooks).testHooks.openedUrls()
+      )
+    )
+    .toEqual(['https://mpcfill.com/explore']);
 });
 
 test('no renderer console errors', () => {

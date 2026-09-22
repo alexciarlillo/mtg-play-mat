@@ -474,6 +474,63 @@ test('a play area background reaches the other board, and can be folded away', a
   }
 });
 
+test('a card back reaches the other board, on the library and face-down cards', async () => {
+  const [hostApp, guestApp, hostBoard, guestBoard] = await Promise.all([
+    page(host, 'app.html'),
+    page(guest, 'app.html'),
+    page(host, 'board.html'),
+    page(guest, 'board.html'),
+  ]);
+  const theirLibrary = guestBoard
+    .getByTestId('opponent-library')
+    .getByRole('img');
+  await expect(theirLibrary).not.toHaveAttribute('src', /^mat:/);
+
+  await hostApp.getByRole('link', { name: 'Settings' }).first().click();
+  await host.app.evaluate(
+    (_electron, file) =>
+      (
+        globalThis as unknown as { testHooks: TestHooks }
+      ).testHooks.chooseMatFile(file),
+    path.resolve('assets/icon.png')
+  );
+  await hostApp.getByRole('button', { name: 'Choose a card back…' }).click();
+  const preview = hostApp.getByTestId('card-back-preview');
+  await expect(preview).toHaveAttribute('data-back', /^[0-9a-f]{64}$/, {
+    timeout: 15_000,
+  });
+  const id = await preview.getAttribute('data-back');
+
+  // The guest draws the host's library with it, by the same name, while
+  // their own library keeps the standard back.
+  await expect(theirLibrary).toHaveAttribute('src', `mat://${id}`, {
+    timeout: 20_000,
+  });
+  await expect(
+    guestBoard.getByTestId('library').getByRole('img')
+  ).not.toHaveAttribute('src', /^mat:/);
+
+  // A face-down permanent of the host's shows the host's back there too.
+  await ownField(hostBoard).click({ button: 'right' });
+  await hostBoard.getByRole('menuitem', { name: 'Turn face down' }).click();
+  await expect(opponentField(guestBoard).getByRole('img')).toHaveAttribute(
+    'src',
+    `mat://${id}`
+  );
+  await ownField(hostBoard).click({ button: 'right' });
+  await hostBoard.getByRole('menuitem', { name: 'Turn face up' }).click();
+
+  // Going back to the standard back reaches the guest as well.
+  await hostApp.getByRole('button', { name: 'Use the standard back' }).click();
+  await expect(theirLibrary).not.toHaveAttribute('src', /^mat:/);
+  for (const app of [hostApp, guestApp]) {
+    await app.getByRole('link', { name: 'Play online' }).first().click();
+    await expect(app).toHaveURL(/#\/online/);
+    await app.getByRole('tab', { name: 'Invite codes' }).click();
+    await expect(app.getByTestId('panel-p2p')).toBeVisible();
+  }
+});
+
 test('a permanent can change hands and dies into its owner’s graveyard', async () => {
   const [hostBoard, hostHand, guestBoard] = await Promise.all([
     page(host, 'board.html'),

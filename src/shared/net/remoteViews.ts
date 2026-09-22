@@ -14,6 +14,8 @@ export interface RemotePeer {
   view: PublicView | null;
   // Their play area background, once its bytes are on this machine.
   matId: string | null;
+  // The back of their cards, the same way; null for the standard back.
+  backId?: string | null;
 }
 
 // What the board shows of the other players. seq increases with every
@@ -46,6 +48,7 @@ interface Peer {
   lastSeq: number;
   view: PublicView | null;
   matId: string | null;
+  backId: string | null;
 }
 
 export const MAX_LOG = 500;
@@ -85,6 +88,7 @@ export class RemoteViews {
         lastSeq: message.seq,
         view: known?.view ?? null,
         matId: known?.matId ?? null,
+        backId: known?.backId ?? null,
       });
       return this.changed();
     }
@@ -128,10 +132,21 @@ export class RemoteViews {
   // A peer's play area background, once main has its bytes on disk.
   // Mats arrive on an ordered link and are checked against their own
   // hash, so they need no sequence of their own.
-  setMat = (playerId: PlayerId, matId: string | null): boolean => {
+  setMat = (playerId: PlayerId, matId: string | null): boolean =>
+    this.setPicture(playerId, 'matId', matId);
+
+  // Their card back, arriving and checked exactly like a mat.
+  setBack = (playerId: PlayerId, backId: string | null): boolean =>
+    this.setPicture(playerId, 'backId', backId);
+
+  private setPicture = (
+    playerId: PlayerId,
+    key: 'matId' | 'backId',
+    id: string | null
+  ): boolean => {
     const peer = this.peers.get(playerId);
-    if (!peer || peer.matId === matId) return false;
-    peer.matId = matId;
+    if (!peer || peer[key] === id) return false;
+    peer[key] = id;
     return this.changed();
   };
 
@@ -179,6 +194,7 @@ export class RemoteViews {
         seat: this.seats.get(peer.info.playerId) ?? null,
         view: peer.view,
         matId: peer.matId,
+        backId: peer.backId,
       }))
       .sort(bySeat),
     log: this.log,

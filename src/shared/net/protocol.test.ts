@@ -912,3 +912,18 @@ describe('changes of control over the wire', () => {
     ).toMatchObject({ features: ['control'] });
   });
 });
+
+describe('card backs over the wire', () => {
+  it('carries a back exactly like a mat', () => {
+    const id = 'c'.repeat(64);
+    expect(
+      parseNetMessage(message({ kind: 'back', id, data: 'aGVsbG8=' }))
+    ).toMatchObject({ kind: 'back', id, data: 'aGVsbG8=' });
+    expect(
+      parseNetMessage(message({ kind: 'back', id: null, data: 'x' }))
+    ).toMatchObject({ kind: 'back', id: null, data: null });
+    expect(() =>
+      parseNetMessage(message({ kind: 'back', id: '../x', data: 'x' }))
+    ).toThrow(/back id is not a mat id/);
+  });
+});

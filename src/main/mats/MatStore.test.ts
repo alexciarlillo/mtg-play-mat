@@ -23,6 +23,7 @@ const image = (width: number, height: number): MatImage => ({
   isEmpty: () => false,
   getSize: () => ({ width, height }),
   resize: ({ width: next }) => image(next, height),
+  crop: (rect) => image(rect.width, rect.height),
   toJPEG: (quality) => Buffer.from(`jpeg ${width}x${height} q${quality}`),
 });
 

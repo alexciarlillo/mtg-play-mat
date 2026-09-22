@@ -30,12 +30,15 @@ const setup = (
   const settings = new SettingsStore(path.join(dir, 'settings.json'));
   const forget = vi.fn(async () => undefined);
   const mats = { importFile, forget } as unknown as MatStore;
+  const openExternal = vi.fn(async () => undefined);
+  const pickFile = vi.fn(async () => file);
   const handlers = createMatHandlers({
     mats,
     settings,
-    pickFile: vi.fn(async () => file),
+    pickFile,
+    openExternal,
   });
-  return { handlers, settings, importFile, forget };
+  return { handlers, settings, importFile, forget, openExternal, pickFile };
 };
 
 describe('mat handlers', () => {
@@ -44,7 +47,7 @@ describe('mat handlers', () => {
     t.settings.update({ matImage: OLD });
 
     expect(await t.handlers.chooseMatImage()).toEqual({ id: ID, error: null });
-    expect(t.importFile).toHaveBeenCalledWith('/pictures/mat.png');
+    expect(t.importFile).toHaveBeenCalledWith('/pictures/mat.png', 'mat');
     expect(t.settings.settings.matImage).toBe(ID);
     expect(t.forget).toHaveBeenCalledWith(OLD);
   });
@@ -98,5 +101,35 @@ describe('mat handlers', () => {
     await t.handlers.clearMatImage();
     expect(t.settings.settings.matImage).toBe('');
     expect(t.forget).toHaveBeenCalledWith(OLD);
+  });
+
+  it('keeps a card back the same way, in its own setting', async () => {
+    const t = setup();
+    t.settings.update({ cardBack: OLD });
+
+    expect(await t.handlers.chooseCardBack()).toEqual({ id: ID, error: null });
+    expect(t.pickFile).toHaveBeenCalledWith('back');
+    expect(t.importFile).toHaveBeenCalledWith('/pictures/mat.png', 'back');
+    expect(t.settings.settings.cardBack).toBe(ID);
+    expect(t.settings.settings.matImage).toBe('');
+    expect(t.forget).toHaveBeenCalledWith(OLD);
+
+    await t.handlers.clearCardBack();
+    expect(t.settings.settings.cardBack).toBe('');
+    expect(t.forget).toHaveBeenLastCalledWith(ID);
+  });
+
+  it('never forgets a picture the other setting still uses', async () => {
+    const t = setup();
+    t.settings.update({ matImage: OLD, cardBack: OLD });
+    await t.handlers.clearCardBack();
+    expect(t.settings.settings.cardBack).toBe('');
+    expect(t.forget).not.toHaveBeenCalled();
+  });
+
+  it('opens the card back gallery in the browser', async () => {
+    const t = setup();
+    await t.handlers.openCardBackGallery();
+    expect(t.openExternal).toHaveBeenCalledWith('https://mpcfill.com/explore');
   });
 });

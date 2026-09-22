@@ -11,6 +11,7 @@ import classNames from 'classnames';
 import { useState } from 'react';
 
 import Card from '../../../ui/Card';
+import { useCardBack } from '../../../ui/CardBackProvider';
 import { cardWidths } from '../../../ui/cardSizes';
 import CardImg from '../../../ui/CardImg';
 import { hasCommanders } from './commanders';
@@ -123,40 +124,46 @@ const Count = ({
   testId,
   back,
   activity,
+  owner,
 }: {
   label: string;
   count: number;
   testId: string;
   back?: boolean;
   activity?: LibraryActivity | null;
-}) => (
-  <div
-    data-testid={testId}
-    data-count={count}
-    className="flex flex-col items-center gap-1"
-  >
+  // Whose card back the library shows.
+  owner?: string;
+}) => {
+  const owned = useCardBack(owner);
+  return (
     <div
-      className={classNames(
-        'relative aspect-card rounded-lg flex items-center justify-center',
-        cardWidths.xs,
-        back && count > 0
-          ? 'overflow-hidden'
-          : 'border-2 border-dashed border-slate-500',
-        // A hand has no art to badge, so its count stays the tile.
-        !back && 'text-2xl font-bold tabular-nums'
-      )}
+      data-testid={testId}
+      data-count={count}
+      className="flex flex-col items-center gap-1"
     >
-      {back ? count > 0 && <CardImg name={label} /> : count}
-      <LibraryActivityBadge
-        activity={activity}
-        compact
-        testId={`${testId}-activity`}
-      />
-      {back && <ZoneCountBadge count={count} size="xs" />}
+      <div
+        className={classNames(
+          'relative aspect-card rounded-lg flex items-center justify-center',
+          cardWidths.xs,
+          back && count > 0
+            ? 'overflow-hidden'
+            : 'border-2 border-dashed border-slate-500',
+          // A hand has no art to badge, so its count stays the tile.
+          !back && 'text-2xl font-bold tabular-nums'
+        )}
+      >
+        {back ? count > 0 && <CardImg name={label} back={owned} /> : count}
+        <LibraryActivityBadge
+          activity={activity}
+          compact
+          testId={`${testId}-activity`}
+        />
+        {back && <ZoneCountBadge count={count} size="xs" />}
+      </div>
+      <div className="text-xs font-medium">{label}</div>
     </div>
-    <div className="text-xs font-medium">{label}</div>
-  </div>
-);
+  );
+};
 
 // Another player's part of the table. Everything here comes from their
 // public view, so it is read-only: no menus, drags, or drop targets.
@@ -439,6 +446,7 @@ const OpponentSide = ({
                     count={view.libraryCount}
                     testId="opponent-library"
                     back
+                    owner={peer.playerId}
                     activity={view.libraryActivity}
                   />
                   <Count

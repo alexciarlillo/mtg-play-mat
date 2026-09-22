@@ -9,6 +9,7 @@ import {
 import { type FormEvent, type ReactNode, useState } from 'react';
 
 import useSettings from '../../hooks/useSettings';
+import { cardBackUrl } from '../../ui/cardImages';
 
 const secondary =
   'rounded-md px-3 py-1.5 text-sm font-semibold shadow-sm disabled:opacity-40 bg-white text-gray-900 ring-1 ring-gray-300 hover:bg-gray-50';
@@ -224,6 +225,82 @@ const PlayArea = ({ matImage }: { matImage: string }) => {
   );
 };
 
+// The back of every card the player owns, as the whole table sees it.
+// The preview is card-shaped, since that is the part every board draws.
+const CardBack = ({ cardBack }: { cardBack: string }) => {
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const choose = () => {
+    setBusy(true);
+    setError(null);
+    window.api
+      .chooseCardBack()
+      .then((choice) => setError(choice.error))
+      .catch((err: unknown) => {
+        onSaveFailed(err);
+        setError('That image could not be used. Try another file.');
+      })
+      .finally(() => setBusy(false));
+  };
+
+  const clear = () => {
+    setError(null);
+    window.api.clearCardBack().catch(onSaveFailed);
+  };
+
+  const openGallery = () => {
+    window.api.openCardBackGallery().catch((err: unknown) => {
+      console.error('[settings] could not open the gallery', err);
+    });
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-end gap-4">
+        <img
+          data-testid="card-back-preview"
+          data-back={cardBack || undefined}
+          src={cardBack ? matImageUrl(cardBack) : cardBackUrl}
+          alt={cardBack ? 'Your card back' : 'The standard card back'}
+          className="aspect-card w-24 rounded-lg object-cover ring-1 ring-gray-300"
+        />
+        <div className="flex gap-2">
+          <button
+            type="button"
+            className={secondary}
+            disabled={busy}
+            onClick={choose}
+          >
+            {cardBack ? 'Choose another card back…' : 'Choose a card back…'}
+          </button>
+          {cardBack && (
+            <button type="button" className={secondary} onClick={clear}>
+              Use the standard back
+            </button>
+          )}
+        </div>
+      </div>
+      {error && (
+        <p role="alert" className="text-sm text-red-700">
+          {error}
+        </p>
+      )}
+      <p className="text-sm text-gray-600">
+        Looking for one? MPC Autofill has a large community collection:{' '}
+        <button
+          type="button"
+          className="font-medium text-blue-700 underline hover:text-blue-900"
+          onClick={openGallery}
+        >
+          browse card backs on mpcfill.com
+        </button>{' '}
+        (choose Cardbacks under card type), download one, then choose it here.
+      </p>
+    </div>
+  );
+};
+
 const onSaveFailed = (err: unknown) =>
   console.error('[settings] could not save', err);
 
@@ -276,6 +353,16 @@ const Settings = () => {
           window: it scales with your cards, so a card left on a patch of art
           stays there whatever size the window is, and a wide window shows bare
           table beside it rather than stretching the picture.
+        </p>
+      </Section>
+
+      <Section title="Card back">
+        <CardBack cardBack={settings.cardBack} />
+        <p className="text-sm text-gray-600">
+          A PNG or JPEG on the back of every card you own, seen by everyone at
+          the table: your library, and your face-down cards, even on someone
+          else&apos;s battlefield. The middle of the picture is used, cut to the
+          shape of a card.
         </p>
       </Section>
 

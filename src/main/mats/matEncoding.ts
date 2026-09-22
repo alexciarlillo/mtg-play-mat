@@ -1,6 +1,6 @@
-// Turning whatever the player picked into the two copies a mat needs: a
-// display copy for their own board, and a share copy small enough to
-// reach the rest of the pod in one message.
+// Turning whatever the player picked into the two copies a mat or card
+// back needs: a display copy for their own board, and a share copy small
+// enough to reach the rest of the pod in one message.
 
 // Just enough of Electron's NativeImage to encode against, so the sizing
 // rules can be tested without a running app.
@@ -8,6 +8,7 @@ export interface MatImage {
   isEmpty(): boolean;
   getSize(): { width: number; height: number };
   resize(options: { width: number }): MatImage;
+  crop(rect: { x: number; y: number; width: number; height: number }): MatImage;
   toJPEG(quality: number): Buffer;
 }
 
@@ -19,6 +20,11 @@ export interface MatEncoder {
 // HiDPI screen with room to spare.
 export const DISPLAY_WIDTH = 2048;
 export const DISPLAY_QUALITY = 88;
+
+// A card back is drawn card-shaped (63x88 mm) and never much larger
+// than a large Scryfall image, which is this wide.
+export const BACK_RATIO = 63 / 88;
+export const BACK_DISPLAY_WIDTH = 672;
 
 // A net message caps at 256 KB and carries the bytes base64'd (a third
 // bigger) inside an envelope, so the share copy gets what is left of
@@ -36,6 +42,14 @@ const SHARE_STEPS: { width: number; quality: number }[] = [
   { width: 1024, quality: 62 },
   { width: 800, quality: 55 },
   { width: 640, quality: 45 },
+];
+
+// A back is small on the table, so its share copy starts small too.
+const BACK_SHARE_STEPS: { width: number; quality: number }[] = [
+  { width: 488, quality: 85 },
+  { width: 488, quality: 72 },
+  { width: 336, quality: 72 },
+  { width: 336, quality: 55 },
 ];
 
 export class MatError extends Error {
@@ -68,8 +82,11 @@ export const displayCopy = (image: MatImage): Buffer =>
 // The copy that travels. The last step is small enough that a picture
 // which still misses the budget there would never have reached the pod,
 // so that is worth saying at import rather than at send time.
-export const shareCopy = (image: MatImage): Buffer => {
-  for (const { width, quality } of SHARE_STEPS) {
+const fitted = (
+  image: MatImage,
+  steps: { width: number; quality: number }[]
+): Buffer => {
+  for (const { width, quality } of steps) {
     const bytes = atWidth(image, width).toJPEG(quality);
     if (bytes.length <= MAX_SHARE_BYTES) return bytes;
   }
@@ -77,3 +94,27 @@ export const shareCopy = (image: MatImage): Buffer => {
     'That image will not compress small enough to send to the other players.'
   );
 };
+
+export const shareCopy = (image: MatImage): Buffer =>
+  fitted(image, SHARE_STEPS);
+
+// The middle of the picture, card-shaped, so every board draws the same
+// part of it whatever shape the file was.
+export const cardShaped = (image: MatImage): MatImage => {
+  const { width, height } = image.getSize();
+  const cropWidth = Math.min(width, Math.round(height * BACK_RATIO));
+  const cropHeight = Math.min(height, Math.round(width / BACK_RATIO));
+  if (cropWidth === width && cropHeight === height) return image;
+  return image.crop({
+    x: Math.floor((width - cropWidth) / 2),
+    y: Math.floor((height - cropHeight) / 2),
+    width: cropWidth,
+    height: cropHeight,
+  });
+};
+
+export const backDisplayCopy = (image: MatImage): Buffer =>
+  atWidth(cardShaped(image), BACK_DISPLAY_WIDTH).toJPEG(DISPLAY_QUALITY);
+
+export const backShareCopy = (image: MatImage): Buffer =>
+  fitted(cardShaped(image), BACK_SHARE_STEPS);

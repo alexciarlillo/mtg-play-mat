@@ -131,6 +131,11 @@ export const requests = {
   // The chosen mat is remembered as a setting, so every window hears.
   chooseMatImage: request<[], MatChoice>(),
   clearMatImage: request<[]>(),
+  // The same for the back of the player's cards, and a gallery to find
+  // one in, opened in the browser.
+  chooseCardBack: request<[], MatChoice>(),
+  clearCardBack: request<[]>(),
+  openCardBackGallery: request<[]>(),
   getSettings: request<[], Settings>(),
   updateSettings: request<[patch: SettingsPatch], Settings>(),
 };

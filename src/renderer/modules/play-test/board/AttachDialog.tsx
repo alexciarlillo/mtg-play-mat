@@ -56,6 +56,7 @@ const AttachDialog = ({
             >
               <div className="aspect-card w-full">
                 <CardArt
+                  owner={target.owner}
                   cardRef={target.ref}
                   faceIndex={target.faceIndex}
                   faceDown={target.faceDown}

@@ -82,6 +82,8 @@ const setup = (me = 'alice') => {
   const logged: string[] = [];
   const keptMats: { id: string; data: string }[] = [];
   let localMat: { id: string; data: string } | null = null;
+  let localBack: { id: string; data: string } | null = null;
+  const keptBacks: { id: string; data: string }[] = [];
   let keepMats = true;
   let local: PublicView | null = view(me);
   let format: DeckFormat = 'constructed';
@@ -102,6 +104,11 @@ const setup = (me = 'alice') => {
     receiveMat: (id, data) => {
       keptMats.push({ id, data });
       return Promise.resolve(keepMats);
+    },
+    localBack: () => Promise.resolve(localBack),
+    receiveBack: (id, data) => {
+      keptBacks.push({ id, data });
+      return Promise.resolve(true);
     },
     receiveControl: (from, name, change) => control.push([from, name, change]),
     peerGone: (playerId, name) => gone.push(`${playerId} ${name}`),
@@ -127,6 +134,7 @@ const setup = (me = 'alice') => {
     opponents,
     logged,
     keptMats,
+    keptBacks,
     rolls,
     control,
     gone,
@@ -140,6 +148,9 @@ const setup = (me = 'alice') => {
     },
     setMat: (next: { id: string; data: string } | null) => {
       localMat = next;
+    },
+    setBack: (next: { id: string; data: string } | null) => {
+      localBack = next;
     },
     refuseMats: () => {
       keepMats = false;
@@ -1299,6 +1310,60 @@ describe('Netplay play area backgrounds', () => {
     await flush();
     expect(t.keptMats).toEqual([{ id: MAT, data: 'aGVsbG8=' }]);
     expect(t.opponent()?.peers[0]).toMatchObject({ matId: MAT });
+  });
+});
+
+describe('Netplay card backs', () => {
+  const BACK = 'c'.repeat(64);
+  const MAT = 'a'.repeat(64);
+  const backsTo = (t: Harness, seat: number) =>
+    t.sentTo(seat).filter((m) => m.kind === 'back');
+
+  it('sends its own beside its mat as a seat opens, and on a change', async () => {
+    const t = setup();
+    t.setBack({ id: BACK, data: 'aGVsbG8=' });
+    await t.netplay.host();
+    t.netplay.handleReport({ type: 'invite', seat: 2, code: 'MPM1:i2' });
+    t.netplay.handleReport({ type: 'open', seat: 2 });
+    await flush();
+    expect(backsTo(t, 2)).toMatchObject([
+      { kind: 'back', id: BACK, data: 'aGVsbG8=' },
+    ]);
+    expect(t.sentTo(2).filter((m) => m.kind === 'mat')).toHaveLength(0);
+
+    t.setBack(null);
+    t.netplay.backChanged();
+    await flush();
+    expect(backsTo(t, 2).at(-1)).toMatchObject({ id: null, data: null });
+  });
+
+  it('keeps a guest’s back apart from their mat, and passes it on', async () => {
+    const t = await hostWith({ 2: 'bob' });
+    const bobBack = raw('bob', 50, {
+      kind: 'back',
+      id: BACK,
+      data: 'aGVsbG8=',
+    });
+    say(t, 2, bobBack);
+    say(t, 2, raw('bob', 51, { kind: 'mat', id: MAT, data: 'aGVsbG8=' }));
+    await flush();
+    expect(t.keptBacks).toEqual([{ id: BACK, data: 'aGVsbG8=' }]);
+    expect(t.keptMats).toEqual([{ id: MAT, data: 'aGVsbG8=' }]);
+    expect(t.opponent()?.peers[0]).toMatchObject({ backId: BACK, matId: MAT });
+
+    await t.netplay.invite(3);
+    t.netplay.handleReport({ type: 'invite', seat: 3, code: 'MPM1:i3' });
+    t.netplay.handleReport({ type: 'open', seat: 3 });
+    say(t, 3, hello('carol'));
+    await flush();
+    expect(backsTo(t, 3)).toMatchObject([{ id: BACK }]);
+  });
+
+  it('takes the host’s back as a guest', async () => {
+    const t = await guestIn();
+    say(t, 1, raw('alice', 50, { kind: 'back', id: BACK, data: 'aGVsbG8=' }));
+    await flush();
+    expect(t.opponent()?.peers[0]).toMatchObject({ backId: BACK });
   });
 });
 

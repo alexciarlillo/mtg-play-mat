@@ -154,6 +154,9 @@ const fields = {
   // The player's own play area background, by the id the mat store
   // names it with; blank for the bare table.
   matImage: field('', matId),
+  // The back of every card this player owns, on every board at the
+  // table, by the same kind of id; blank for the standard back.
+  cardBack: field('', matId),
   // Each opponent's own log, under their seat. One preference for every
   // seat, so folding it away is a single click in a pod.
   seatLog: field(true, boolean),

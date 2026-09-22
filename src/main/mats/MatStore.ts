@@ -12,6 +12,8 @@ import path from 'node:path';
 import { isMatId } from '@shared/mat';
 
 import {
+  backDisplayCopy,
+  backShareCopy,
   decodeMat,
   displayCopy,
   type MatEncoder,
@@ -45,8 +47,16 @@ const writeAtomic = async (file: string, bytes: Buffer) => {
   await rename(tmp, file);
 };
 
-// Every mat this machine knows: the player's own, and the ones peers
-// have sent. A mat is named by the hash of the bytes that travel, so
+// A picture the store can keep: a play area background, or a card back.
+export type TableImageKind = 'mat' | 'back';
+
+const encodings = {
+  mat: { display: displayCopy, share: shareCopy },
+  back: { display: backDisplayCopy, share: backShareCopy },
+};
+
+// Every mat and card back this machine knows: the player's own, and the
+// ones peers have sent. A mat is named by the hash of the bytes that travel, so
 // both ends of a pod agree on its name and a peer cannot claim someone
 // else's mat by naming it.
 export default class MatStore {
@@ -62,14 +72,18 @@ export default class MatStore {
   };
 
   // Takes the player's chosen file and keeps both copies of it.
-  importFile = async (file: string): Promise<string> => {
+  importFile = async (
+    file: string,
+    kind: TableImageKind = 'mat'
+  ): Promise<string> => {
     const source = await this.read(file);
     const image = decodeMat(this.deps.encoder, source);
-    const share = shareCopy(image);
+    const { display, share: encode } = encodings[kind];
+    const share = encode(image);
     const id = hash(share);
     await mkdir(this.deps.dir, { recursive: true });
     await writeAtomic(this.path(id), share);
-    await writeAtomic(this.path(id, 'full'), displayCopy(image));
+    await writeAtomic(this.path(id, 'full'), display(image));
     return id;
   };
 

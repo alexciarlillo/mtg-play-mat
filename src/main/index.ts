@@ -4,7 +4,14 @@ import path from 'node:path';
 import { CARD_SCHEME } from '@shared/cardImages';
 import { relayHost } from '@shared/debug';
 import { MAT_FILE_EXTENSIONS, MAT_SCHEME } from '@shared/mat';
-import { app, BrowserWindow, dialog, nativeImage, protocol } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  nativeImage,
+  protocol,
+  shell,
+} from 'electron';
 
 import CardDataService from './cardData/CardDataService';
 import runIngestProcess from './cardData/runIngestProcess';
@@ -22,7 +29,7 @@ import createDebugHandlers from './modules/debug/debugHandlers';
 import createMatHandlers from './modules/mat/matHandlers';
 import createCollectionHandlers from './modules/collection/collectionHandlers';
 import createDeckHandlers from './modules/decks/deckHandlers';
-import MatStore from './mats/MatStore';
+import MatStore, { type TableImageKind } from './mats/MatStore';
 import { createMatImageHandler, matSchemePrivileges } from './mats/matProtocol';
 import type Netplay from './modules/netplay/Netplay';
 import ProfileStore from './modules/netplay/ProfileStore';
@@ -142,13 +149,18 @@ const openSettings = (playTest: PlayTest) => {
 // hooks they name the file the next choice will return instead.
 let testMatFile: string | null = null;
 
-// The player's own picture for their play area. Opened over the app
-// window so it is modal to it on macOS.
+// Links opened in the browser, recorded instead under test hooks.
+const openedUrls: string[] = [];
+
+// The player's own picture for their play area or card back. Opened
+// over the app window so it is modal to it on macOS.
 const pickMatFile = async (
-  parent: BrowserWindow | null
+  parent: BrowserWindow | null,
+  kind: TableImageKind
 ): Promise<string | null> => {
   const options = {
-    title: 'Choose a play area background',
+    title:
+      kind === 'back' ? 'Choose a card back' : 'Choose a play area background',
     properties: ['openFile' as const],
     filters: [{ name: 'Images', extensions: MAT_FILE_EXTENSIONS }],
   };
@@ -249,13 +261,17 @@ const start = (onDeepLink: ReturnType<typeof watchDeepLinks>) => {
       ...createMatHandlers({
         mats,
         settings,
-        pickFile: async () => {
+        pickFile: async (kind) => {
           if (testHooksEnabled && testMatFile) {
             const file = testMatFile;
             testMatFile = null;
             return file;
           }
-          return pickMatFile(appWindow);
+          return pickMatFile(appWindow, kind);
+        },
+        openExternal: async (url) => {
+          if (testHooksEnabled) openedUrls.push(url);
+          else await shell.openExternal(url);
         },
       }),
     },
@@ -296,6 +312,7 @@ const start = (onDeepLink: ReturnType<typeof watchDeepLinks>) => {
         chooseMatFile: (file: string) => {
           testMatFile = file;
         },
+        openedUrls: () => openedUrls,
       },
     });
   }

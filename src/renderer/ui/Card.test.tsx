@@ -3,6 +3,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import Card from './Card';
+import { CardBackProvider } from './CardBackProvider';
 import { ContextMenuProvider } from './ContextMenuProvider';
 
 const bears: CardView = {
@@ -55,6 +56,35 @@ describe('Card', () => {
     renderCard({ card: { ...bears, ref: null, faceDown: true } });
     const img = screen.getByAltText('Face-down card');
     expect(img.getAttribute('src')).not.toContain('scryfall');
+  });
+
+  it('shows its owner’s back when hidden, and the standard one otherwise', () => {
+    const back = 'c'.repeat(64);
+    const hidden = { ...bears, ref: null, faceDown: true };
+    render(
+      <ContextMenuProvider>
+        <CardBackProvider backs={{ p1: back, p2: null }}>
+          <Card card={hidden} />
+          <Card card={{ ...hidden, instanceId: 'p2:1', owner: 'p2' }} />
+        </CardBackProvider>
+      </ContextMenuProvider>
+    );
+    const [mine, theirs] = screen.getAllByAltText('Face-down card');
+    expect(mine).toHaveAttribute('src', `mat://${back}`);
+    expect(theirs.getAttribute('src')).not.toContain('mat://');
+  });
+
+  it('falls back to the standard back when a custom one fails', () => {
+    render(
+      <ContextMenuProvider>
+        <CardBackProvider backs={{ p1: 'c'.repeat(64) }}>
+          <Card card={{ ...bears, ref: null, faceDown: true }} />
+        </CardBackProvider>
+      </ContextMenuProvider>
+    );
+    const img = screen.getByAltText('Face-down card');
+    fireEvent.error(img);
+    expect(img.getAttribute('src')).not.toContain('mat://');
   });
 
   it('reports clicks with the card', () => {

@@ -43,6 +43,10 @@ export interface MatChoice {
   error: string | null;
 }
 
+// Where players can find card back art; a gallery, not an API, so it
+// is only ever opened in the player's browser.
+export const CARD_BACK_GALLERY_URL = 'https://mpcfill.com/explore';
+
 // The picture formats worth offering. JPEG costs nothing to accept and
 // is what half the art on a hard disk already is.
 export const MAT_FILE_EXTENSIONS = ['png', 'jpg', 'jpeg'];

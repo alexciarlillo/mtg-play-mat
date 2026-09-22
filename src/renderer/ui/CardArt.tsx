@@ -1,6 +1,7 @@
-import { type CardRef, currentFace } from '@shared/game';
+import { type CardRef, currentFace, type PlayerId } from '@shared/game';
 import classNames from 'classnames';
 
+import { useCardBack } from './CardBackProvider';
 import CardImg from './CardImg';
 
 interface Props {
@@ -9,6 +10,8 @@ interface Props {
   faceIndex?: number;
   faceDown?: boolean;
   className?: string;
+  // Whose back to show when the card is hidden.
+  owner?: PlayerId;
 }
 
 // A custom token has no printing, so it is drawn as a plain frame with its
@@ -43,7 +46,14 @@ const CustomToken = ({ cardRef, faceIndex = 0 }: Props) => {
 
 // The face a card currently shows: its image (the back when hidden or
 // unknown), turned upside down for the flipped half of a flip card.
-const CardArt = ({ cardRef, faceIndex = 0, faceDown, className }: Props) => {
+const CardArt = ({
+  cardRef,
+  faceIndex = 0,
+  faceDown,
+  className,
+  owner,
+}: Props) => {
+  const back = useCardBack(owner);
   if (!faceDown && cardRef?.custom) {
     return <CustomToken cardRef={cardRef} faceIndex={faceIndex} />;
   }
@@ -51,6 +61,7 @@ const CardArt = ({ cardRef, faceIndex = 0, faceDown, className }: Props) => {
   const flipped = !hidden && cardRef.layout === 'flip' && faceIndex > 0;
   return (
     <CardImg
+      back={back}
       className={classNames(className, { 'rotate-180': flipped })}
       scryfallId={hidden ? undefined : cardRef.id}
       face={hidden || cardRef.layout === 'flip' ? 0 : faceIndex}

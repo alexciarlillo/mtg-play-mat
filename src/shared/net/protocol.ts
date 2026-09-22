@@ -102,6 +102,9 @@ export type NetPayload =
   // The sender's play area background, named by the hash of the bytes
   // that follow, or null for the bare table. Added within v2 as well.
   | { kind: 'mat'; id: string | null; data: string | null }
+  // The back of the sender's cards, sent just like a mat. Added within
+  // v2 as well: older builds show their own back for everyone.
+  | { kind: 'back'; id: string | null; data: string | null }
   // A permanent changing hands, for one player only: the host passes it
   // on to that seat alone. Added within v2, behind FEATURE_CONTROL.
   | { kind: 'control'; to: PlayerId; change: ControlChange };
@@ -515,15 +518,17 @@ export const parseNetMessage = (raw: unknown): NetMessage => {
         byName: text(fields, 'byName', { max: 64 }),
         roll: rollResult(fields.roll),
       };
-    case 'mat': {
+    case 'mat':
+    case 'back': {
+      const kind = fields.kind;
       if (fields.id === null) {
-        return { ...envelope, kind: 'mat', id: null, data: null };
+        return { ...envelope, kind, id: null, data: null };
       }
       const id = text(fields, 'id', { max: MAT_ID_LENGTH });
-      if (!isMatId(id)) fail('mat id is not a mat id');
+      if (!isMatId(id)) fail(`${kind} id is not a mat id`);
       return {
         ...envelope,
-        kind: 'mat',
+        kind,
         id,
         // Checked against the id by the mat store, which is the only
         // thing that makes it safe to keep.

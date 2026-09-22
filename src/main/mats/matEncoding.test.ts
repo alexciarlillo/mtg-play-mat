@@ -2,6 +2,10 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  BACK_DISPLAY_WIDTH,
+  backDisplayCopy,
+  backShareCopy,
+  cardShaped,
   decodeMat,
   displayCopy,
   DISPLAY_WIDTH,
@@ -19,6 +23,7 @@ const image = (width: number, height: number, bytesPerPixel = 1): MatImage => ({
   getSize: () => ({ width, height }),
   resize: ({ width: next }) =>
     image(next, Math.round((height * next) / width), bytesPerPixel),
+  crop: (rect) => image(rect.width, rect.height, bytesPerPixel),
   toJPEG: (quality) =>
     Buffer.alloc(Math.round((width * height * bytesPerPixel * quality) / 100)),
 });
@@ -33,6 +38,7 @@ const recorded = (from: MatImage) => {
   const wrap = (inner: MatImage): MatImage => ({
     ...inner,
     resize: (options) => wrap(inner.resize(options)),
+    crop: (rect) => wrap(inner.crop(rect)),
     toJPEG: (quality) => {
       calls.push({ width: inner.getSize().width, quality });
       return inner.toJPEG(quality);
@@ -102,5 +108,30 @@ describe('shareCopy', () => {
     expect(() => shareCopy(image(4000, 4000, 100))).toThrow(
       /will not compress/
     );
+  });
+});
+
+describe('card backs', () => {
+  it('takes the middle of the picture, card-shaped', () => {
+    const size = (w: number, h: number) => cardShaped(image(w, h)).getSize();
+    // Too wide: the sides go. Too tall: the top and bottom go.
+    expect(size(1000, 880)).toEqual({ width: 630, height: 880 });
+    expect(size(630, 1200)).toEqual({ width: 630, height: 880 });
+    // Already card-shaped, it is left alone.
+    const exact = image(630, 880);
+    expect(cardShaped(exact)).toBe(exact);
+  });
+
+  it('keeps a display copy no wider than a large card image', () => {
+    const { image: big, calls } = recorded(image(3000, 4190));
+    backDisplayCopy(big);
+    expect(calls).toEqual([{ width: BACK_DISPLAY_WIDTH, quality: 88 }]);
+  });
+
+  it('shares a small copy that fits one message', () => {
+    const { image: big, calls } = recorded(image(3000, 4190));
+    const bytes = backShareCopy(big);
+    expect(bytes.length).toBeLessThanOrEqual(MAX_SHARE_BYTES);
+    expect(calls[0]).toEqual({ width: 488, quality: 85 });
   });
 });

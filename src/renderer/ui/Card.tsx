@@ -83,6 +83,7 @@ const Card = ({
       onMouseLeave={() => preview.hide(instanceId)}
     >
       <CardArt
+        owner={card.owner}
         cardRef={card.ref}
         faceIndex={card.faceIndex}
         faceDown={hidden}

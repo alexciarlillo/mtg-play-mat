@@ -28,6 +28,7 @@ describe('parseSettings', () => {
       handTray: { height: 280, collapsed: false },
       opponentRow: DEFAULT_OPPONENT_ROW_HEIGHT,
       matImage: '',
+      cardBack: '',
       seatLog: true,
       relayUrl: '',
       relayKey: '',
@@ -40,6 +41,8 @@ describe('parseSettings', () => {
     expect(parseSettings({ matImage: '' }).matImage).toBe('');
     expect(parseSettings({ matImage: '../etc/passwd' }).matImage).toBe('');
     expect(parseSettings({ matImage: 'A'.repeat(64) }).matImage).toBe('');
+    expect(parseSettings({ cardBack: id }).cardBack).toBe(id);
+    expect(parseSettings({ cardBack: '../etc/passwd' }).cardBack).toBe('');
   });
 
   it('migrates a file that only has a display name', () => {

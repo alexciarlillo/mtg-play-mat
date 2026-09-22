@@ -32,6 +32,7 @@ export default defineConfig([
             'useRootStore',
             'useContextMenu',
             'useCardPreview',
+            'useCardBack',
           ],
         },
       ],

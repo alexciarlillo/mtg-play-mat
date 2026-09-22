@@ -128,6 +128,7 @@ const BattlefieldCard = ({
         >
           <div className={classNames('h-full', { 'rotate-90': card.tapped })}>
             <CardArt
+              owner={card.owner}
               cardRef={card.ref}
               faceIndex={card.faceIndex}
               faceDown={card.faceDown}

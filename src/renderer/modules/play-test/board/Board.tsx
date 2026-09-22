@@ -17,6 +17,7 @@ import {
 } from 'react';
 
 import useSettings from '../../../hooks/useSettings';
+import { CardBackProvider } from '../../../ui/CardBackProvider';
 import { cardWidths } from '../../../ui/cardSizes';
 import { useContextMenu } from '../../../ui/ContextMenuProvider';
 import FloatingPanel from '../../../ui/FloatingPanel';
@@ -218,303 +219,317 @@ const Board = ({ store, opponent, hand }: Props) => {
   // them out over the player panel.
   const bounds = fieldBounds(view ? view.zones.battlefield : []);
   const pileSize = compactPiles ? 'xs' : 'sm';
+  const backs = {
+    ...Object.fromEntries(
+      peers.map((peer) => [peer.info.playerId, peer.backId])
+    ),
+    ...(playerId && { [playerId]: settings.cardBack }),
+  };
 
   return (
-    <div className="h-screen w-screen overflow-hidden bg-neutral-400 flex flex-col">
-      {/* The docked hand sits below, so opponents and the field share
+    <CardBackProvider backs={backs}>
+      <div className="h-screen w-screen overflow-hidden bg-neutral-400 flex flex-col">
+        {/* The docked hand sits below, so opponents and the field share
           what is left and the table panel stays above the tray. */}
-      <div className="flex min-h-0 flex-1 flex-col">
-        {duel && settingsLoaded && (
-          <OpponentsRow
-            peers={peers}
-            height={settings.opponentRow}
-            onHeightChange={(opponentRow) => {
-              updateSettings({ opponentRow }).catch((err: unknown) =>
-                console.error('[play-test] could not save opponents row', err)
-              );
-            }}
-            showTurn={turnTracking}
-            owners={owners}
-            log={log}
-            logOpen={settings.seatLog}
-            onLogOpenChange={(seatLog) => {
-              updateSettings({ seatLog }).catch((err: unknown) =>
-                console.error('[play-test] could not save seat log', err)
-              );
-            }}
-          />
-        )}
-        <div className="flex flex-1 min-h-0" onContextMenu={handleContextMenu}>
+        <div className="flex min-h-0 flex-1 flex-col">
+          {duel && settingsLoaded && (
+            <OpponentsRow
+              peers={peers}
+              height={settings.opponentRow}
+              onHeightChange={(opponentRow) => {
+                updateSettings({ opponentRow }).catch((err: unknown) =>
+                  console.error('[play-test] could not save opponents row', err)
+                );
+              }}
+              showTurn={turnTracking}
+              owners={owners}
+              log={log}
+              logOpen={settings.seatLog}
+              onLogOpenChange={(seatLog) => {
+                updateSettings({ seatLog }).catch((err: unknown) =>
+                  console.error('[play-test] could not save seat log', err)
+                );
+              }}
+            />
+          )}
           <div
-            className={classNames(
-              'relative flex-1 h-full px-8',
-              duel ? 'py-3' : 'py-6'
-            )}
-          >
-            {view && (
-              <RevealPanel
-                reveal={view.revealed}
-                onHide={() =>
-                  dispatch({ type: 'hideReveal', playerId: view.playerId })
-                }
-              />
-            )}
-            {/* Over the field, not in the player panel, which is full in
-              a commander pod; it waits for settings so it doesn't jump. */}
-            {settingsLoaded && (
-              <FloatingPanel
-                title="Table"
-                testId="table-panel"
-                className="w-72"
-                placement={settings.tablePanel}
-                onPlacementChange={(tablePanel) => {
-                  updateSettings({ tablePanel }).catch((err: unknown) =>
-                    console.error('[play-test] could not save panel', err)
-                  );
-                }}
-              >
-                <TableLog log={log} onCustomDie={() => setDialog('rollDie')} />
-              </FloatingPanel>
-            )}
-            {/* Positions are relative to this box, in logical field units. */}
-            <ScaledField
-              testId="battlefield"
-              fitWidth={bounds.width}
-              offsetX={bounds.offsetX}
-            >
-              {(scale) => (
-                <>
-                  {/* First, so every card is drawn over it. */}
-                  <PlayMat id={settings.matImage} />
-                  {view &&
-                    stackOrder(view.zones.battlefield).map((card) => (
-                      <BattlefieldCard
-                        key={card.instanceId}
-                        card={card}
-                        scale={scale}
-                        offsetX={bounds.offsetX}
-                        onAddCounter={onAddCounter}
-                        onAttach={onAttach}
-                        giveTo={giveTo}
-                        ownerName={ownerNameOf(card)}
-                        owner={ownerLabel(card, view.playerId, owners)}
-                      />
-                    ))}
-                </>
-              )}
-            </ScaledField>
-          </div>
-
-          <aside
-            style={{ width: FULL_PANEL_WIDTH }}
-            className="h-full shrink-0 bg-slate-800 text-slate-100 flex flex-col"
+            className="flex flex-1 min-h-0"
+            onContextMenu={handleContextMenu}
           >
             <div
               className={classNames(
-                'scroll-visible min-h-0 flex-1 overflow-y-auto flex flex-col p-3',
-                duel ? 'gap-2' : 'gap-3'
+                'relative flex-1 h-full px-8',
+                duel ? 'py-3' : 'py-6'
               )}
             >
               {view && (
-                <>
-                  <LifeCounter
-                    playerId={view.playerId}
-                    life={view.life}
-                    compact={duel}
-                    onSetLife={() => setDialog('setLife')}
-                  />
-                  <PlayerCounters
-                    counters={view.counters}
-                    playerId={view.playerId}
-                  />
-                  {turnTracking && <TurnPanel view={view} compact={duel} />}
-                  {!view.keptHand && (
-                    <div
-                      data-testid="mulligan-status"
-                      className="rounded bg-amber-200 px-2 py-1 text-center text-sm font-semibold text-slate-900"
-                    >
-                      Choosing opening hand · Mulligans {view.mulligans}
-                    </div>
-                  )}
-                  <div
-                    className={classNames(
-                      'grid gap-x-2',
-                      compactPiles
-                        ? 'grid-cols-4 gap-y-1'
-                        : 'grid-cols-2 gap-y-3'
-                    )}
-                  >
-                    <Library
-                      playerId={view.playerId}
-                      count={view.libraryCount}
-                      size={pileSize}
-                      activity={view.libraryActivity}
-                      onDrawMany={() => setDialog('drawMany')}
-                      onMill={() => setDialog('mill')}
-                    />
-                    <div
-                      data-testid="hand-count"
-                      data-drop-zone="hand"
-                      data-count={view.handCount}
-                      className="flex flex-col items-center gap-1"
-                    >
-                      <div
-                        className={classNames(
-                          'aspect-card rounded-lg border-2 border-dashed border-slate-500',
-                          'flex items-center justify-center font-bold tabular-nums',
-                          compactPiles ? 'text-2xl' : 'text-4xl',
-                          cardWidths[pileSize]
-                        )}
-                      >
-                        {view.handCount}
-                      </div>
-                      <div className="text-sm font-medium">Hand</div>
-                    </div>
-                    <ZonePile
-                      zone="graveyard"
-                      label="Graveyard"
-                      cards={view.zones.graveyard}
-                      size={pileSize}
-                      onOpen={() => setDialog('graveyard')}
-                    />
-                    <ZonePile
-                      zone="exile"
-                      label="Exile"
-                      cards={view.zones.exile}
-                      size={pileSize}
-                      onOpen={() => setDialog('exile')}
-                    />
-                    {commanderGame && (
-                      <CommandZone view={view} size={duel ? 'xs' : 'sm'} />
-                    )}
-                  </div>
-                  <DummyOpponents
-                    playerId={view.playerId}
-                    dummies={view.dummies}
-                    commanders={commanderSources(visibleCommanders(view))}
-                  />
-                </>
+                <RevealPanel
+                  reveal={view.revealed}
+                  onHide={() =>
+                    dispatch({ type: 'hideReveal', playerId: view.playerId })
+                  }
+                />
               )}
+              {/* Over the field, not in the player panel, which is full in
+              a commander pod; it waits for settings so it doesn't jump. */}
+              {settingsLoaded && (
+                <FloatingPanel
+                  title="Table"
+                  testId="table-panel"
+                  className="w-72"
+                  placement={settings.tablePanel}
+                  onPlacementChange={(tablePanel) => {
+                    updateSettings({ tablePanel }).catch((err: unknown) =>
+                      console.error('[play-test] could not save panel', err)
+                    );
+                  }}
+                >
+                  <TableLog
+                    log={log}
+                    onCustomDie={() => setDialog('rollDie')}
+                  />
+                </FloatingPanel>
+              )}
+              {/* Positions are relative to this box, in logical field units. */}
+              <ScaledField
+                testId="battlefield"
+                fitWidth={bounds.width}
+                offsetX={bounds.offsetX}
+              >
+                {(scale) => (
+                  <>
+                    {/* First, so every card is drawn over it. */}
+                    <PlayMat id={settings.matImage} />
+                    {view &&
+                      stackOrder(view.zones.battlefield).map((card) => (
+                        <BattlefieldCard
+                          key={card.instanceId}
+                          card={card}
+                          scale={scale}
+                          offsetX={bounds.offsetX}
+                          onAddCounter={onAddCounter}
+                          onAttach={onAttach}
+                          giveTo={giveTo}
+                          ownerName={ownerNameOf(card)}
+                          owner={ownerLabel(card, view.playerId, owners)}
+                        />
+                      ))}
+                  </>
+                )}
+              </ScaledField>
             </div>
-            {/* Pinned below the scrolling column: lethal commander damage
+
+            <aside
+              style={{ width: FULL_PANEL_WIDTH }}
+              className="h-full shrink-0 bg-slate-800 text-slate-100 flex flex-col"
+            >
+              <div
+                className={classNames(
+                  'scroll-visible min-h-0 flex-1 overflow-y-auto flex flex-col p-3',
+                  duel ? 'gap-2' : 'gap-3'
+                )}
+              >
+                {view && (
+                  <>
+                    <LifeCounter
+                      playerId={view.playerId}
+                      life={view.life}
+                      compact={duel}
+                      onSetLife={() => setDialog('setLife')}
+                    />
+                    <PlayerCounters
+                      counters={view.counters}
+                      playerId={view.playerId}
+                    />
+                    {turnTracking && <TurnPanel view={view} compact={duel} />}
+                    {!view.keptHand && (
+                      <div
+                        data-testid="mulligan-status"
+                        className="rounded bg-amber-200 px-2 py-1 text-center text-sm font-semibold text-slate-900"
+                      >
+                        Choosing opening hand · Mulligans {view.mulligans}
+                      </div>
+                    )}
+                    <div
+                      className={classNames(
+                        'grid gap-x-2',
+                        compactPiles
+                          ? 'grid-cols-4 gap-y-1'
+                          : 'grid-cols-2 gap-y-3'
+                      )}
+                    >
+                      <Library
+                        playerId={view.playerId}
+                        count={view.libraryCount}
+                        size={pileSize}
+                        activity={view.libraryActivity}
+                        onDrawMany={() => setDialog('drawMany')}
+                        onMill={() => setDialog('mill')}
+                      />
+                      <div
+                        data-testid="hand-count"
+                        data-drop-zone="hand"
+                        data-count={view.handCount}
+                        className="flex flex-col items-center gap-1"
+                      >
+                        <div
+                          className={classNames(
+                            'aspect-card rounded-lg border-2 border-dashed border-slate-500',
+                            'flex items-center justify-center font-bold tabular-nums',
+                            compactPiles ? 'text-2xl' : 'text-4xl',
+                            cardWidths[pileSize]
+                          )}
+                        >
+                          {view.handCount}
+                        </div>
+                        <div className="text-sm font-medium">Hand</div>
+                      </div>
+                      <ZonePile
+                        zone="graveyard"
+                        label="Graveyard"
+                        cards={view.zones.graveyard}
+                        size={pileSize}
+                        onOpen={() => setDialog('graveyard')}
+                      />
+                      <ZonePile
+                        zone="exile"
+                        label="Exile"
+                        cards={view.zones.exile}
+                        size={pileSize}
+                        onOpen={() => setDialog('exile')}
+                      />
+                      {commanderGame && (
+                        <CommandZone view={view} size={duel ? 'xs' : 'sm'} />
+                      )}
+                    </div>
+                    <DummyOpponents
+                      playerId={view.playerId}
+                      dummies={view.dummies}
+                      commanders={commanderSources(visibleCommanders(view))}
+                    />
+                  </>
+                )}
+              </div>
+              {/* Pinned below the scrolling column: lethal commander damage
                 has to stay in sight however little board a docked hand
                 leaves. Half the panel at most, so the rest keeps room. */}
-            {view && damageRows && (
-              <div className="scroll-visible max-h-[50%] shrink-0 overflow-y-auto border-t border-slate-600 px-3 py-2">
-                <CommanderDamageTaken
-                  playerId={view.playerId}
-                  sources={damageSources}
-                  taken={view.commanderDamage}
-                />
-              </div>
-            )}
-          </aside>
+              {view && damageRows && (
+                <div className="scroll-visible max-h-[50%] shrink-0 overflow-y-auto border-t border-slate-600 px-3 py-2">
+                  <CommanderDamageTaken
+                    playerId={view.playerId}
+                    sources={damageSources}
+                    taken={view.commanderDamage}
+                  />
+                </div>
+              )}
+            </aside>
+          </div>
         </div>
-      </div>
-      {hand && settingsLoaded && (
-        <HandTray
-          store={hand}
-          placement={settings.handTray}
-          onPlacementChange={(handTray) => {
-            updateSettings({ handTray }).catch((err: unknown) =>
-              console.error('[play-test] could not save hand tray', err)
-            );
-          }}
-          onBusyChange={setHandBusy}
-        />
-      )}
+        {hand && settingsLoaded && (
+          <HandTray
+            store={hand}
+            placement={settings.handTray}
+            onPlacementChange={(handTray) => {
+              updateSettings({ handTray }).catch((err: unknown) =>
+                console.error('[play-test] could not save hand tray', err)
+              );
+            }}
+            onBusyChange={setHandBusy}
+          />
+        )}
 
-      {view && dialog === 'graveyard' && (
-        <ZoneBrowser
-          title="Graveyard"
-          cards={view.zones.graveyard}
-          onClose={close}
-        />
-      )}
-      {view && dialog === 'exile' && (
-        <ZoneBrowser title="Exile" cards={view.zones.exile} onClose={close} />
-      )}
-      {view && dialog === 'drawMany' && (
-        <NumberPrompt
-          title="Draw cards"
-          label="How many?"
-          initial={1}
-          min={1}
-          max={Math.max(1, view.libraryCount)}
-          onSubmit={(count) =>
-            dispatch({ type: 'draw', playerId: view.playerId, count })
-          }
-          onClose={close}
-        />
-      )}
-      {view && dialog === 'mill' && (
-        <NumberPrompt
-          title="Mill cards"
-          label="How many from the top?"
-          initial={1}
-          min={1}
-          max={Math.max(1, view.libraryCount)}
-          onSubmit={(count) =>
-            dispatch({ type: 'mill', playerId: view.playerId, count })
-          }
-          onClose={close}
-        />
-      )}
-      {view && dialog === 'setLife' && (
-        <NumberPrompt
-          title="Set life"
-          label="Life total"
-          initial={view.life}
-          min={-999}
-          max={9999}
-          onSubmit={(life) =>
-            dispatch({ type: 'setLife', playerId: view.playerId, life })
-          }
-          onClose={close}
-        />
-      )}
-      {dialog === 'restart' && (
-        <ConfirmDialog
-          title="Restart game?"
-          message="Starts a new game with the same deck: everything is shuffled back and you draw a new opening hand."
-          confirmLabel="Restart"
-          onConfirm={() => {
-            window.api.restartPlayTest().catch((err: unknown) => {
-              console.error('[play-test] restart failed', err);
-            });
-          }}
-          onClose={close}
-        />
-      )}
-      {dialog === 'help' && <ShortcutHelp onClose={close} />}
-      {dialog === 'rollDie' && (
-        <NumberPrompt
-          title="Roll a die"
-          label="Sides"
-          initial={100}
-          min={2}
-          max={MAX_DIE_SIDES}
-          onSubmit={(sides) => requestRoll({ type: 'die', sides })}
-          onClose={close}
-        />
-      )}
-      {prompts[0] && (
-        <CommanderPrompt key={prompts[0].instanceId} prompt={prompts[0]} />
-      )}
-      {view && dialog === 'token' && (
-        <TokenDialog playerId={view.playerId} onClose={close} />
-      )}
-      {cardDialog?.kind === 'counter' && (
-        <CounterDialog card={cardDialog.card} onClose={closeCardDialog} />
-      )}
-      {view && cardDialog?.kind === 'attach' && (
-        <AttachDialog
-          card={cardDialog.card}
-          battlefield={view.zones.battlefield}
-          onClose={closeCardDialog}
-        />
-      )}
-    </div>
+        {view && dialog === 'graveyard' && (
+          <ZoneBrowser
+            title="Graveyard"
+            cards={view.zones.graveyard}
+            onClose={close}
+          />
+        )}
+        {view && dialog === 'exile' && (
+          <ZoneBrowser title="Exile" cards={view.zones.exile} onClose={close} />
+        )}
+        {view && dialog === 'drawMany' && (
+          <NumberPrompt
+            title="Draw cards"
+            label="How many?"
+            initial={1}
+            min={1}
+            max={Math.max(1, view.libraryCount)}
+            onSubmit={(count) =>
+              dispatch({ type: 'draw', playerId: view.playerId, count })
+            }
+            onClose={close}
+          />
+        )}
+        {view && dialog === 'mill' && (
+          <NumberPrompt
+            title="Mill cards"
+            label="How many from the top?"
+            initial={1}
+            min={1}
+            max={Math.max(1, view.libraryCount)}
+            onSubmit={(count) =>
+              dispatch({ type: 'mill', playerId: view.playerId, count })
+            }
+            onClose={close}
+          />
+        )}
+        {view && dialog === 'setLife' && (
+          <NumberPrompt
+            title="Set life"
+            label="Life total"
+            initial={view.life}
+            min={-999}
+            max={9999}
+            onSubmit={(life) =>
+              dispatch({ type: 'setLife', playerId: view.playerId, life })
+            }
+            onClose={close}
+          />
+        )}
+        {dialog === 'restart' && (
+          <ConfirmDialog
+            title="Restart game?"
+            message="Starts a new game with the same deck: everything is shuffled back and you draw a new opening hand."
+            confirmLabel="Restart"
+            onConfirm={() => {
+              window.api.restartPlayTest().catch((err: unknown) => {
+                console.error('[play-test] restart failed', err);
+              });
+            }}
+            onClose={close}
+          />
+        )}
+        {dialog === 'help' && <ShortcutHelp onClose={close} />}
+        {dialog === 'rollDie' && (
+          <NumberPrompt
+            title="Roll a die"
+            label="Sides"
+            initial={100}
+            min={2}
+            max={MAX_DIE_SIDES}
+            onSubmit={(sides) => requestRoll({ type: 'die', sides })}
+            onClose={close}
+          />
+        )}
+        {prompts[0] && (
+          <CommanderPrompt key={prompts[0].instanceId} prompt={prompts[0]} />
+        )}
+        {view && dialog === 'token' && (
+          <TokenDialog playerId={view.playerId} onClose={close} />
+        )}
+        {cardDialog?.kind === 'counter' && (
+          <CounterDialog card={cardDialog.card} onClose={closeCardDialog} />
+        )}
+        {view && cardDialog?.kind === 'attach' && (
+          <AttachDialog
+            card={cardDialog.card}
+            battlefield={view.zones.battlefield}
+            onClose={closeCardDialog}
+          />
+        )}
+      </div>
+    </CardBackProvider>
   );
 };
 
