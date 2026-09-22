@@ -114,6 +114,10 @@ export const requests = {
   // Only the hidden net window may call this.
   netReport: request<[report: NetReport]>(),
   getOpponentView: request<[], OpponentState>(),
+  // Hands one of the player's permanents to another player in the pod,
+  // or gives a borrowed one back to its owner.
+  giveControl: request<[instanceId: string, to: string]>(),
+  returnControl: request<[instanceId: string]>(),
   // Token printings by name, for creating tokens in a play test.
   searchTokens: request<[query: string], TokenSearchResult[]>(),
   // App preferences. Main drops invalid keys and values from a patch, and

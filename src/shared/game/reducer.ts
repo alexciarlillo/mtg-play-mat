@@ -3,6 +3,7 @@ import {
   reduceCommander,
   withCommanderRules,
 } from './commander';
+import { isControlAction, reduceControl } from './control';
 import { emptyGame, getPlayer, reduceCore } from './core';
 import { hideReveal, reduceLibrary } from './library';
 import { mtgRules, reduceMtg } from './mtg';
@@ -68,6 +69,7 @@ const reduceAny = (state: GameState, action: GameAction): GameState => {
   if (isMtgAction(action)) return reduceMtg(state, action);
   if (isCommanderAction(action)) return reduceCommander(state, action);
   if (isLibraryAction(action)) return reduceLibrary(state, action, rules);
+  if (isControlAction(action)) return reduceControl(state, action, rules);
   if (action.type === 'newGame') {
     return markCommanders(reduceCore(state, action, rules));
   }

@@ -2,8 +2,11 @@ import { isMatId, MAT_ID_LENGTH } from '../mat';
 import {
   type CardView,
   type CommanderDamage,
+  type ControlChange,
   type DummyOpponent,
+  type LentCard,
   parseCardRef,
+  type PermanentState,
   parseLibraryActivity,
   type Phase,
   phases,
@@ -13,6 +16,8 @@ import {
   type PublicZoneId,
   type RevealSource,
   type RevealView,
+  type ZoneId,
+  zoneIds,
 } from '../game';
 
 // 2 added pods (roster, relayed messages) and host-rolled dice.
@@ -34,11 +39,24 @@ export const MAX_MAT_DATA_CHARS = 250_000;
 // and stays under the datachannel's own message limit.
 export const MAX_MESSAGE_BYTES = 256 * 1024;
 
+// Optional abilities a build announces in its hello; a peer is only ever
+// asked to do what it says it can.
+export const FEATURE_CONTROL = 'control';
+
+export const localFeatures: readonly string[] = [FEATURE_CONTROL];
+
+const MAX_FEATURES = 20;
+
 export interface PeerInfo {
   playerId: PlayerId;
   name: string;
   appVersion: string;
+  // Absent from builds older than any feature.
+  features?: string[];
 }
+
+export const hasFeature = (info: PeerInfo, feature: string) =>
+  info.features?.includes(feature) ?? false;
 
 export interface RosterEntry {
   playerId: PlayerId;
@@ -83,7 +101,10 @@ export type NetPayload =
   | { kind: 'log'; text: string }
   // The sender's play area background, named by the hash of the bytes
   // that follow, or null for the bare table. Added within v2 as well.
-  | { kind: 'mat'; id: string | null; data: string | null };
+  | { kind: 'mat'; id: string | null; data: string | null }
+  // A permanent changing hands, for one player only: the host passes it
+  // on to that seat alone. Added within v2, behind FEATURE_CONTROL.
+  | { kind: 'control'; to: PlayerId; change: ControlChange };
 
 export type NetMessage = Envelope & NetPayload;
 
@@ -269,6 +290,71 @@ const revealed = (value: unknown): RevealView | null => {
   };
 };
 
+const permanentState = (fields: Fields): PermanentState => {
+  const faceDown = bool(fields, 'faceDown');
+  return {
+    tapped: bool(fields, 'tapped'),
+    faceDown,
+    faceIndex: int(fields, 'faceIndex', 0, 3),
+    counters: counters(fields, 'counters'),
+    ...(fields.commanderCasts !== undefined && {
+      commanderCasts: int(fields, 'commanderCasts', 0, MAX_COUNT),
+    }),
+  };
+};
+
+// A lent card's id is one of its owner's, so it can never collide with
+// the receiver's own cards.
+const lentCard = (value: unknown, owner: PlayerId): LentCard => {
+  const fields = object(value, 'card');
+  const instanceId = text(fields, 'instanceId');
+  if (!instanceId.startsWith(`${owner}:`)) fail('card is not the sender’s');
+  return {
+    ...permanentState(fields),
+    instanceId,
+    ref: parseCardRef(fields.ref, fail),
+    isToken: bool(fields, 'isToken'),
+    ...(fields.isCommander !== undefined &&
+      bool(fields, 'isCommander') && { isCommander: true }),
+  };
+};
+
+const controlChange = (value: unknown, from: PlayerId): ControlChange => {
+  const fields = object(value, 'change');
+  switch (fields.op) {
+    case 'give':
+      return { op: 'give', card: lentCard(fields.card, from) };
+    case 'return': {
+      if (!(zoneIds as readonly unknown[]).includes(fields.to)) {
+        fail('change.to is not a zone');
+      }
+      return {
+        op: 'return',
+        instanceId: text(fields, 'instanceId'),
+        to: fields.to as ZoneId,
+        ...(fields.index !== undefined && {
+          index: int(fields, 'index', 0, MAX_ZONE_CARDS),
+        }),
+        ...(fields.shuffle !== undefined && {
+          shuffle: bool(fields, 'shuffle'),
+        }),
+        state: permanentState(object(fields.state, 'state')),
+      };
+    }
+    case 'recall':
+      return { op: 'recall' };
+    default:
+      return fail('unknown control change');
+  }
+};
+
+const features = (value: unknown): string[] | undefined => {
+  if (value === undefined) return undefined;
+  return list(value, 'features', MAX_FEATURES)
+    .filter((item): item is string => typeof item === 'string')
+    .filter((item) => item.length > 0 && item.length <= 40);
+};
+
 const publicZones: PublicZoneId[] = [
   'battlefield',
   'graveyard',
@@ -393,12 +479,14 @@ export const parseNetMessage = (raw: unknown): NetMessage => {
     case 'hello': {
       const playerId = text(fields, 'playerId');
       if (playerId !== envelope.from) fail('hello is for another player');
+      const announced = features(fields.features);
       return {
         ...envelope,
         kind: 'hello',
         playerId,
         name: text(fields, 'name', { max: 64 }),
         appVersion: text(fields, 'appVersion', { max: 64 }),
+        ...(announced && { features: announced }),
       };
     }
     case 'public': {
@@ -442,6 +530,13 @@ export const parseNetMessage = (raw: unknown): NetMessage => {
         data: text(fields, 'data', { max: MAX_MAT_DATA_CHARS }),
       };
     }
+    case 'control':
+      return {
+        ...envelope,
+        kind: 'control',
+        to: text(fields, 'to'),
+        change: controlChange(fields.change, envelope.from),
+      };
     case 'log': {
       const line = cleanLogText(text(fields, 'text', { max: MAX_LOG_TEXT }));
       if (line.length === 0) fail('log text is empty');

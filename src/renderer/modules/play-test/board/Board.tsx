@@ -44,7 +44,14 @@ import { fieldBounds, FULL_PANEL_WIDTH, stackOrder } from './layout';
 import LifeCounter from './LifeCounter';
 import OpponentsRow from './OpponentsRow';
 import PlayMat from './PlayMat';
-import { opponentCommanders, requestRoll, seatOrder } from './pod';
+import {
+  controlTargets,
+  opponentCommanders,
+  ownerLabel,
+  ownerLabels,
+  requestRoll,
+  seatOrder,
+} from './pod';
 import PlayerCounters from './PlayerCounters';
 import RevealPanel from './RevealPanel';
 import ScaledField from './ScaledField';
@@ -192,6 +199,10 @@ const Board = ({ store, opponent, hand }: Props) => {
 
   const peers = remote ? seatOrder(remote.peers, remote.selfSeat) : [];
   const log = remote?.log ?? [];
+  const giveTo = controlTargets(peers);
+  const owners = ownerLabels(peers, playerId);
+  const ownerNameOf = (card: CardView) =>
+    peers.find((peer) => peer.info.playerId === card.owner)?.info.name;
   // With an opponent the board splits in two and the own panel compacts.
   // Three or four players put every opponent in one row across the top.
   const duel = peers.length > 0;
@@ -223,6 +234,7 @@ const Board = ({ store, opponent, hand }: Props) => {
               );
             }}
             showTurn={turnTracking}
+            owners={owners}
             log={log}
             logOpen={settings.seatLog}
             onLogOpenChange={(seatLog) => {
@@ -283,6 +295,9 @@ const Board = ({ store, opponent, hand }: Props) => {
                         offsetX={bounds.offsetX}
                         onAddCounter={onAddCounter}
                         onAttach={onAttach}
+                        giveTo={giveTo}
+                        ownerName={ownerNameOf(card)}
+                        owner={ownerLabel(card, view.playerId, owners)}
                       />
                     ))}
                 </>

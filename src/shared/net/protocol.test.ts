@@ -833,3 +833,82 @@ describe('library activity', () => {
     );
   });
 });
+
+describe('changes of control over the wire', () => {
+  const card = {
+    instanceId: 'alice:3',
+    ref: deck[3],
+    isToken: false,
+    tapped: true,
+    faceDown: false,
+    faceIndex: 0,
+    counters: { '+1/+1': 2 },
+  };
+  const state = { tapped: false, faceDown: false, faceIndex: 0, counters: {} };
+
+  const control = (change: unknown, to = 'bob') =>
+    parseNetMessage(message({ kind: 'control', to, change }));
+
+  it('round-trips giving, returning, and recalling', () => {
+    const changes = [
+      { op: 'give', card },
+      { op: 'give', card: { ...card, isCommander: true, commanderCasts: 2 } },
+      { op: 'return', instanceId: 'bob:1', to: 'library', index: 0, state },
+      {
+        op: 'return',
+        instanceId: 'bob:1',
+        to: 'library',
+        shuffle: true,
+        state,
+      },
+      { op: 'recall' },
+    ];
+    changes.forEach((change) => {
+      expect(control(change)).toEqual({
+        v: 2,
+        seq: 1,
+        from: 'alice',
+        kind: 'control',
+        to: 'bob',
+        change,
+      });
+    });
+  });
+
+  it('keeps only known fields', () => {
+    const parsed = control({
+      op: 'give',
+      card: { ...card, owner: 'mallory', extra: 1 },
+      extra: 2,
+    });
+    expect(parsed).toMatchObject({ change: { op: 'give', card } });
+    expect(JSON.stringify(parsed)).not.toMatch(/mallory|extra/);
+  });
+
+  it('refuses a card that is not the sender’s own', () => {
+    expect(() =>
+      control({ op: 'give', card: { ...card, instanceId: 'bob:3' } })
+    ).toThrow(/not the sender/);
+  });
+
+  it('refuses unknown changes and zones', () => {
+    expect(() => control({ op: 'steal' })).toThrow(/unknown control/);
+    expect(() =>
+      control({ op: 'return', instanceId: 'bob:1', to: 'moon', state })
+    ).toThrow(/not a zone/);
+    expect(() => control({ op: 'recall' }, '')).toThrow(/to must be/);
+  });
+
+  it('carries the features a hello announces, and none from older builds', () => {
+    const hello = {
+      kind: 'hello',
+      playerId: 'alice',
+      name: 'A',
+      appVersion: '1',
+    };
+    expect(parseNetMessage(message(hello))).not.toHaveProperty('features');
+    expect(
+      parseNetMessage(message({ ...hello, features: ['control', 7, ''] }))
+    ).toMatchObject({ features: ['control'] });
+  });
+});

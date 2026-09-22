@@ -1,6 +1,9 @@
 import { parseCardRef } from './cardRefs';
+import { isControlAction } from './control';
 import type {
+  GameAction,
   GameState,
+  NewGameAction,
   Phase,
   PlayerAction,
   PlayerId,
@@ -319,11 +322,13 @@ export const parsePlayerAction = (input: unknown): PlayerAction => {
 };
 
 // The player an action would change, so a store can refuse actions on
-// cards or players it is not authoritative for.
+// cards or players it is not authoritative for. A change of control is
+// nobody's to take back, so it has no player.
 export const actionPlayer = (
   state: GameState,
-  action: PlayerAction
+  action: Exclude<GameAction, NewGameAction>
 ): PlayerId | null => {
+  if (isControlAction(action)) return null;
   if ('playerId' in action) return action.playerId;
   const card = state.cards[action.instanceId];
   if (!card) return null;

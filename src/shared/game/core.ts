@@ -191,7 +191,7 @@ const newGame = (state: GameState, action: NewGameAction): GameState => {
 
 // Cards attached to one that left the battlefield stay where they are,
 // but no longer attached to anything.
-const detachFrom = (state: GameState, hostId: InstanceId): GameState => {
+export const detachFrom = (state: GameState, hostId: InstanceId): GameState => {
   const attached = Object.values(state.cards).filter(
     (card) => card.attachedTo === hostId
   );
@@ -250,6 +250,11 @@ export const moveCard = (
       };
     }
     moved = rules.onZoneChange({ ...moved, attachedTo: null }, from, to);
+  }
+  // A borrowed permanent can only be on the battlefield here; anywhere
+  // else is a zone of its owner's, in the owner's own game.
+  if (from === 'battlefield' && to !== from && !getPlayer(state, card.owner)) {
+    moved = null;
   }
 
   if (!moved) {

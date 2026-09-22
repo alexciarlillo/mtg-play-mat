@@ -340,6 +340,12 @@ export const describeAction = (
     }
     case 'removeDummy':
       return `removed the placeholder opponent ${dummyName(before, action.dummyId)}`;
+    // Told by main, which knows the other player's name.
+    case 'giveControl':
+    case 'gainControl':
+    case 'releaseControl':
+    case 'regainControl':
+      return null;
     case 'adjustDummyLife': {
       const was = before.dummies.find((d) => d.id === action.dummyId);
       const now = after.dummies.find((d) => d.id === action.dummyId);

@@ -6,7 +6,12 @@ import {
   type ScopedLog,
   scopedLog,
 } from '@shared/debug';
-import { type PlayerId, type PublicView, startingLife } from '@shared/game';
+import {
+  type ControlChange,
+  type PlayerId,
+  type PublicView,
+  startingLife,
+} from '@shared/game';
 import {
   CodeError,
   extractCode,
@@ -31,7 +36,10 @@ import { normalizeLobbyCode } from '@shared/net/lobbyCode';
 import {
   cleanLogText,
   encodeNetMessage,
+  FEATURE_CONTROL,
+  hasFeature,
   HOST_SEAT,
+  localFeatures,
   MAX_MESSAGE_BYTES,
   MAX_SEATS,
   type NetMessage,
@@ -85,6 +93,15 @@ export interface NetplayDeps {
   // bytes are only ever trusted once they hash to the id they came
   // under, which is the store's job.
   receiveMat?(id: string, data: string): Promise<boolean>;
+  // A permanent changing hands, sent to this player by another.
+  receiveControl?(
+    from: PlayerId,
+    fromName: string,
+    change: ControlChange
+  ): void;
+  // A player with a game open no longer has one here: they left, or
+  // closed it. Whatever changed hands with them has to come home.
+  peerGone?(playerId: PlayerId, name: string): void;
   // Where the networked paths narrate themselves, for the debug log.
   log?: DebugSink;
   // How long the host waits for a channel after pasting a reply.
@@ -219,6 +236,10 @@ export default class Netplay {
   // Added to the snapshot's seq so a change in the fake pod alone still
   // moves it forward for the board.
   private fakeRev = 0;
+
+  // Players whose game was open at the last push, by name, so one that
+  // goes away can still be named.
+  private withGame = new Map<PlayerId, string>();
 
   private readonly log: ScopedLog;
 
@@ -367,6 +388,36 @@ export default class Netplay {
     this.remote.addAction(playerId, displayName, text);
     this.pushOpponent();
     this.send({ kind: 'log', text });
+  };
+
+  // Who may be handed a permanent: a player with a game open, on a build
+  // that knows how to hold it.
+  canTakeControl = (playerId: PlayerId): boolean => {
+    const peer = this.remote
+      .snapshot()
+      .peers.find((p) => p.info.playerId === playerId);
+    return (
+      peer !== undefined &&
+      peer.view !== null &&
+      hasFeature(peer.info, FEATURE_CONTROL)
+    );
+  };
+
+  peerName = (playerId: PlayerId): string | null =>
+    this.remote.peer(playerId)?.name ?? null;
+
+  // Straight to the one player it is for; a guest's goes by the host,
+  // which passes it on to that seat alone.
+  sendControl = (to: PlayerId, change: ControlChange) => {
+    if (!this.remote.peer(to)) return;
+    const seats =
+      this.state.role === 'host'
+        ? this.boundSeats()
+            .filter((s) => s.playerId === to)
+            .map((s) => s.seat)
+        : undefined;
+    this.log.info(`control ${change.op}`, { to });
+    this.send({ kind: 'control', to, change }, seats);
   };
 
   host = async () => {
@@ -803,6 +854,17 @@ export default class Netplay {
         this.rollFor(message.from, name, message.request);
         return;
       }
+      case 'control': {
+        if (message.to === this.deps.profile().playerId) {
+          this.deliverControl(message.from, message.change);
+          return;
+        }
+        const target = this.otherSeats(seat).find(
+          (s) => s.playerId === message.to
+        );
+        if (target) this.sendRaw(raw, [target.seat]);
+        return;
+      }
       default:
         // Rosters and results come from the host alone.
         return;
@@ -849,6 +911,11 @@ export default class Netplay {
       case 'mat':
         void this.applyMat(message.from, message.id, message.data);
         return;
+      case 'control':
+        if (message.to === this.deps.profile().playerId) {
+          this.deliverControl(message.from, message.change);
+        }
+        return;
       case 'hello':
       case 'public':
       case 'bye': {
@@ -871,6 +938,13 @@ export default class Netplay {
       default:
         return;
     }
+  };
+
+  private deliverControl = (from: PlayerId, change: ControlChange) => {
+    const name = this.remote.peer(from)?.name;
+    if (!name) return;
+    this.log.info(`control ${change.op} arrived`, { from });
+    this.deps.receiveControl?.(from, name, change);
   };
 
   // A peer's background: the bytes are written before the board is told
@@ -1040,7 +1114,12 @@ export default class Netplay {
 
   private helloInfo = () => {
     const { playerId, displayName } = this.deps.profile();
-    return { playerId, name: displayName, appVersion: this.deps.appVersion };
+    return {
+      playerId,
+      name: displayName,
+      appVersion: this.deps.appVersion,
+      features: [...localFeatures],
+    };
   };
 
   private connectedStatus = () => {
@@ -1224,6 +1303,21 @@ export default class Netplay {
   };
 
   private pushOpponent = () => {
+    this.noticeGoneGames();
     this.deps.pushOpponent(this.opponentState());
+  };
+
+  // Every change to the pod comes through a push, so comparing here
+  // catches each way a game can go: a goodbye, a drop, a closed board.
+  private noticeGoneGames = () => {
+    const now = new Map(
+      this.remote
+        .snapshot()
+        .peers.filter((peer) => peer.view !== null)
+        .map((peer) => [peer.info.playerId, peer.info.name])
+    );
+    const gone = [...this.withGame].filter(([id]) => !now.has(id));
+    this.withGame = now;
+    gone.forEach(([id, name]) => this.deps.peerGone?.(id, name));
   };
 }

@@ -17,6 +17,8 @@ interface Props {
   className?: string;
   // Shows the owner the front of their own face-down card.
   reveal?: boolean;
+  // Whose it is, when that is not whoever controls it.
+  owner?: string | null;
 }
 
 // A card face that renders whatever view main sent. Any change goes back
@@ -28,6 +30,7 @@ const Card = ({
   size = 'lg',
   className,
   reveal = false,
+  owner = null,
 }: Props) => {
   const contextMenu = useContextMenu();
   const preview = useCardPreview();
@@ -94,7 +97,7 @@ const Card = ({
         </span>
       )}
       {(card.zone === 'battlefield' || card.zone === 'exile') && (
-        <CardBadges card={card} />
+        <CardBadges card={card} owner={owner} />
       )}
     </div>
   );

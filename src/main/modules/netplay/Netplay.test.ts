@@ -1,5 +1,5 @@
 // @vitest-environment node
-import type { PublicView } from '@shared/game';
+import type { ControlChange, PublicView } from '@shared/game';
 import { packDescription } from '@shared/net/codec';
 import type { NetCommand, NetState } from '@shared/net/lobby';
 import type { NetMessage } from '@shared/net/protocol';
@@ -86,6 +86,8 @@ const setup = (me = 'alice') => {
   let local: PublicView | null = view(me);
   let format: DeckFormat = 'constructed';
   const rolls: number[] = [];
+  const control: [string, string, ControlChange][] = [];
+  const gone: string[] = [];
   const netplay = new Netplay({
     transports: { p2p: transport, relay },
     config: { iceServers: [], recordWire: false },
@@ -101,6 +103,8 @@ const setup = (me = 'alice') => {
       keptMats.push({ id, data });
       return Promise.resolve(keepMats);
     },
+    receiveControl: (from, name, change) => control.push([from, name, change]),
+    peerGone: (playerId, name) => gone.push(`${playerId} ${name}`),
     connectTimeoutMs: 50,
     randomInt: (max) => {
       rolls.push(max);
@@ -124,6 +128,8 @@ const setup = (me = 'alice') => {
     logged,
     keptMats,
     rolls,
+    control,
+    gone,
     opponent: () => opponents.at(-1),
     state: () => netplay.netState,
     setLocal: (v: PublicView | null) => {
@@ -597,6 +603,7 @@ describe('Netplay guest', () => {
       playerId: 'bob',
       name: 'Bob',
       appVersion: '9.9.9',
+      features: ['control'],
     });
     expect(pub).toMatchObject({ seq: 2, kind: 'public', view: view('bob') });
     expect(t.state()).toMatchObject({
@@ -1292,5 +1299,130 @@ describe('Netplay play area backgrounds', () => {
     await flush();
     expect(t.keptMats).toEqual([{ id: MAT, data: 'aGVsbG8=' }]);
     expect(t.opponent()?.peers[0]).toMatchObject({ matId: MAT });
+  });
+});
+
+describe('Netplay changes of control', () => {
+  const card = {
+    instanceId: 'alice:3',
+    ref: {
+      id: '409f9b88-f03e-40b6-9883-68c14c37c0de',
+      name: 'Grizzly Bears',
+      typeLine: 'Creature — Bear',
+      faces: [{ name: 'Grizzly Bears', typeLine: 'Creature — Bear' }],
+    },
+    isToken: false,
+    tapped: false,
+    faceDown: true,
+    faceIndex: 0,
+    counters: {},
+  };
+  const give: ControlChange = { op: 'give', card };
+
+  const helloWith = (from: string, seq = 1) =>
+    raw(from, seq, {
+      kind: 'hello',
+      playerId: from,
+      name: names[from],
+      appVersion: '1',
+      features: ['control'],
+    });
+
+  const publicOf = (from: string, seq: number, v: PublicView | null) =>
+    raw(from, seq, { kind: 'public', view: v });
+
+  it('hands a permanent only to a player with a game that can hold it', async () => {
+    const t = await hostWith({ 2: 'bob' });
+    t.netplay.invite(3);
+    t.netplay.handleReport({ type: 'invite', seat: 3, code: 'MPM1:i3' });
+    t.netplay.handleReport({ type: 'open', seat: 3 });
+    say(t, 3, helloWith('carol'));
+    // Bob's build never said it could; Carol has no game open yet.
+    expect(t.netplay.canTakeControl('bob')).toBe(false);
+    expect(t.netplay.canTakeControl('carol')).toBe(false);
+    say(t, 3, publicOf('carol', 2, view('carol')));
+    expect(t.netplay.canTakeControl('carol')).toBe(true);
+    expect(t.netplay.canTakeControl('dave')).toBe(false);
+  });
+
+  it('sends the host’s change to that one seat', async () => {
+    const t = await hostWith({ 2: 'bob', 3: 'carol' });
+    t.netplay.sendControl('carol', give);
+    const sent = t.sends().at(-1);
+    expect(sent?.seats).toEqual([3]);
+    expect(JSON.parse(sent?.data ?? '')).toMatchObject({
+      kind: 'control',
+      from: 'alice',
+      to: 'carol',
+      change: give,
+    });
+  });
+
+  it('passes a guest’s change on to its seat alone, unchanged', async () => {
+    const t = await hostWith({ 2: 'bob', 3: 'carol', 4: 'dave' });
+    const data = raw('bob', 2, {
+      kind: 'control',
+      to: 'carol',
+      change: { ...give, card: { ...card, instanceId: 'bob:3' } },
+    });
+    say(t, 2, data);
+    expect(t.sends().at(-1)).toEqual({ op: 'send', seats: [3], data });
+    expect(t.control).toEqual([]);
+  });
+
+  it('takes a change meant for the host itself', async () => {
+    const t = await hostWith({ 2: 'bob' });
+    say(
+      t,
+      2,
+      raw('bob', 2, { kind: 'control', to: 'alice', change: { op: 'recall' } })
+    );
+    expect(t.control).toEqual([['bob', 'Bob', { op: 'recall' }]]);
+  });
+
+  it('refuses a card that is not the sender’s to give', async () => {
+    const t = await hostWith({ 2: 'bob' });
+    say(t, 2, raw('bob', 2, { kind: 'control', to: 'alice', change: give }));
+    expect(t.control).toEqual([]);
+  });
+
+  it('as a guest, sends by the host and keeps only its own', async () => {
+    const t = await guestIn([
+      ['alice', 1],
+      ['bob', 2],
+      ['carol', 3],
+    ]);
+    say(t, 1, hello('carol'));
+    t.netplay.sendControl('carol', {
+      op: 'return',
+      instanceId: 'carol:1',
+      to: 'graveyard',
+      state: { tapped: false, faceDown: false, faceIndex: 0, counters: {} },
+    });
+    expect(t.sends().at(-1)?.seats).toEqual([1]);
+
+    say(
+      t,
+      1,
+      raw('carol', 2, { kind: 'control', to: 'dave', change: { op: 'recall' } })
+    );
+    say(
+      t,
+      1,
+      raw('carol', 3, { kind: 'control', to: 'bob', change: { op: 'recall' } })
+    );
+    expect(t.control).toEqual([['carol', 'Carol', { op: 'recall' }]]);
+  });
+
+  it('notices a game going away, whichever way it goes', async () => {
+    const t = await hostWith({ 2: 'bob', 3: 'carol' });
+    say(t, 2, publicOf('bob', 2, view('bob')));
+    say(t, 3, publicOf('carol', 2, view('carol')));
+    expect(t.gone).toEqual([]);
+
+    say(t, 2, publicOf('bob', 3, null));
+    expect(t.gone).toEqual(['bob Bob']);
+    say(t, 3, raw('carol', 3, { kind: 'bye' }));
+    expect(t.gone).toEqual(['bob Bob', 'carol Carol']);
   });
 });

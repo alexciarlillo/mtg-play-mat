@@ -474,6 +474,104 @@ test('a play area background reaches the other board, and can be folded away', a
   }
 });
 
+test('a permanent can change hands and dies into its owner’s graveyard', async () => {
+  const [hostBoard, hostHand, guestBoard] = await Promise.all([
+    page(host, 'board.html'),
+    page(host, 'hand.html'),
+    page(guest, 'board.html'),
+  ]);
+  const ids = async (field: Locator) =>
+    Promise.all(
+      (await field.all()).map((card) => card.getAttribute('data-instance-id'))
+    );
+  const menuItem = (board: Page, name: string) =>
+    board.getByRole('menuitem', { name, exact: true });
+  const hostCards = Object.keys((await gameState(host)).cards).length;
+  const guestField = await ownField(guestBoard).count();
+
+  // The host plays a card and hands it to the guest.
+  const before = await ids(ownField(hostBoard));
+  await handCards(hostHand).first().click();
+  await expect(ownField(hostBoard)).toHaveCount(before.length + 1);
+  const played = (await ids(ownField(hostBoard))).find(
+    (id) => !before.includes(id)
+  );
+  if (!played) throw new Error('no played card');
+  const hostCard = hostBoard.locator(`[data-instance-id="${played}"]`);
+  const name = (await hostCard.getAttribute('data-card-name')) ?? '';
+  await hostCard.click({ button: 'right' });
+  await menuItem(hostBoard, 'Give control to Bob').click();
+
+  // It leaves the host's field for the guest's, marked as Alice's there
+  // and as the host's own across the table.
+  await expect(ownField(hostBoard)).toHaveCount(before.length);
+  await expect(ownField(guestBoard)).toHaveCount(guestField + 1);
+  const borrowed = guestBoard.locator(`[data-instance-id="${played}"]`);
+  await expect(borrowed).toHaveAttribute('data-card-name', name);
+  await expect(borrowed.getByTestId('owner-badge')).toHaveText("Alice's");
+  const seen = hostBoard.locator(`[data-instance-id$="/${played}"]`);
+  await expect(seen.getByTestId('owner-badge')).toHaveText('Yours');
+
+  // The guest controls it now: tapping it shows on the host's board.
+  await borrowed.click();
+  await expect(seen).toHaveClass(/rotate-90/);
+
+  // Destroyed, it goes to the host's graveyard, never the guest's.
+  const graveyard = (await gameState(host)).players[0].zones.graveyard.length;
+  await borrowed.click({ button: 'right' });
+  await menuItem(guestBoard, 'Move to graveyard').click();
+  await expect(ownField(guestBoard)).toHaveCount(guestField);
+  await expect(seen).toHaveCount(0);
+  await expect(hostBoard.getByTestId('graveyard')).toHaveAttribute(
+    'data-count',
+    String(graveyard + 1)
+  );
+  const hostGame = await gameState(host);
+  expect(hostGame.players[0].zones.graveyard.at(-1)).toBe(played);
+  expect(hostGame.cards[played]).toMatchObject({
+    controller: hostGame.players[0].id,
+    zone: 'graveyard',
+  });
+  const guestGame = await gameState(guest);
+  expect(guestGame.cards[played]).toBeUndefined();
+  expect(guestGame.players[0].zones.graveyard).not.toContain(played);
+  // The host's deck is whole: no card was added or lost on either side.
+  expect(Object.keys(hostGame.cards)).toHaveLength(hostCards);
+
+  // The one who took it can also simply give it back.
+  const next = await ids(ownField(hostBoard));
+  await handCards(hostHand).first().click();
+  await expect(ownField(hostBoard)).toHaveCount(next.length + 1);
+  const second = (await ids(ownField(hostBoard))).find(
+    (id) => !next.includes(id)
+  );
+  const secondCard = hostBoard.locator(`[data-instance-id="${second}"]`);
+  await secondCard.click({ button: 'right' });
+  await menuItem(hostBoard, 'Give control to Bob').click();
+  const secondBorrowed = guestBoard.locator(`[data-instance-id="${second}"]`);
+  await expect(secondBorrowed).toHaveCount(1);
+  await secondBorrowed.click({ button: 'right' });
+  await menuItem(guestBoard, 'Return to Alice').click();
+  await expect(secondBorrowed).toHaveCount(0);
+  await expect(secondCard).toHaveCount(1);
+  await expect(secondCard.getByTestId('owner-badge')).toHaveCount(0);
+
+  // Both boards told the table what happened.
+  const log = (board: Page) =>
+    board.getByTestId('table-log').getByTestId('log-entry').allTextContents();
+  await expect
+    .poll(async () => (await log(hostBoard)).join('\n'))
+    .toMatch(/gave control of .* to Bob/);
+  await expect
+    .poll(async () => (await log(guestBoard)).join('\n'))
+    .toMatch(new RegExp(`put ${name} into Alice's graveyard`));
+
+  // Back as the next test expects: one permanent on the host's field.
+  await secondCard.click({ button: 'right' });
+  await menuItem(hostBoard, 'Move to graveyard').click();
+  await expect(ownField(hostBoard)).toHaveCount(next.length);
+});
+
 test('leaving clears the opponent side on both boards', async () => {
   const [hostApp, guestApp, hostBoard, guestBoard] = await Promise.all([
     page(host, 'app.html'),
@@ -483,14 +581,24 @@ test('leaving clears the opponent side on both boards', async () => {
   ]);
   await expect(guestBoard.getByTestId('opponent-side')).toHaveCount(1);
 
+  // A permanent the guest controls goes home when its owner leaves.
+  const guestField = await ownField(guestBoard).count();
+  await ownField(hostBoard).click({ button: 'right' });
+  await hostBoard
+    .getByRole('menuitem', { name: 'Give control to Bob', exact: true })
+    .click();
+  await expect(ownField(guestBoard)).toHaveCount(guestField + 1);
+  await expect(ownField(hostBoard)).toHaveCount(0);
+
   await hostApp.getByRole('button', { name: 'Leave' }).click();
   await expect(hostBoard.getByTestId('opponent-side')).toHaveCount(0);
   await expect(guestBoard.getByTestId('opponent-side')).toHaveCount(0);
   await expect(status(hostApp)).toHaveAttribute('data-phase', 'idle');
   await expect(status(guestApp)).toHaveText(/The host \(Alice\) left the game/);
 
-  // The local game is untouched.
+  // The local game is whole again, and the guest's is its own.
   await expect(ownField(hostBoard)).toHaveCount(1);
+  await expect(ownField(guestBoard)).toHaveCount(guestField);
 });
 
 test('an invite link reaches the running app and reconnects', async () => {
@@ -533,9 +641,10 @@ test('an invite link reaches the running app and reconnects', async () => {
 
   // Reconnected: the host's table is back on the guest's board.
   await expect(opponentField(guestBoard)).toHaveCount(1);
+  const graveyard = (await gameState(host)).players[0].zones.graveyard;
   await expect(guestBoard.getByTestId('opponent-graveyard')).toHaveAttribute(
     'data-count',
-    '1'
+    String(graveyard.length)
   );
 });
 

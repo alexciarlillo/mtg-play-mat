@@ -81,6 +81,8 @@ type NetplaySetupHandlers = Pick<
   | 'netResend'
   | 'netReport'
   | 'getOpponentView'
+  | 'giveControl'
+  | 'returnControl'
 >;
 
 export const setupNetplay = ({
@@ -137,6 +139,8 @@ export const setupNetplay = ({
       return bytes ? { id, data: bytes.toString('base64') } : null;
     },
     receiveMat: (id, data) => mats.receive(id, Buffer.from(data, 'base64')),
+    receiveControl: playTest.receiveControl,
+    peerGone: playTest.peerGone,
     pushOpponent: (state) => {
       growForTable(playTest.boardWindow, state.peers.length);
       sendEvent(playTest.boardWindow, 'opponentView', state);
@@ -149,6 +153,11 @@ export const setupNetplay = ({
   });
 
   playTest.onLogEntry(netplay.localLogEntry);
+
+  playTest.linkControl({
+    send: netplay.sendControl,
+    peerName: netplay.peerName,
+  });
 
   // Peers learn a new name without waiting for a reconnect, whichever
   // window changed it.
@@ -169,6 +178,15 @@ export const setupNetplay = ({
 
   const handlers: NetplaySetupHandlers = {
     ...netplay.handlers,
+    // Only to a player whose game can hold it; renderer input is checked
+    // here, since it is untrusted.
+    giveControl: (instanceId: unknown, to: unknown) => {
+      if (typeof instanceId !== 'string' || typeof to !== 'string') return;
+      if (netplay.canTakeControl(to)) playTest.giveControl(instanceId, to);
+    },
+    returnControl: (instanceId: unknown) => {
+      if (typeof instanceId === 'string') playTest.returnControl(instanceId);
+    },
   };
 
   const guards: SenderGuards = { netReport: netWindow.isNetSender };

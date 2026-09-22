@@ -15,6 +15,20 @@ export {
   isModalDfc,
   parseCardRef,
 } from './cardRefs';
+export {
+  borrowedFrom,
+  type ControlChange,
+  type Departure,
+  departures,
+  describeDeparture,
+  describeRegain,
+  isBorrowed,
+  isControlAction,
+  lentCard,
+  lentTo,
+  permanentState,
+  publicName,
+} from './control';
 export { cascadePosition, emptyGame, getPlayer } from './core';
 export {
   describeLibraryActivity,

@@ -421,8 +421,67 @@ export type CommanderAction =
   | RemoveDummyAction
   | AdjustDummyLifeAction;
 
-export type GameAction =
-  CoreAction | MtgAction | CommanderAction | LibraryAction;
+// A permanent's state as it crosses from one player's game to another's.
+export interface PermanentState {
+  tapped: boolean;
+  faceDown: boolean;
+  faceIndex: number;
+  counters: Record<string, number>;
+  commanderCasts?: number;
+}
 
-// What a window may ask for. Starting a game is main's decision.
-export type PlayerAction = Exclude<GameAction, NewGameAction>;
+// Everything another game needs to put a lent permanent on its board.
+export interface LentCard extends PermanentState {
+  instanceId: InstanceId;
+  ref: CardRef;
+  isToken: boolean;
+  isCommander?: boolean;
+}
+
+// The owner lets another player control one of their permanents. The
+// card stays in the owner's game, set aside, until it comes back.
+export interface GiveControlAction {
+  type: 'giveControl';
+  instanceId: InstanceId;
+  to: PlayerId;
+}
+
+// Another player's permanent comes under this player's control.
+export interface GainControlAction {
+  type: 'gainControl';
+  playerId: PlayerId;
+  owner: PlayerId;
+  card: LentCard;
+}
+
+// Borrowed permanents leave this game, back to their owner's.
+export interface ReleaseControlAction {
+  type: 'releaseControl';
+  instanceIds: InstanceId[];
+}
+
+// A lent permanent comes back to its owner, into the zone the player who
+// controlled it sent it to; state only matters for the battlefield.
+export interface RegainControlAction {
+  type: 'regainControl';
+  instanceId: InstanceId;
+  to: ZoneId;
+  // As for moveCard; shuffle is for a shuffle into the library.
+  index?: number;
+  shuffle?: boolean;
+  state: PermanentState;
+}
+
+// Applied by main as other players act, never asked for by a window.
+export type ControlAction =
+  | GiveControlAction
+  | GainControlAction
+  | ReleaseControlAction
+  | RegainControlAction;
+
+export type GameAction =
+  CoreAction | MtgAction | CommanderAction | LibraryAction | ControlAction;
+
+// What a window may ask for. Starting a game is main's decision, and so
+// is every change of control, since each one crosses to another game.
+export type PlayerAction = Exclude<GameAction, NewGameAction | ControlAction>;

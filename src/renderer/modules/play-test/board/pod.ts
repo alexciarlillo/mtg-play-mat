@@ -1,5 +1,11 @@
-import type { PlayerId } from '@shared/game';
-import type { RollResult, RollRequest, TableEvent } from '@shared/net/protocol';
+import type { CardView, PlayerId } from '@shared/game';
+import {
+  FEATURE_CONTROL,
+  hasFeature,
+  type RollRequest,
+  type RollResult,
+  type TableEvent,
+} from '@shared/net/protocol';
 import type { RemotePeer, TableEntry } from '@shared/net/remoteViews';
 
 import {
@@ -32,6 +38,40 @@ export const opponentCommanders = (peers: RemotePeer[]): DamageSource[] =>
         )
       : []
   );
+
+export interface ControlTarget {
+  playerId: PlayerId;
+  name: string;
+}
+
+// Who a permanent can be handed to: players with a game open, on a
+// build that knows how to hold it.
+export const controlTargets = (peers: RemotePeer[]): ControlTarget[] =>
+  peers
+    .filter((peer) => peer.view && hasFeature(peer.info, FEATURE_CONTROL))
+    .map(({ info }) => ({ playerId: info.playerId, name: info.name }));
+
+export type OwnerLabels = Record<PlayerId, string>;
+
+// How a permanent's owner is named on a board, the local player's own
+// permanents included.
+export const ownerLabels = (
+  peers: RemotePeer[],
+  selfId: PlayerId | undefined
+): OwnerLabels => ({
+  ...Object.fromEntries(
+    peers.map(({ info }) => [info.playerId, `${info.name}'s`])
+  ),
+  ...(selfId && { [selfId]: 'Yours' }),
+});
+
+// Only a permanent under someone other than its owner is labelled.
+export const ownerLabel = (
+  card: CardView,
+  controller: PlayerId,
+  labels: OwnerLabels
+): string | null =>
+  card.owner === controller ? null : (labels[card.owner] ?? "Another player's");
 
 // What was rolled, without saying by whom: a seat's own log is already
 // under their name.

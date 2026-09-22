@@ -26,6 +26,7 @@ import LibraryActivityBadge from './LibraryActivityBadge';
 import { lifeFlashClass } from './lifeFlash';
 import { phaseLabels } from './phases';
 import PlayMat from './PlayMat';
+import { ownerLabel, type OwnerLabels } from './pod';
 import PlayerCounters from './PlayerCounters';
 import RevealPanel from './RevealPanel';
 import ScaledField from './ScaledField';
@@ -96,7 +97,13 @@ const ZoneCount = ({
   );
 };
 
-const OpponentCard = ({ card }: { card: CardView }) => {
+const OpponentCard = ({
+  card,
+  owner,
+}: {
+  card: CardView;
+  owner: string | null;
+}) => {
   const { x, y } = card.position ?? { x: 0, y: 0 };
   return (
     <div
@@ -105,7 +112,7 @@ const OpponentCard = ({ card }: { card: CardView }) => {
       className="absolute left-0 top-0"
       style={{ transform: `translate(${x}px, ${y}px)` }}
     >
-      <Card card={card} size="md" />
+      <Card card={card} size="md" owner={owner} />
     </div>
   );
 };
@@ -161,6 +168,7 @@ const OpponentSide = ({
   compact = false,
   tight = false,
   showTurn = false,
+  owners = {},
   hidden = false,
   log = [],
   logOpen = false,
@@ -178,6 +186,7 @@ const OpponentSide = ({
   tight?: boolean;
   // Follows the local turn tracking setting, not the opponent's.
   showTurn?: boolean;
+  owners?: OwnerLabels;
   // Board folded away, usually because this player is out of the game.
   // Only the battlefield goes: the panel is how they are still tracked.
   hidden?: boolean;
@@ -347,7 +356,11 @@ const OpponentSide = ({
                     testId="opponent-play-mat"
                   />
                   {stackOrder(view.zones.battlefield).map((card) => (
-                    <OpponentCard key={card.instanceId} card={card} />
+                    <OpponentCard
+                      key={card.instanceId}
+                      card={card}
+                      owner={ownerLabel(card, peer.playerId, owners)}
+                    />
                   ))}
                 </>
               )}

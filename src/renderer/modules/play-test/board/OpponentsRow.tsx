@@ -12,6 +12,7 @@ import {
   TIGHT_PANEL_HEIGHT,
 } from './layout';
 import OpponentSide from './OpponentSide';
+import type { OwnerLabels } from './pod';
 
 interface Resize {
   pointerId: number;
@@ -43,6 +44,7 @@ const OpponentsRow = ({
   height,
   onHeightChange,
   showTurn,
+  owners = {},
   log,
   logOpen,
   onLogOpenChange,
@@ -51,6 +53,8 @@ const OpponentsRow = ({
   height: number;
   onHeightChange(next: number): void;
   showTurn: boolean;
+  // Names for permanents someone controls but does not own.
+  owners?: OwnerLabels;
   log: TableEntry[];
   // One preference for every seat: folding one away folds them all, so
   // nobody has to do it three times in a pod.
@@ -175,6 +179,7 @@ const OpponentsRow = ({
             compact={pod}
             tight={tight}
             showTurn={showTurn}
+            owners={owners}
             hidden={isHidden(peer.info.playerId)}
             log={log}
             logOpen={logOpen}

@@ -1,3 +1,4 @@
+import { isControlAction } from './control';
 import { emptyGame } from './core';
 import { reduce, replay } from './reducer';
 import type { GameAction, GameState, PlayerAction, PlayerId } from './types';
@@ -47,6 +48,7 @@ export const undoLast = (
   const at = lastActionBy(log, playerId, Math.max(1, floor));
   const action = log[at];
   if (at < 0 || !action || action.type === 'newGame') return null;
+  if (isControlAction(action)) return null;
 
   const rebuilt = replay([...log.slice(0, at), ...log.slice(at + 1)]);
   return { state: { ...rebuilt, seq: state.seq + 1 }, action };

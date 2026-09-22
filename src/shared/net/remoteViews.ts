@@ -77,11 +77,11 @@ export class RemoteViews {
   receive = (message: NetMessage): boolean => {
     if (message.from === this.selfId()) return false;
     if (message.kind === 'hello') {
-      const { playerId, name, appVersion } = message;
+      const { playerId, name, appVersion, features } = message;
       // A repeated hello (a resend) keeps what is already on the board.
       const known = this.peers.get(playerId);
       this.peers.set(playerId, {
-        info: { playerId, name, appVersion },
+        info: { playerId, name, appVersion, ...(features && { features }) },
         lastSeq: message.seq,
         view: known?.view ?? null,
         matId: known?.matId ?? null,

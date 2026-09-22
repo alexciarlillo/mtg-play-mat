@@ -38,6 +38,8 @@ interface Props extends BattlefieldMenuOptions {
   // How far the field's contents are shifted right of its left edge, so
   // a card dropped at the right edge stays inside it.
   offsetX?: number;
+  // The owner's badge, for a borrowed permanent.
+  owner?: string | null;
 }
 
 const BattlefieldCard = ({
@@ -46,6 +48,9 @@ const BattlefieldCard = ({
   offsetX = 0,
   onAddCounter,
   onAttach,
+  giveTo,
+  ownerName,
+  owner = null,
 }: Props) => {
   const nodeRef = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState(false);
@@ -104,7 +109,12 @@ const BattlefieldCard = ({
     });
   };
 
-  const menu = battlefieldMenu(card, { onAddCounter, onAttach });
+  const menu = battlefieldMenu(card, {
+    onAddCounter,
+    onAttach,
+    giveTo,
+    ownerName,
+  });
 
   return (
     <>
@@ -143,7 +153,7 @@ const BattlefieldCard = ({
             'z-20': dragging,
           })}
         >
-          <Card card={card} menu={menu} size="md" />
+          <Card card={card} menu={menu} size="md" owner={owner} />
           {!dragging && <CounterControls card={card} />}
         </div>
       </Draggable>

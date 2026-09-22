@@ -2,20 +2,30 @@ import { randomInt } from 'node:crypto';
 
 import {
   actionPlayer,
+  borrowedFrom,
   type CardRef,
   type CommanderMove,
   commanderMoves,
+  type ControlChange,
+  type Departure,
+  departures,
+  describeDeparture,
+  describeRegain,
   describeStep,
   emptyGame,
   type GameAction,
   type GameState,
+  lentCard,
+  lentTo,
   libraryView,
   OPENING_HAND_SIZE,
   parseLibraryActivity,
   parsePlayerAction,
   type PlayerAction,
+  permanentState,
   type PlayerId,
   privateView,
+  publicName,
   publicView,
   type PublicView,
   redoAction,
@@ -59,6 +69,12 @@ type PublicListener = (view: PublicView | null) => void;
 type StatusListener = (status: PlayTestStatus) => void;
 
 type LogListener = (text: string) => void;
+
+// How the play test reaches the other games at the table.
+export interface ControlLink {
+  send(to: PlayerId, change: ControlChange): void;
+  peerName(playerId: PlayerId): string | null;
+}
 
 type PlayTestHandlers = Pick<
   RequestHandlers,
@@ -137,6 +153,8 @@ export default class PlayTest {
   private readonly statusListeners = new Set<StatusListener>();
 
   private readonly logListeners = new Set<LogListener>();
+
+  private control: ControlLink | null = null;
 
   constructor({ cardDb, deckDb, playerId, playerName, handInBoard }: Deps) {
     this.cardDb = cardDb;
@@ -322,10 +340,193 @@ export default class PlayTest {
     if (actionPlayer(this.state, action) !== this.playerId) return;
     const next = reduce(this.state, action);
     if (next === this.state) return;
+    const left = departures(this.state, action, next);
+    if (left.length > 0) {
+      this.sendHome(left);
+      this.applyControl(next);
+      return;
+    }
     const text = this.describe(this.state, action, next);
     this.redoStack = [];
     this.apply(next);
     if (text) this.addLogEntry(text);
+  };
+
+  linkControl = (link: ControlLink) => {
+    this.control = link;
+  };
+
+  private nameOf = (playerId: PlayerId) =>
+    this.control?.peerName(playerId) ?? 'another player';
+
+  // A change of control is shared with another game, so neither side can
+  // take back anything from before it without the two disagreeing.
+  private applyControl = (next: GameState) => {
+    this.undoFloor = next.log.length;
+    this.redoStack = [];
+    this.apply(next);
+  };
+
+  // Borrowed permanents that just left this game go to their owners.
+  private sendHome = (left: Departure[]) => {
+    left.forEach((departure) => {
+      const { owner } = departure.card;
+      this.control?.send(owner, departure.change);
+      this.addLogEntry(describeDeparture(departure, this.nameOf(owner)));
+    });
+  };
+
+  // The owner lets another player control one of their permanents.
+  giveControl = (instanceId: string, to: PlayerId) => {
+    const card = this.state.cards[instanceId];
+    if (!this.isOpen || !this.control || card?.owner !== this.playerId) {
+      return;
+    }
+    const next = reduce(this.state, { type: 'giveControl', instanceId, to });
+    if (next === this.state) return;
+    this.applyControl(next);
+    this.control.send(to, { op: 'give', card: lentCard(card) });
+    this.addLogEntry(
+      `gave control of ${publicName(card)} to ${this.nameOf(to)}`
+    );
+  };
+
+  // The controller hands a borrowed permanent back to its owner.
+  returnControl = (instanceId: string) => {
+    const card = this.state.cards[instanceId];
+    if (!card || card.controller !== this.playerId) return;
+    const action = {
+      type: 'releaseControl' as const,
+      instanceIds: [card.instanceId],
+    };
+    const next = reduce(this.state, action);
+    if (next === this.state) return;
+    this.sendHome(departures(this.state, action, next));
+    this.applyControl(next);
+  };
+
+  // Another game handed over, returned, or recalled a permanent.
+  receiveControl = (
+    from: PlayerId,
+    fromName: string,
+    change: ControlChange
+  ) => {
+    switch (change.op) {
+      case 'give':
+        this.gain(from, fromName, change);
+        return;
+      case 'return':
+        this.regain(from, fromName, change);
+        return;
+      case 'recall':
+        this.release(from, fromName);
+        return;
+    }
+  };
+
+  private gain = (
+    from: PlayerId,
+    fromName: string,
+    { card }: Extract<ControlChange, { op: 'give' }>
+  ) => {
+    const next = this.isOpen
+      ? reduce(this.state, {
+          type: 'gainControl',
+          playerId: this.playerId,
+          owner: from,
+          card,
+        })
+      : this.state;
+    // With no game to put it in, it goes straight back.
+    if (next === this.state) {
+      if (!this.state.cards[card.instanceId]) {
+        this.control?.send(from, {
+          op: 'return',
+          instanceId: card.instanceId,
+          to: 'battlefield',
+          state: permanentState(card),
+        });
+      }
+      return;
+    }
+    this.applyControl(next);
+    this.addLogEntry(`gained control of ${publicName(card)} from ${fromName}`);
+  };
+
+  private regain = (
+    from: PlayerId,
+    fromName: string,
+    change: Extract<ControlChange, { op: 'return' }>
+  ) => {
+    const card = this.state.cards[change.instanceId];
+    // Only the player controlling it may send it back.
+    if (card?.controller !== from || card.owner !== this.playerId) return;
+    const next = reduce(this.state, {
+      type: 'regainControl',
+      instanceId: change.instanceId,
+      to: change.to,
+      ...(change.index !== undefined && { index: change.index }),
+      ...(change.shuffle && { shuffle: true }),
+      state: change.state,
+    });
+    if (next === this.state) return;
+    this.applyControl(next);
+    this.addLogEntry(describeRegain(card, change, fromName));
+  };
+
+  // The owner's game is gone or new, so their cards here are void.
+  private release = (owner: PlayerId, ownerName: string) => {
+    const cards = borrowedFrom(this.state, owner);
+    if (cards.length === 0) return;
+    const next = reduce(this.state, {
+      type: 'releaseControl',
+      instanceIds: cards.map((card) => card.instanceId),
+    });
+    this.applyControl(next);
+    const names = cards.map((card) => publicName(card)).join(', ');
+    this.addLogEntry(`gave ${names} back to ${ownerName}`);
+  };
+
+  // A player left or closed their game: everything that changed hands
+  // with them comes home, and nothing is sent, since nobody is there.
+  peerGone = (playerId: PlayerId, name: string) => {
+    this.release(playerId, name);
+    lentTo(this.state, playerId).forEach((card) => {
+      this.regain(playerId, name, {
+        op: 'return',
+        instanceId: card.instanceId,
+        to: 'battlefield',
+        state: permanentState(card),
+      });
+    });
+  };
+
+  // Before this game ends, every card that changed hands goes home: the
+  // borrowed ones to their owners' battlefields, and the lent ones are
+  // called back from whoever holds them.
+  private settleControl = () => {
+    const borrowed = borrowedFrom(this.state);
+    if (borrowed.length > 0) {
+      const action = {
+        type: 'releaseControl' as const,
+        instanceIds: borrowed.map((card) => card.instanceId),
+      };
+      const next = reduce(this.state, action);
+      this.sendHome(departures(this.state, action, next));
+      this.state = next;
+    }
+    const lent = lentTo(this.state);
+    new Set(lent.map((card) => card.controller)).forEach((controller) => {
+      this.control?.send(controller, { op: 'recall' });
+    });
+    lent.forEach((card) => {
+      this.state = reduce(this.state, {
+        type: 'regainControl',
+        instanceId: card.instanceId,
+        to: 'battlefield',
+        state: permanentState(card),
+      });
+    });
   };
 
   // Built from public views of the two states, never the states.
@@ -416,6 +617,7 @@ export default class PlayTest {
   };
 
   private newGame = (deck: LoadedDeck, seed = randomInt(2 ** 32)) => {
+    this.settleControl();
     const actions: GameAction[] = [
       {
         type: 'newGame',
@@ -544,6 +746,7 @@ export default class PlayTest {
       board.on('closed', () => {
         if (this.board !== board) return;
         this.board = null;
+        this.settleControl();
         this.libraryActivity.reset();
         this.hand?.close();
         this.notifyPublic();
@@ -557,6 +760,7 @@ export default class PlayTest {
       hand.on('closed', () => {
         if (this.hand !== hand) return;
         this.hand = null;
+        this.settleControl();
         this.libraryActivity.reset();
         this.board?.close();
         this.notifyPublic();
