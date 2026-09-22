@@ -69,6 +69,8 @@ export interface NetplayDeps {
   // The local game's format, so fake opponents start on its life total.
   localFormat?(): DeckFormat;
   pushState(state: NetState): void;
+  // Whether a relay server and key are configured.
+  relayReady?(): boolean;
   pushOpponent(state: OpponentState): void;
   // How long the host waits for a channel after pasting a reply.
   connectTimeoutMs?: number;
@@ -201,7 +203,7 @@ export default class Netplay {
   }
 
   readonly handlers: NetplayHandlers = {
-    getNetState: () => this.state,
+    getNetState: () => this.snapshot(),
     netHost: () => this.host(),
     netHostLobby: () => this.hostLobby(),
     netJoinLobby: (code: unknown) => this.joinLobby(code),
@@ -221,8 +223,23 @@ export default class Netplay {
   };
 
   get netState(): NetState {
-    return this.state;
+    return this.snapshot();
   }
+
+  // Relay readiness follows settings, which change without a session
+  // event, so it is recomputed whenever the state is handed out.
+  private snapshot = (): NetState => {
+    this.state = {
+      ...this.state,
+      relayReady: this.deps.relayReady?.() ?? false,
+    };
+    return this.state;
+  };
+
+  // Settings changed under us; re-push so the page sees it.
+  settingsChanged = () => {
+    this.update({});
+  };
 
   private get transport(): Transport {
     return this.deps.transports[this.mode];
@@ -928,7 +945,7 @@ export default class Netplay {
       mode: next.role ? this.mode : null,
       ...next,
     };
-    this.deps.pushState(this.state);
+    this.deps.pushState(this.snapshot());
     return this.session;
   };
 
@@ -993,7 +1010,7 @@ export default class Netplay {
 
   private update = (next: Partial<NetState>) => {
     this.state = { ...this.state, ...next };
-    this.deps.pushState(this.state);
+    this.deps.pushState(this.snapshot());
   };
 
   private clearFakes = (): boolean => {

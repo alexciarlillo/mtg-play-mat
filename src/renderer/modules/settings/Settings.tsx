@@ -1,5 +1,7 @@
 import {
   MAX_DISPLAY_NAME_LENGTH,
+  MAX_RELAY_KEY_LENGTH,
+  MAX_RELAY_URL_LENGTH,
   type Settings as SettingsValues,
   type SettingsPatch,
 } from '@shared/settings';
@@ -87,6 +89,77 @@ const Toggle = ({
   </label>
 );
 
+// The relay that hands out lobby codes. Saved together, because a server
+// without its key is no more use than neither. Unlike the name field
+// this is not keyed on the saved value: it has to survive main rejecting
+// an address long enough to say so.
+const Relay = ({
+  savedUrl,
+  savedKey,
+  onSave,
+}: {
+  savedUrl: string;
+  savedKey: string;
+  onSave(patch: SettingsPatch): Promise<SettingsValues>;
+}) => {
+  const [url, setUrl] = useState(savedUrl);
+  const [key, setKey] = useState(savedKey);
+  const [error, setError] = useState<string | null>(null);
+  const unchanged = url === savedUrl && key === savedKey;
+
+  const save = (e: FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    onSave({ relayUrl: url, relayKey: key }).then((next) => {
+      setUrl(next.relayUrl);
+      setKey(next.relayKey);
+      // A rejected address is dropped by main, so the saved value is
+      // what says whether it took.
+      if (url.trim() !== '' && next.relayUrl !== url.trim()) {
+        setError('That is not an http:// or https:// address.');
+      }
+    }, onSaveFailed);
+  };
+
+  return (
+    <form className="space-y-3" onSubmit={save}>
+      <label className="block text-sm font-medium text-gray-900">
+        Relay server
+        <input
+          aria-label="Relay server"
+          className="mt-1 block w-96 max-w-full rounded-md border-0 px-2 py-1.5 text-gray-900 ring-1 ring-gray-300"
+          placeholder="https://relay.example.com"
+          maxLength={MAX_RELAY_URL_LENGTH}
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+        />
+      </label>
+      <label className="block text-sm font-medium text-gray-900">
+        Relay key
+        <input
+          aria-label="Relay key"
+          type="password"
+          className="mt-1 block w-96 max-w-full rounded-md border-0 px-2 py-1.5 text-gray-900 ring-1 ring-gray-300"
+          maxLength={MAX_RELAY_KEY_LENGTH}
+          value={key}
+          onChange={(e) => setKey(e.target.value)}
+        />
+      </label>
+      <button type="submit" className={secondary} disabled={unchanged}>
+        Save relay
+      </button>
+      {error && (
+        <p role="alert" className="text-sm text-red-700">
+          {error}
+        </p>
+      )}
+    </form>
+  );
+};
+
+const onSaveFailed = (err: unknown) =>
+  console.error('[settings] could not save', err);
+
 const Settings = () => {
   const { settings, loaded, update } = useSettings();
 
@@ -110,6 +183,21 @@ const Settings = () => {
         />
         <p className="text-sm text-gray-600">
           Other players see this name when you play online.
+        </p>
+      </Section>
+
+      <Section title="Online play">
+        <Relay
+          savedUrl={settings.relayUrl}
+          savedKey={settings.relayKey}
+          onSave={update}
+        />
+        <p className="text-sm text-gray-600">
+          Lobby codes are brokered by a relay server you run yourself; the
+          server is in this project under <code>server/</code>. The key is the
+          one its <code>RELAY_APP_KEYS</code> lists for{' '}
+          <code>mtg-play-mat</code>. Leave both blank to play with invite codes
+          only, which need no server.
         </p>
       </Section>
 

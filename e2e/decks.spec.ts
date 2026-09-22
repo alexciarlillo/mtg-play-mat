@@ -105,6 +105,7 @@ test('an old-schema deck survives the migration', async () => {
 test('Play online picks a deck, starts the game, and hosts', async () => {
   const page = await appWindow();
   await page.getByRole('link', { name: 'Play online' }).first().click();
+  await page.getByRole('tab', { name: 'Invite codes' }).click();
 
   const setup = page.getByTestId('game-setup');
   await expect(setup).toHaveAttribute('data-open', 'false');

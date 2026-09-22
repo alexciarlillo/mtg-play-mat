@@ -88,7 +88,7 @@ export class TestClient {
     this.socket.send(typeof frame === 'string' ? frame : JSON.stringify(frame));
   }
 
-  sendRaw(data: string | Uint8Array): void {
+  sendRaw(data: string | Uint8Array<ArrayBuffer>): void {
     this.socket.send(data);
   }
 

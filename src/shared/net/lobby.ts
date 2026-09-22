@@ -62,6 +62,9 @@ export interface NetState {
   lobbyCode: string | null;
   // A lobby code that arrived through a mtgplaymat:// link.
   pendingLobbyCode: string | null;
+  // Whether a relay server is configured at all; without one, lobby
+  // codes cannot work and the page says so instead of failing later.
+  relayReady: boolean;
 }
 
 export const idleNetState: NetState = {
@@ -76,6 +79,7 @@ export const idleNetState: NetState = {
   mode: null,
   lobbyCode: null,
   pendingLobbyCode: null,
+  relayReady: false,
 };
 
 export const guestSeats = Array.from(

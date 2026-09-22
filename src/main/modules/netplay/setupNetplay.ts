@@ -115,6 +115,10 @@ export const setupNetplay = ({
     localView: playTest.currentPublicView,
     localFormat: () => playTest.deckFormat,
     pushState: (state) => sendEvent(getAppWindow(), 'netState', state),
+    relayReady: () => {
+      const { baseUrl, appKey } = relaySettings(settings.settings);
+      return baseUrl.trim() !== '' && appKey.trim() !== '';
+    },
     pushOpponent: (state) => {
       growForTable(playTest.boardWindow, state.peers.length);
       sendEvent(playTest.boardWindow, 'opponentView', state);
@@ -132,6 +136,12 @@ export const setupNetplay = ({
   // window changed it.
   settings.onChange((next, previous) => {
     if (next.displayName !== previous.displayName) netplay.resend();
+    if (
+      next.relayUrl !== previous.relayUrl ||
+      next.relayKey !== previous.relayKey
+    ) {
+      netplay.settingsChanged();
+    }
   });
 
   const handlers: NetplaySetupHandlers = {

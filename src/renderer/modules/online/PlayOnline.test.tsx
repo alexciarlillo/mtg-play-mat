@@ -1,3 +1,4 @@
+import type { NetState } from '@shared/net/lobby';
 import { idleNetState } from '@shared/net/lobby';
 import { defaultSettings } from '@shared/settings';
 import type { DeckSummary } from '@shared/types/decks';
@@ -26,6 +27,8 @@ const closed: PlayTestStatus = {
 };
 
 let pushStatus: (status: PlayTestStatus) => void = () => {};
+let pushNet: (state: NetState) => void = () => {};
+let netState: NetState = idleNetState;
 
 const makeApi = (status: PlayTestStatus, decks: DeckSummary[]) => ({
   getSettings: vi.fn(async () => ({
@@ -33,8 +36,11 @@ const makeApi = (status: PlayTestStatus, decks: DeckSummary[]) => ({
     displayName: 'Alex',
   })),
   onSettingsChanged: vi.fn(() => () => {}),
-  getNetState: vi.fn(async () => idleNetState),
-  onNetState: vi.fn(() => () => {}),
+  getNetState: vi.fn(async () => netState),
+  onNetState: vi.fn((listener: (s: NetState) => void) => {
+    pushNet = listener;
+    return () => {};
+  }),
   getPlayTestStatus: vi.fn(async () => status),
   onPlayTestStatus: vi.fn((listener: (s: PlayTestStatus) => void) => {
     pushStatus = listener;
@@ -46,6 +52,11 @@ const makeApi = (status: PlayTestStatus, decks: DeckSummary[]) => ({
   restartPlayTest: vi.fn(async () => {}),
   closePlayTest: vi.fn(async () => {}),
   netHost: vi.fn(async () => {}),
+  netHostLobby: vi.fn(async () => {}),
+  netJoinLobby: vi.fn(async () => {}),
+  netCloseSeat: vi.fn(async () => {}),
+  netResend: vi.fn(async () => {}),
+  netLeave: vi.fn(async () => {}),
 });
 
 let api: ReturnType<typeof makeApi>;
@@ -65,6 +76,8 @@ const setup = (
 
 beforeEach(() => {
   pushStatus = () => {};
+  pushNet = () => {};
+  netState = idleNetState;
 });
 
 afterEach(() => {
@@ -144,6 +157,7 @@ describe('PlayOnline game setup', () => {
     setup();
 
     const select = await screen.findByRole('combobox', { name: 'Deck' });
+    await user.click(screen.getByRole('tab', { name: 'Invite codes' }));
     expect(screen.queryByTestId('no-game-notice')).toBeNull();
     await user.click(screen.getByRole('button', { name: 'Join a game' }));
     expect(screen.getByTestId('no-game-notice')).toBeInTheDocument();
@@ -157,5 +171,178 @@ describe('PlayOnline game setup', () => {
     );
     await user.click(screen.getByRole('button', { name: 'Join a game' }));
     expect(screen.queryByTestId('no-game-notice')).toBeNull();
+  });
+});
+
+const hosting = (over: Partial<NetState> = {}): NetState => ({
+  ...idleNetState,
+  role: 'host',
+  mode: 'relay',
+  phase: 'awaitingReply',
+  relayReady: true,
+  lobbyCode: 'ABC123',
+  seats: [
+    { seat: 2, phase: 'empty', invite: null, player: null, error: null },
+    { seat: 3, phase: 'empty', invite: null, player: null, error: null },
+    { seat: 4, phase: 'empty', invite: null, player: null, error: null },
+  ],
+  ...over,
+});
+
+describe('PlayOnline connection tabs', () => {
+  it('opens on the lobby code tab', async () => {
+    setup();
+    await screen.findByRole('combobox', { name: 'Deck' });
+    expect(screen.getByRole('tab', { name: 'Lobby code' })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
+    expect(screen.getByTestId('panel-relay')).toBeInTheDocument();
+    expect(screen.queryByTestId('panel-p2p')).toBeNull();
+  });
+
+  it('switches to invite codes and back', async () => {
+    const user = userEvent.setup();
+    setup();
+    await screen.findByRole('combobox', { name: 'Deck' });
+
+    await user.click(screen.getByRole('tab', { name: 'Invite codes' }));
+    expect(screen.getByTestId('panel-p2p')).toBeInTheDocument();
+    expect(screen.queryByTestId('lobby-code')).toBeNull();
+
+    await user.click(screen.getByRole('tab', { name: 'Lobby code' }));
+    expect(screen.getByTestId('panel-relay')).toBeInTheDocument();
+  });
+
+  it('pins the tab to a live session and disables the other', async () => {
+    const user = userEvent.setup();
+    setup();
+    await screen.findByRole('combobox', { name: 'Deck' });
+    await user.click(screen.getByRole('tab', { name: 'Invite codes' }));
+
+    act(() => pushNet(hosting()));
+    expect(screen.getByTestId('panel-relay')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Invite codes' })).toBeDisabled();
+
+    // Leaving hands the choice back.
+    act(() => pushNet({ ...idleNetState, relayReady: true }));
+    expect(
+      screen.getByRole('tab', { name: 'Invite codes' })
+    ).not.toBeDisabled();
+  });
+});
+
+describe('PlayOnline lobby codes', () => {
+  it('points at Settings and refuses to start without a relay', async () => {
+    setup();
+    await screen.findByRole('combobox', { name: 'Deck' });
+    expect(screen.getByTestId('no-relay-notice')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Host a game' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Join a game' })).toBeDisabled();
+  });
+
+  it('hosts once a relay is configured', async () => {
+    const user = userEvent.setup();
+    setup();
+    await screen.findByRole('combobox', { name: 'Deck' });
+    act(() => pushNet({ ...idleNetState, relayReady: true }));
+    expect(screen.queryByTestId('no-relay-notice')).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'Host a game' }));
+    expect(api.netHostLobby).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the code grouped, with both ways to share it', async () => {
+    setup();
+    await screen.findByRole('combobox', { name: 'Deck' });
+    act(() => pushNet(hosting()));
+
+    expect(screen.getByTestId('lobby-code')).toHaveTextContent('ABC-123');
+    expect(screen.getByTestId('seats-free')).toHaveTextContent(
+      '3 seats still free.'
+    );
+    expect(
+      screen.getByRole('button', { name: 'Copy code' })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Copy link' })
+    ).toBeInTheDocument();
+  });
+
+  it('lists who has joined and can remove them', async () => {
+    const user = userEvent.setup();
+    setup();
+    await screen.findByRole('combobox', { name: 'Deck' });
+    act(() =>
+      pushNet(
+        hosting({
+          phase: 'connected',
+          seats: [
+            {
+              seat: 2,
+              phase: 'connected',
+              invite: null,
+              error: null,
+              player: { playerId: 'bob', name: 'Bob', appVersion: '1' },
+            },
+            {
+              seat: 3,
+              phase: 'empty',
+              invite: null,
+              player: null,
+              error: null,
+            },
+            {
+              seat: 4,
+              phase: 'empty',
+              invite: null,
+              player: null,
+              error: null,
+            },
+          ],
+        })
+      )
+    );
+
+    expect(screen.getByTestId('seat-2')).toHaveTextContent('Seat 2: Bob');
+    expect(screen.getByTestId('seats-free')).toHaveTextContent(
+      '2 seats still free.'
+    );
+    await user.click(screen.getByRole('button', { name: 'Remove seat 2' }));
+    expect(api.netCloseSeat).toHaveBeenCalledWith(2);
+  });
+
+  it('joins by code, however it was typed', async () => {
+    const user = userEvent.setup();
+    setup();
+    await screen.findByRole('combobox', { name: 'Deck' });
+    act(() => pushNet({ ...idleNetState, relayReady: true }));
+
+    await user.click(screen.getByRole('button', { name: 'Join a game' }));
+    const input = screen.getByRole('textbox', { name: 'Lobby code' });
+    const join = screen.getByRole('button', { name: 'Join' });
+    expect(join).toBeDisabled();
+
+    await user.type(input, 'abc12');
+    expect(join).toBeDisabled();
+    await user.type(input, '3');
+    expect(join).not.toBeDisabled();
+    await user.click(join);
+    expect(api.netJoinLobby).toHaveBeenCalledWith('abc123');
+  });
+
+  it('fills the code in from a deep link', async () => {
+    setup();
+    await screen.findByRole('combobox', { name: 'Deck' });
+    act(() =>
+      pushNet({
+        ...idleNetState,
+        relayReady: true,
+        pendingLobbyCode: 'XYZ789',
+      })
+    );
+    expect(screen.getByRole('textbox', { name: 'Lobby code' })).toHaveValue(
+      'XYZ-789'
+    );
   });
 });

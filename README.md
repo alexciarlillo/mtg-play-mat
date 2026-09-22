@@ -62,11 +62,13 @@ board in the command zone; the sideboard stays out.
 
 ## Online play
 
-Two ways to connect, both carrying the same messages. The default is a **lobby code**: the
-host gets a six-character code from a relay server and reads it out; everyone else types it
-in. The relay is in this repo under [`server/`](server/README.md) and is meant to be run on
-your own box. The fallback is **peer to peer**, where players paste WebRTC offer and answer
-codes to each other and no server is involved at all.
+Two ways to connect, on two tabs of the **Play online** page, both carrying the same
+messages. The default is a **lobby code**: the host gets a six-character code from a relay
+server and reads it out; everyone else types it in. The relay is in this repo under
+[`server/`](server/README.md) and is meant to be run on your own box — point the app at it
+under **Settings → Online play**, with the key its `RELAY_APP_KEYS` lists for
+`mtg-play-mat`. The fallback is **Invite codes**: players paste WebRTC offer and answer codes
+to each other and no server is involved at all.
 
 Either way a pod is a star — guests talk to the host, and the host passes messages on. Hands
 and libraries never leave the machine they are on.
