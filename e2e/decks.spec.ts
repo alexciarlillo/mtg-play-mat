@@ -152,7 +152,7 @@ test('Play online picks a deck, starts the game, and hosts', async () => {
 
 test('import a Moxfield Commander export, skipping a bogus line', async () => {
   const page = await appWindow();
-  await page.getByRole('button', { name: 'Import a deck' }).click();
+  await page.getByRole('button', { name: 'New deck' }).click();
   await page.getByLabel('Name', { exact: true }).fill('Atraxa Test');
   await page.getByLabel('Card list').fill(moxfieldExport);
   await page.getByRole('button', { name: 'Check list' }).click();
@@ -185,7 +185,7 @@ test('import a Moxfield Commander export, skipping a bogus line', async () => {
 
 test('import an MTGA export with About name and blank-line sideboard', async () => {
   const page = await appWindow();
-  await page.getByRole('button', { name: 'Import a deck' }).click();
+  await page.getByRole('button', { name: 'New deck' }).click();
   await page.getByLabel('Card list').fill(mtgaExport);
   await page.getByRole('button', { name: 'Check list' }).click();
 
@@ -203,6 +203,23 @@ test('import an MTGA export with About name and blank-line sideboard', async () 
   await expect(tile(page, 'Mono-White Angels')).toContainText(
     'Constructed · 60 cards'
   );
+});
+
+test('a deck can be made with no list at all, and opens ready to fill', async () => {
+  const page = await appWindow();
+  await page.getByRole('button', { name: 'New deck' }).click();
+  await page.getByLabel('Name', { exact: true }).fill('Empty Brew');
+  await page.getByLabel('Format').selectOption('commander');
+  // No list pasted, so there is nothing to check.
+  await expect(page.getByRole('button', { name: 'Check list' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Create empty deck' }).click();
+
+  // Straight to the deck, which is where cards get added.
+  await expect(page).toHaveURL(/#\/decks\/\d+$/);
+  await expect(page.getByLabel('Deck name')).toHaveValue('Empty Brew');
+
+  await page.getByRole('link', { name: 'Deck Builder' }).first().click();
+  await expect(tile(page, 'Empty Brew')).toContainText('Commander · 0 cards');
 });
 
 test('the editor groups cards and switches a printing that persists', async () => {

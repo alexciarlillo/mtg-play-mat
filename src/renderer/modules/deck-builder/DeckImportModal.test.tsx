@@ -98,7 +98,7 @@ describe('DeckImportModal', () => {
     expect(save).toBeEnabled();
     await user.click(save);
 
-    await waitFor(() => expect(onSaved).toHaveBeenCalledWith(5));
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith(5, false));
     expect(api.createDeck).toHaveBeenCalledWith({
       name: 'From About',
       format: 'constructed',
@@ -108,5 +108,47 @@ describe('DeckImportModal', () => {
       ],
       displayPrintingId: 'bolt',
     });
+  });
+
+  it('makes an empty deck when no list is pasted', async () => {
+    const user = userEvent.setup();
+    const onSaved = vi.fn();
+    render(<DeckImportModal isOpen onClose={() => {}} onSaved={onSaved} />);
+
+    // Nothing to check, so the list is never previewed.
+    expect(screen.queryByRole('button', { name: 'Check list' })).toBeNull();
+    await user.type(screen.getByLabelText('Name'), 'Brew');
+    await user.selectOptions(screen.getByLabelText('Format'), 'commander');
+    await user.click(screen.getByRole('button', { name: 'Create empty deck' }));
+
+    expect(api.previewDeckImport).not.toHaveBeenCalled();
+    expect(api.createDeck).toHaveBeenCalledWith({
+      name: 'Brew',
+      format: 'commander',
+      cards: [],
+      displayPrintingId: null,
+    });
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith(5, true));
+  });
+
+  it('names an unnamed empty deck rather than refusing', async () => {
+    const user = userEvent.setup();
+    render(<DeckImportModal isOpen onClose={() => {}} onSaved={() => {}} />);
+
+    await user.click(screen.getByRole('button', { name: 'Create empty deck' }));
+    expect(api.createDeck).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'New deck' })
+    );
+  });
+
+  it('offers Check list as soon as there is something to check', async () => {
+    const user = userEvent.setup();
+    render(<DeckImportModal isOpen onClose={() => {}} onSaved={() => {}} />);
+
+    await user.type(screen.getByLabelText('Card list'), '4 Lightning Bolt');
+    expect(
+      screen.queryByRole('button', { name: 'Create empty deck' })
+    ).toBeNull();
+    expect(screen.getByRole('button', { name: 'Check list' })).toBeEnabled();
   });
 });

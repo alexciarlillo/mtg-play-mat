@@ -2,7 +2,7 @@ import { PlusIcon } from '@heroicons/react/24/outline';
 import type { DeckSummary } from '@shared/types/decks';
 import { observer } from 'mobx-react-lite';
 import { type MouseEvent, useEffect, useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 
 import CardImg from '../../ui/CardImg';
 import { useContextMenu } from '../../ui/ContextMenuProvider';
@@ -13,6 +13,7 @@ import { formatLabels } from './deckUi';
 const DeckBuilder = () => {
   const store = useDeckStore();
   const menu = useContextMenu();
+  const navigate = useNavigate();
 
   const [importingDeck, setImportingDeck] = useState(false);
 
@@ -44,7 +45,10 @@ const DeckBuilder = () => {
         >
           <PlusIcon className="h-6 w-6" />
           <span className="mt-2 block text-sm font-medium text-gray-900">
-            Import a deck
+            New deck
+          </span>
+          <span className="mt-1 block text-xs text-gray-500">
+            Empty, or from a list
           </span>
         </button>
         {store.decks.map((deck) => (
@@ -74,9 +78,12 @@ const DeckBuilder = () => {
       <DeckImportModal
         isOpen={importingDeck}
         onClose={() => setImportingDeck(false)}
-        onSaved={() => {
+        onSaved={(deckId, empty) => {
           setImportingDeck(false);
           store.refreshDecks();
+          // An empty deck is only worth making if you can start filling
+          // it in, so go straight there.
+          if (empty) void navigate(`/decks/${deckId}`);
         }}
       />
     </div>

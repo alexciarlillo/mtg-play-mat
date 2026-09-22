@@ -125,7 +125,7 @@ test.afterAll(async () => {
 test('app window loads with an empty deck list', async () => {
   const appWindow = await windowByPage('app.html');
 
-  await expect(appWindow.getByText('Import a deck')).toBeVisible();
+  await expect(appWindow.getByText('New deck')).toBeVisible();
   // Test hooks skip the launch check, so no real bulk download starts.
   const cardData = appWindow.getByTestId('card-data-status');
   await expect(cardData).toContainText('No card data yet');

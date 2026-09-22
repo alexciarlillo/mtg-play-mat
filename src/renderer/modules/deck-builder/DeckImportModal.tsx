@@ -26,7 +26,9 @@ import {
 interface Props {
   isOpen: boolean;
   onClose(): void;
-  onSaved(deckId: number): void;
+  // `empty` is true when the deck was made with no card list, so the
+  // caller can open it rather than leave the player on the deck list.
+  onSaved(deckId: number, empty: boolean): void;
 }
 
 type Fix = { kind: 'skip' } | { kind: 'card'; card: CardNameResult };
@@ -159,7 +161,7 @@ const DeckImportModal = ({ isOpen, onClose, onSaved }: Props) => {
         }),
       ]
     : [];
-  const deckName = name.trim() || report?.deckName || 'Imported deck';
+  const deckName = name.trim() || report?.deckName || 'New deck';
   const cover =
     cards.find((c) => c.board === 'commander') ??
     cards.find((c) => c.board === 'main');
@@ -174,8 +176,9 @@ const DeckImportModal = ({ isOpen, onClose, onSaved }: Props) => {
         cards,
         displayPrintingId: cover?.printingId ?? null,
       });
+      const empty = cards.length === 0;
       reset();
-      onSaved(id);
+      onSaved(id, empty);
     } catch (err) {
       setError(String(err));
       setBusy(false);
@@ -192,7 +195,7 @@ const DeckImportModal = ({ isOpen, onClose, onSaved }: Props) => {
       <div className="fixed inset-0 z-10 overflow-y-auto p-4 sm:p-6 md:p-12">
         <DialogPanel className="mx-auto max-w-2xl rounded-lg bg-white p-4 shadow-2xl ring-1 ring-black/5">
           <DialogTitle as="h3" className="text-lg font-medium text-gray-900">
-            Import deck
+            New deck
           </DialogTitle>
 
           <div className="mt-2">
@@ -206,16 +209,33 @@ const DeckImportModal = ({ isOpen, onClose, onSaved }: Props) => {
               id="deck-name"
               type="text"
               className={`mt-1 ${inputClass}`}
-              placeholder={report?.deckName ?? 'Imported deck'}
+              placeholder={report?.deckName ?? 'New deck'}
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
           </div>
 
+          <label className="mt-2 flex items-center gap-2 text-sm font-medium text-gray-700">
+            Format
+            <select
+              aria-label="Format"
+              className="rounded-md border border-gray-300 px-1 py-0.5 font-normal"
+              value={format}
+              onChange={(e) => setFormat(e.target.value as DeckFormat)}
+            >
+              {deckFormats.map((f) => (
+                <option key={f} value={f}>
+                  {formatLabels[f]}
+                </option>
+              ))}
+            </select>
+          </label>
+
           {!report && (
             <>
               <Description className="mt-2 text-sm text-gray-500">
-                Paste a deck list: plain text, MTGA, or Moxfield export.
+                Paste a deck list — plain text, MTGA, or Moxfield export — or
+                leave it empty and add cards on the deck page.
               </Description>
               <label
                 htmlFor="deck-list"
@@ -241,27 +261,10 @@ const DeckImportModal = ({ isOpen, onClose, onSaved }: Props) => {
                   then check the list again.
                 </p>
               )}
-              <div className="flex flex-wrap items-center gap-3">
-                <span data-testid="import-summary">
-                  {report.resolved.length} resolved, {report.unresolved.length}{' '}
-                  unresolved, {report.ignored.length} ignored
-                </span>
-                <label className="flex items-center gap-1">
-                  Format
-                  <select
-                    aria-label="Format"
-                    className="rounded-md border border-gray-300 px-1 py-0.5"
-                    value={format}
-                    onChange={(e) => setFormat(e.target.value as DeckFormat)}
-                  >
-                    {deckFormats.map((f) => (
-                      <option key={f} value={f}>
-                        {formatLabels[f]}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
+              <span data-testid="import-summary">
+                {report.resolved.length} resolved, {report.unresolved.length}{' '}
+                unresolved, {report.ignored.length} ignored
+              </span>
               <div className="text-gray-600">
                 {(['commander', 'main', 'side'] as const)
                   .filter((b) => counts(b) > 0)
@@ -364,7 +367,7 @@ const DeckImportModal = ({ isOpen, onClose, onSaved }: Props) => {
                 <button
                   type="button"
                   className={primaryButtonClass}
-                  disabled={busy || pending.length > 0 || cards.length === 0}
+                  disabled={busy || pending.length > 0}
                   title={
                     pending.length > 0
                       ? 'Fix or skip every unresolved line first'
@@ -374,11 +377,20 @@ const DeckImportModal = ({ isOpen, onClose, onSaved }: Props) => {
                 >
                   Save deck
                 </button>
+              ) : deckList.trim() === '' ? (
+                <button
+                  type="button"
+                  className={primaryButtonClass}
+                  disabled={busy}
+                  onClick={() => void save()}
+                >
+                  Create empty deck
+                </button>
               ) : (
                 <button
                   type="button"
                   className={primaryButtonClass}
-                  disabled={busy || deckList.trim() === ''}
+                  disabled={busy}
                   onClick={() => void preview()}
                 >
                   Check list
