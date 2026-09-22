@@ -86,11 +86,18 @@ export const createRelayServer = (
     maxPayload: MAX_RELAY_FRAME_BYTES,
   });
 
-  const createLobby = async (req: IncomingMessage, res: ServerResponse) => {
+  const createLobby = async (
+    req: IncomingMessage,
+    res: ServerResponse,
+    url: URL
+  ) => {
     const ip = clientIp(req, config.trustProxy);
+    // The query carries the same credentials as the headers, because the
+    // WebSocket endpoint can only use the query and a reverse proxy in
+    // front of both should need only one rule.
     const principal = authenticate({
-      appId: header(req, 'x-app-id'),
-      appKey: header(req, 'x-app-key'),
+      appId: header(req, 'x-app-id') ?? url.searchParams.get('app'),
+      appKey: header(req, 'x-app-key') ?? url.searchParams.get('key'),
       ip,
     });
     if (!principal) {
@@ -146,7 +153,7 @@ export const createRelayServer = (
       return;
     }
     if (req.method === 'POST' && url.pathname === '/v1/lobbies') {
-      void createLobby(req, res).catch(() => {
+      void createLobby(req, res, url).catch(() => {
         json(res, 400, { error: 'bad_request' });
       });
       return;

@@ -32,16 +32,27 @@ export const startRelay = async (overrides: Partial<RelayConfig> = {}) => {
   };
 };
 
+// `where` says which way the credentials travel, so tests can cover the
+// header path, the query path, and neither.
 export const createLobby = async (
   baseUrl: string,
-  { appId = APP_ID, appKey = APP_KEY, body = {} as unknown } = {}
+  {
+    appId = APP_ID,
+    appKey = APP_KEY,
+    body = {} as unknown,
+    where = 'header' as 'header' | 'query' | 'none',
+  } = {}
 ) => {
-  const res = await fetch(`${baseUrl}/v1/lobbies`, {
+  const url = new URL('/v1/lobbies', baseUrl);
+  if (where === 'query') {
+    url.searchParams.set('app', appId);
+    url.searchParams.set('key', appKey);
+  }
+  const res = await fetch(url, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
-      'x-app-id': appId,
-      'x-app-key': appKey,
+      ...(where === 'header' && { 'x-app-id': appId, 'x-app-key': appKey }),
     },
     body: JSON.stringify(body),
   });

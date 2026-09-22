@@ -27,14 +27,68 @@ messages inside `data`.
 | `POST /v1/lobbies`                          | Headers `x-app-id`, `x-app-key`. Body `{"slots":4}` (optional). → `201 {v, code, hostToken, slots, expiresAt}` |
 | `GET /v1/ws?v=1&app=…&key=…&code=…&token=…` | WebSocket upgrade. `token` only for the host.                                                                  |
 
-Everything travels in the query string on the WebSocket because the client is the standard
-`WebSocket` API, which cannot set request headers.
+`POST /v1/lobbies` accepts its credentials in the headers **or** in the query
+(`?app=…&key=…`); a header wins when both are present. The WebSocket has only the query,
+because the client is the standard `WebSocket` API, which cannot set request headers. Sending
+both means one reverse-proxy rule can gate both endpoints — see "Auth at the proxy" below.
 
 Client frames: `{op:'send',to,data}`, `{op:'close',seat}` (host only), `{op:'leave'}`.
 Server frames: `{ev:'seated',…}`, `{ev:'peer',seat,state}`, `{ev:'data',from,data}`,
 `{ev:'error',code,message}`.
 
 Close codes are in the 4000-4999 range — see `RelayClose` in `src/shared/net/relay.ts`.
+
+## Auth at the proxy
+
+The relay can do no authentication at all and leave the whole gate to nginx. Because every
+request carries `?key=` — the WebSocket by necessity, lobby creation by choice — one rule
+covers both endpoints:
+
+```nginx
+map $http_upgrade $connection_upgrade {
+	default upgrade;
+	''      close;
+}
+
+map $arg_key $relay_ok {
+	default        0;
+	"YOUR-SECRET"  1;
+}
+
+server {
+	server_name relay.example.com;
+
+	location /healthz { proxy_pass http://127.0.0.1:8787; }
+
+	location /v1/ {
+		if ($relay_ok = 0) { return 401; }
+
+		proxy_pass http://127.0.0.1:8787;
+		proxy_http_version 1.1;
+		proxy_set_header Upgrade    $http_upgrade;
+		proxy_set_header Connection $connection_upgrade;
+		proxy_set_header Host       $host;
+		proxy_set_header X-Real-IP  $remote_addr;
+		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+		proxy_read_timeout 1h;
+	}
+}
+```
+
+Run the relay with `RELAY_ALLOW_ANY_APP=1` and no `RELAY_APP_KEYS`, and set the same secret as
+the app's relay key in Settings. Nothing unauthenticated reaches Node. Keep
+`RELAY_TRUST_PROXY=1` so the rate limits still key on the real address, and
+`RELAY_HOST=127.0.0.1` so the relay is not reachable except through nginx.
+
+Two things to know:
+
+- **HTTP Basic auth cannot work here.** Node's global `WebSocket` is the WHATWG API: it
+  cannot set request headers, and it drops userinfo from the URL rather than turning it into
+  an `Authorization` header (verified against Node 24.21). `auth_basic` would gate lobby
+  creation and then fail every WebSocket upgrade.
+- **A query string is more visible than a header** — it lands in access logs and in any
+  intermediary's. Either add `access_log off;` to that `location`, or keep the relay's own
+  `RELAY_APP_KEYS` as the gate and skip the proxy rule.
 
 ## Security
 

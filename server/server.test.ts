@@ -6,6 +6,8 @@ import {
   RelayClose,
 } from '../src/shared/net/relay';
 import {
+  APP_ID,
+  APP_KEY,
   createLobby,
   dial,
   seatedAt,
@@ -77,6 +79,34 @@ describe('http', () => {
     expect(lobby.slots).toBe(4);
     expect(lobby.hostToken.length).toBeGreaterThan(20);
     expect(Date.parse(lobby.expiresAt)).toBeGreaterThan(Date.now());
+  });
+
+  it('takes the credentials from the query as well as the headers', async () => {
+    const { baseUrl } = await relay();
+    const { status, text } = await createLobby(baseUrl, { where: 'query' });
+    expect(status).toBe(201);
+    expect(parseCreateLobbyResponse(text).code).toHaveLength(6);
+  });
+
+  it('turns away a wrong key wherever it came from', async () => {
+    const { baseUrl } = await relay();
+    expect(
+      (await createLobby(baseUrl, { where: 'query', appKey: 'wrong' })).status
+    ).toBe(401);
+    expect((await createLobby(baseUrl, { where: 'none' })).status).toBe(401);
+  });
+
+  it('prefers a header over the query, so a proxy cannot be talked past', async () => {
+    const { baseUrl } = await relay();
+    const url = new URL('/v1/lobbies', baseUrl);
+    url.searchParams.set('app', APP_ID);
+    url.searchParams.set('key', APP_KEY);
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'x-app-id': APP_ID, 'x-app-key': 'wrong' },
+      body: '{}',
+    });
+    expect(res.status).toBe(401);
   });
 
   it('turns away an unknown app or a wrong key', async () => {

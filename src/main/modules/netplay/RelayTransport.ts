@@ -2,6 +2,7 @@ import { normalizeLobbyCode } from '@shared/net/lobbyCode';
 import type { NetCommand, NetReport } from '@shared/net/lobby';
 import { HOST_SEAT, MAX_SEATS } from '@shared/net/protocol';
 import {
+  createLobbyUrl,
   encodeRelayFrame,
   HOST_RELAY_SEAT,
   parseCreateLobbyResponse,
@@ -122,18 +123,15 @@ export default class RelayTransport implements Transport {
     const settings = this.deps.settings();
     if (!this.checkSettings(settings)) return;
     try {
-      const res = await this.fetch(
-        new URL('v1/lobbies', base(settings.baseUrl)),
-        {
-          method: 'POST',
-          headers: {
-            'content-type': 'application/json',
-            'x-app-id': settings.appId,
-            'x-app-key': settings.appKey,
-          },
-          body: JSON.stringify({ slots }),
-        }
-      );
+      const res = await this.fetch(createLobbyUrl(settings), {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-app-id': settings.appId,
+          'x-app-key': settings.appKey,
+        },
+        body: JSON.stringify({ slots }),
+      });
       const text = await res.text();
       if (session !== this.session) return;
       if (!res.ok) {
@@ -287,8 +285,6 @@ export default class RelayTransport implements Transport {
     this.deps.report(report);
   };
 }
-
-const base = (url: string) => (url.endsWith('/') ? url : `${url}/`);
 
 const lobbyHttpError = (status: number): string => {
   if (status === 401) {

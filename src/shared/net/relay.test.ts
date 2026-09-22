@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  createLobbyUrl,
   encodeRelayFrame,
   MAX_RELAY_DATA_BYTES,
   parseCreateLobbyResponse,
@@ -180,5 +181,35 @@ describe('relayWebSocketUrl', () => {
     expect(
       relayWebSocketUrl({ baseUrl: 'https://relay.example.com/', ...args })
     ).toContain('wss://relay.example.com/v1/ws?');
+  });
+});
+
+describe('createLobbyUrl', () => {
+  const args = { appId: 'app', appKey: 'key' };
+
+  it('carries the credentials in the query, for a proxy to gate on', () => {
+    expect(
+      createLobbyUrl({ baseUrl: 'https://relay.example.com', ...args })
+    ).toBe(
+      `https://relay.example.com/v1/lobbies?v=${RELAY_PROTOCOL_VERSION}` +
+        '&app=app&key=key'
+    );
+  });
+
+  it('keeps a base path and tolerates a trailing slash', () => {
+    expect(
+      createLobbyUrl({ baseUrl: 'https://relay.example.com/relay/', ...args })
+    ).toContain('https://relay.example.com/relay/v1/lobbies?');
+  });
+
+  it('escapes a key that would otherwise break the query', () => {
+    const url = new URL(
+      createLobbyUrl({
+        baseUrl: 'https://relay.example.com',
+        appId: 'app',
+        appKey: 'a&b=c d',
+      })
+    );
+    expect(url.searchParams.get('key')).toBe('a&b=c d');
   });
 });

@@ -116,10 +116,20 @@ describe('hosting a lobby', () => {
   it('creates the lobby, then dials with the host token', async () => {
     const t = await hosting();
     const [url, init] = t.fetchMock.mock.calls[0] as unknown as [
-      URL,
+      string,
       RequestInit,
     ];
-    expect(url.toString()).toBe('https://relay.example.com/v1/lobbies');
+    const posted = new URL(url);
+    expect(posted.origin + posted.pathname).toBe(
+      'https://relay.example.com/v1/lobbies'
+    );
+    // The same credentials go in the headers and the query, so one
+    // reverse-proxy rule can gate this and the WebSocket alike.
+    expect(Object.fromEntries(posted.searchParams)).toEqual({
+      v: '1',
+      app: 'mtg-play-mat',
+      key: 'app-key',
+    });
     expect(init.method).toBe('POST');
     expect(init.headers).toMatchObject({
       'x-app-id': 'mtg-play-mat',

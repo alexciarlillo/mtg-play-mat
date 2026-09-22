@@ -201,6 +201,30 @@ export const parseCreateLobbyResponse = (raw: unknown): CreateLobbyResponse => {
   };
 };
 
+export interface RelayCredentials {
+  baseUrl: string;
+  appId: string;
+  appKey: string;
+}
+
+const relayUrl = (
+  path: string,
+  { baseUrl, appId, appKey }: RelayCredentials
+) => {
+  const url = new URL(path, baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`);
+  url.searchParams.set('v', String(RELAY_PROTOCOL_VERSION));
+  url.searchParams.set('app', appId);
+  url.searchParams.set('key', appKey);
+  return url;
+};
+
+// Lobby creation sends its credentials in headers *and* in the query.
+// The query is what a reverse proxy in front of the relay can gate on
+// with one rule, since the WebSocket endpoint has nowhere else to put
+// them.
+export const createLobbyUrl = (credentials: RelayCredentials): string =>
+  relayUrl('v1/lobbies', credentials).toString();
+
 // The WebSocket URL a client dials. Everything travels in the query
 // because the browser WebSocket API cannot set request headers.
 export const relayWebSocketUrl = ({
@@ -209,18 +233,9 @@ export const relayWebSocketUrl = ({
   appKey,
   code,
   token,
-}: {
-  baseUrl: string;
-  appId: string;
-  appKey: string;
-  code: string;
-  token?: string;
-}): string => {
-  const url = new URL('v1/ws', baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`);
+}: RelayCredentials & { code: string; token?: string }): string => {
+  const url = relayUrl('v1/ws', { baseUrl, appId, appKey });
   url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-  url.searchParams.set('v', String(RELAY_PROTOCOL_VERSION));
-  url.searchParams.set('app', appId);
-  url.searchParams.set('key', appKey);
   url.searchParams.set('code', code);
   if (token) url.searchParams.set('token', token);
   return url.toString();
