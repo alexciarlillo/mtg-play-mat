@@ -1,4 +1,9 @@
-import { EyeIcon, EyeSlashIcon } from '@heroicons/react/20/solid';
+import {
+  EyeIcon,
+  EyeSlashIcon,
+  PhotoIcon,
+  StopIcon,
+} from '@heroicons/react/20/solid';
 import type { CardView, LibraryActivity, PublicView } from '@shared/game';
 import type { PeerInfo } from '@shared/net/protocol';
 import type { TableEntry } from '@shared/net/remoteViews';
@@ -20,6 +25,7 @@ import {
 import LibraryActivityBadge from './LibraryActivityBadge';
 import { lifeFlashClass } from './lifeFlash';
 import { phaseLabels } from './phases';
+import PlayMat from './PlayMat';
 import PlayerCounters from './PlayerCounters';
 import RevealPanel from './RevealPanel';
 import ScaledField from './ScaledField';
@@ -158,8 +164,11 @@ const OpponentSide = ({
   hidden = false,
   log = [],
   logOpen = false,
+  matId = null,
+  matHidden = false,
   onToggleHidden,
   onToggleLog,
+  onToggleMat,
 }: {
   peer: PeerInfo;
   view: PublicView | null;
@@ -175,8 +184,14 @@ const OpponentSide = ({
   // The whole table history; the seat picks out its own player's part.
   log?: TableEntry[];
   logOpen?: boolean;
+  // Their play area background, if they have one and its bytes have
+  // arrived.
+  matId?: string | null;
+  // Folded away here only: it is their mat, this is just our board.
+  matHidden?: boolean;
   onToggleHidden?(): void;
   onToggleLog?(): void;
+  onToggleMat?(): void;
 }) => {
   const [open, setOpen] = useState<Pile | null>(null);
   // Damage across the table is the easiest thing to miss, so it is
@@ -209,6 +224,27 @@ const OpponentSide = ({
         <EyeSlashIcon className="size-4" />
       ) : (
         <EyeIcon className="size-4" />
+      )}
+    </button>
+  );
+
+  const matButton = matId && onToggleMat && (
+    <button
+      type="button"
+      data-testid="opponent-mat-hide"
+      aria-label={`${matHidden ? 'Show' : 'Hide'} ${peer.name}'s play area background`}
+      aria-pressed={matHidden}
+      title={matHidden ? 'Show their background' : 'Hide their background'}
+      className={classNames(
+        'shrink-0 rounded p-0.5 hover:bg-slate-500',
+        matHidden && 'bg-slate-500 text-amber-300'
+      )}
+      onClick={onToggleMat}
+    >
+      {matHidden ? (
+        <StopIcon className="size-4" />
+      ) : (
+        <PhotoIcon className="size-4" />
       )}
     </button>
   );
@@ -250,14 +286,20 @@ const OpponentSide = ({
   const header = compact ? (
     <div className="flex flex-col gap-1">
       <div className="flex items-center justify-between gap-2">
-        {hideButton}
+        <span className="flex shrink-0 items-center gap-0.5">
+          {hideButton}
+          {matButton}
+        </span>
         {life}
       </div>
       {name}
     </div>
   ) : (
     <div className="flex items-center justify-between gap-2">
-      {hideButton}
+      <span className="flex shrink-0 items-center gap-0.5">
+        {hideButton}
+        {matButton}
+      </span>
       {name}
       {life}
     </div>
@@ -295,11 +337,20 @@ const OpponentSide = ({
               fitWidth={bounds.width}
               offsetX={bounds.offsetX}
             >
-              {() =>
-                stackOrder(view.zones.battlefield).map((card) => (
-                  <OpponentCard key={card.instanceId} card={card} />
-                ))
-              }
+              {() => (
+                <>
+                  {/* Their mat, in their own field's units, so it sits
+                      under their cards exactly as it does on their
+                      board. */}
+                  <PlayMat
+                    id={matHidden ? null : matId}
+                    testId="opponent-play-mat"
+                  />
+                  {stackOrder(view.zones.battlefield).map((card) => (
+                    <OpponentCard key={card.instanceId} card={card} />
+                  ))}
+                </>
+              )}
             </ScaledField>
           ) : (
             <div className="flex h-full items-center justify-center text-lg font-medium text-stone-200">

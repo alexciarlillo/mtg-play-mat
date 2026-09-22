@@ -43,6 +43,7 @@ import Library from './Library';
 import { fieldBounds, FULL_PANEL_WIDTH, stackOrder } from './layout';
 import LifeCounter from './LifeCounter';
 import OpponentsRow from './OpponentsRow';
+import PlayMat from './PlayMat';
 import { opponentCommanders, requestRoll, seatOrder } from './pod';
 import PlayerCounters from './PlayerCounters';
 import RevealPanel from './RevealPanel';
@@ -269,19 +270,23 @@ const Board = ({ store, opponent, hand }: Props) => {
               fitWidth={bounds.width}
               offsetX={bounds.offsetX}
             >
-              {(scale) =>
-                view &&
-                stackOrder(view.zones.battlefield).map((card) => (
-                  <BattlefieldCard
-                    key={card.instanceId}
-                    card={card}
-                    scale={scale}
-                    offsetX={bounds.offsetX}
-                    onAddCounter={onAddCounter}
-                    onAttach={onAttach}
-                  />
-                ))
-              }
+              {(scale) => (
+                <>
+                  {/* First, so every card is drawn over it. */}
+                  <PlayMat id={settings.matImage} />
+                  {view &&
+                    stackOrder(view.zones.battlefield).map((card) => (
+                      <BattlefieldCard
+                        key={card.instanceId}
+                        card={card}
+                        scale={scale}
+                        offsetX={bounds.offsetX}
+                        onAddCounter={onAddCounter}
+                        onAttach={onAttach}
+                      />
+                    ))}
+                </>
+              )}
             </ScaledField>
           </div>
 

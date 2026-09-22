@@ -3,7 +3,8 @@ import path from 'node:path';
 
 import { CARD_SCHEME } from '@shared/cardImages';
 import { relayHost } from '@shared/debug';
-import { app, BrowserWindow, protocol } from 'electron';
+import { MAT_FILE_EXTENSIONS, MAT_SCHEME } from '@shared/mat';
+import { app, BrowserWindow, dialog, nativeImage, protocol } from 'electron';
 
 import CardDataService from './cardData/CardDataService';
 import runIngestProcess from './cardData/runIngestProcess';
@@ -18,8 +19,11 @@ import { registerRequestHandlers, sendEvent } from './ipc';
 import MenuBuilder from './menu';
 import createCardDataHandlers from './modules/card-data/cardDataHandlers';
 import createDebugHandlers from './modules/debug/debugHandlers';
+import createMatHandlers from './modules/mat/matHandlers';
 import createCollectionHandlers from './modules/collection/collectionHandlers';
 import createDeckHandlers from './modules/decks/deckHandlers';
+import MatStore from './mats/MatStore';
+import { createMatImageHandler, matSchemePrivileges } from './mats/matProtocol';
 import type Netplay from './modules/netplay/Netplay';
 import ProfileStore from './modules/netplay/ProfileStore';
 import { relaySettings } from './modules/netplay/relayConfig';
@@ -35,10 +39,14 @@ import {
   deckDbPath,
   getDbDir,
   imageCacheDir,
+  matsDir,
 } from './shared/db/paths';
 import { createWindow, whenLoaded } from './windows';
 
-protocol.registerSchemesAsPrivileged([cardSchemePrivileges]);
+protocol.registerSchemesAsPrivileged([
+  cardSchemePrivileges,
+  matSchemePrivileges,
+]);
 
 let appWindow: BrowserWindow | null = null;
 
@@ -130,6 +138,26 @@ const openSettings = (playTest: PlayTest) => {
   });
 };
 
+// End-to-end tests cannot drive a native file dialog, so under test
+// hooks they name the file the next choice will return instead.
+let testMatFile: string | null = null;
+
+// The player's own picture for their play area. Opened over the app
+// window so it is modal to it on macOS.
+const pickMatFile = async (
+  parent: BrowserWindow | null
+): Promise<string | null> => {
+  const options = {
+    title: 'Choose a play area background',
+    properties: ['openFile' as const],
+    filters: [{ name: 'Images', extensions: MAT_FILE_EXTENSIONS }],
+  };
+  const result = parent
+    ? await dialog.showOpenDialog(parent, options)
+    : await dialog.showOpenDialog(options);
+  return result.canceled ? null : (result.filePaths[0] ?? null);
+};
+
 const start = (onDeepLink: ReturnType<typeof watchDeepLinks>) => {
   mkdirSync(getDbDir(), { recursive: true });
   const appVersion = app.getVersion();
@@ -161,6 +189,7 @@ const start = (onDeepLink: ReturnType<typeof watchDeepLinks>) => {
       sendEvent(window, 'settingsChanged', next);
     });
   });
+  const mats = new MatStore({ dir: matsDir(), encoder: nativeImage });
   const profile = new ProfileStore(settings);
   const playTest = new PlayTest({
     cardDb,
@@ -177,6 +206,7 @@ const start = (onDeepLink: ReturnType<typeof watchDeepLinks>) => {
     getAppWindow: () => appWindow,
     testHooks: testHooksEnabled,
     log,
+    mats,
   });
   netplay = online.netplay;
 
@@ -191,6 +221,8 @@ const start = (onDeepLink: ReturnType<typeof watchDeepLinks>) => {
       });
     },
   });
+
+  protocol.handle(MAT_SCHEME, createMatImageHandler(mats));
 
   protocol.handle(
     CARD_SCHEME,
@@ -214,6 +246,18 @@ const start = (onDeepLink: ReturnType<typeof watchDeepLinks>) => {
       ...online.handlers,
       ...createSettingsHandlers({ settings }),
       ...createDebugHandlers({ log }),
+      ...createMatHandlers({
+        mats,
+        settings,
+        pickFile: async () => {
+          if (testHooksEnabled && testMatFile) {
+            const file = testMatFile;
+            testMatFile = null;
+            return file;
+          }
+          return pickMatFile(appWindow);
+        },
+      }),
     },
     {
       ...online.guards,
@@ -249,6 +293,9 @@ const start = (onDeepLink: ReturnType<typeof watchDeepLinks>) => {
         gameState: () => playTest.gameState,
         profile: () => profile.profile,
         settings: () => settings.settings,
+        chooseMatFile: (file: string) => {
+          testMatFile = file;
+        },
       },
     });
   }

@@ -46,6 +46,7 @@ const opponent: OpponentState = {
       info: { playerId: 'p2', name: 'Bob', appVersion: '0.0.0' },
       seat: null,
       view: { ...view, playerId: 'p2', name: 'Bob', turn: 5 },
+      matId: null,
     },
   ],
   log: [],
@@ -136,6 +137,7 @@ describe('Board opponent row', () => {
       info: { playerId: `p${seat + 2}`, name, appVersion: '0.0.0' },
       seat: seat + 1,
       view: { ...view, playerId: `p${seat + 2}`, name },
+      matId: null,
     })),
   });
 

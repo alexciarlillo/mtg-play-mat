@@ -181,6 +181,7 @@ const fakePeer = (index: number, seed: number, life: number): RemotePeer => {
     // Namespaced the way a received view is, so instance ids can never
     // collide with the local game's.
     view: view && namespaceView(view, playerId),
+    matId: null,
   };
 };
 

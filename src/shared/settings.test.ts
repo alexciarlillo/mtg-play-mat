@@ -27,10 +27,19 @@ describe('parseSettings', () => {
       handInBoard: true,
       handTray: { height: 280, collapsed: false },
       opponentRow: DEFAULT_OPPONENT_ROW_HEIGHT,
+      matImage: '',
       seatLog: true,
       relayUrl: '',
       relayKey: '',
     });
+  });
+
+  it('keeps a mat id and refuses anything that is not one', () => {
+    const id = 'a'.repeat(64);
+    expect(parseSettings({ matImage: id }).matImage).toBe(id);
+    expect(parseSettings({ matImage: '' }).matImage).toBe('');
+    expect(parseSettings({ matImage: '../etc/passwd' }).matImage).toBe('');
+    expect(parseSettings({ matImage: 'A'.repeat(64) }).matImage).toBe('');
   });
 
   it('migrates a file that only has a display name', () => {

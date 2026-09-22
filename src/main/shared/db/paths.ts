@@ -10,3 +10,5 @@ export const deckDbPath = () => path.join(getDbDir(), 'Decks.sqlite');
 
 export const imageCacheDir = () =>
   path.join(app.getPath('userData'), 'image-cache');
+
+export const matsDir = () => path.join(app.getPath('userData'), 'mats');

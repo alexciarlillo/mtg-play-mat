@@ -136,6 +136,25 @@ top/bottom) or "Shuffle into library". Click the graveyard or exile to browse it
 Drag a battlefield card onto a pile to move it there. Hovering a card shows a large
 preview in that window only.
 
+**Play area background:** pick a PNG or JPEG under **Settings → Play area** and it is drawn
+under your battlefield, shaped like a real 24x14 playmat. It is an object on the table
+rather than wallpaper behind the window: it lives in the same logical units as the cards
+(`MAT_WIDTH` x `MAT_HEIGHT` in `layout.ts`), so it scales with them. A card left on a patch
+of art stays on that patch whatever size the window is, and a wide window shows bare table
+beside the mat instead of stretching or re-cropping the picture. Main keeps two copies of
+the image in `mats/` under the user data directory and serves them over a `mat://` scheme
+like card images: a display copy up to 2048px wide, and a smaller one for sending to other
+players. A mat is named by the hash of the bytes that travel.
+
+Everyone at the table sees everyone's mat. It goes out as one `mat` message when a link
+opens and whenever you change it, which is why the share copy is squeezed under 180KB:
+base64'd, that still fits in one 256KB message and one relay frame, so there is no
+chunking and nothing to reassemble. The host keeps each seat's latest mat and passes it on,
+so a player who joins later gets it without anyone resending. Arriving bytes are only kept
+if they hash to the id they came under, so a peer can only ever add the mat it actually
+sent. If someone's picture is more distracting than fun, the photo button on their seat
+hides it on your board alone.
+
 Card manipulation (right-click a permanent unless noted):
 
 - **Counters:** add +1/+1 or -1/-1 (they cancel in pairs), loyalty ± on planeswalkers

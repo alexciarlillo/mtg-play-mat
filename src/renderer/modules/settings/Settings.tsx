@@ -1,3 +1,4 @@
+import { matImageUrl } from '@shared/mat';
 import {
   MAX_DISPLAY_NAME_LENGTH,
   MAX_RELAY_KEY_LENGTH,
@@ -157,6 +158,72 @@ const Relay = ({
   );
 };
 
+// The play area background. It is drawn as a playmat-shaped object
+// under the battlefield, so the preview here has that shape too rather
+// than the picture's own.
+const PlayArea = ({ matImage }: { matImage: string }) => {
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const choose = () => {
+    setBusy(true);
+    setError(null);
+    window.api
+      .chooseMatImage()
+      .then((choice) => setError(choice.error))
+      .catch((err: unknown) => {
+        onSaveFailed(err);
+        setError('That image could not be used. Try another file.');
+      })
+      .finally(() => setBusy(false));
+  };
+
+  const clear = () => {
+    setError(null);
+    window.api.clearMatImage().catch(onSaveFailed);
+  };
+
+  return (
+    <div className="space-y-3">
+      {matImage ? (
+        <div
+          data-testid="mat-preview"
+          data-mat={matImage}
+          className="aspect-[24/14] w-64 rounded-lg bg-cover bg-center ring-1 ring-gray-300"
+          style={{ backgroundImage: `url("${matImageUrl(matImage)}")` }}
+        />
+      ) : (
+        <div
+          data-testid="mat-preview"
+          className="flex aspect-[24/14] w-64 items-center justify-center rounded-lg bg-neutral-400 text-sm text-neutral-700 ring-1 ring-gray-300"
+        >
+          Bare table
+        </div>
+      )}
+      <div className="flex gap-2">
+        <button
+          type="button"
+          className={secondary}
+          disabled={busy}
+          onClick={choose}
+        >
+          {matImage ? 'Choose another image…' : 'Choose an image…'}
+        </button>
+        {matImage && (
+          <button type="button" className={secondary} onClick={clear}>
+            Remove
+          </button>
+        )}
+      </div>
+      {error && (
+        <p role="alert" className="text-sm text-red-700">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+};
+
 const onSaveFailed = (err: unknown) =>
   console.error('[settings] could not save', err);
 
@@ -198,6 +265,17 @@ const Settings = () => {
           one its <code>RELAY_APP_KEYS</code> lists for{' '}
           <code>mtg-play-mat</code>. Leave both blank to play with invite codes
           only, which need no server.
+        </p>
+      </Section>
+
+      <Section title="Play area">
+        <PlayArea matImage={settings.matImage} />
+        <p className="text-sm text-gray-600">
+          A PNG or JPEG under your battlefield, shaped like a real 24x14
+          playmat. It is part of the table rather than wallpaper behind the
+          window: it scales with your cards, so a card left on a patch of art
+          stays there whatever size the window is, and a wide window shows bare
+          table beside it rather than stretching the picture.
         </p>
       </Section>
 

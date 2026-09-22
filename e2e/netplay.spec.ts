@@ -23,6 +23,7 @@ interface TestHooks {
   openSampleCommanderPlayTest(seed?: number): Promise<void>;
   gameState(): GameState;
   profile(): { playerId: string; displayName: string };
+  chooseMatFile(file: string): void;
 }
 
 interface Instance {
@@ -420,6 +421,57 @@ test('the wire never carries the sender’s hidden cards', async () => {
     }
   }
   expect(logLines).toBeGreaterThan(3);
+});
+
+test('a play area background reaches the other board, and can be folded away', async () => {
+  const [hostApp, guestApp, guestBoard] = await Promise.all([
+    page(host, 'app.html'),
+    page(guest, 'app.html'),
+    page(guest, 'board.html'),
+  ]);
+  const theirMat = guestBoard.getByTestId('opponent-play-mat');
+  await expect(theirMat).toHaveCount(0);
+
+  // The host picks a picture; only the host's machine ever sees the file.
+  await hostApp.getByRole('link', { name: 'Settings' }).first().click();
+  await host.app.evaluate(
+    (_electron, file) =>
+      (
+        globalThis as unknown as { testHooks: TestHooks }
+      ).testHooks.chooseMatFile(file),
+    path.resolve('assets/icon.png')
+  );
+  await hostApp.getByRole('button', { name: /Choose an? .*image…/ }).click();
+  const preview = hostApp.getByTestId('mat-preview');
+  await expect(preview).toHaveAttribute('data-mat', /^[0-9a-f]{64}$/, {
+    timeout: 15_000,
+  });
+  const id = await preview.getAttribute('data-mat');
+
+  // The guest's board draws it under the host's cards, by the same name.
+  await expect(theirMat).toHaveAttribute('data-mat', id ?? '', {
+    timeout: 20_000,
+  });
+
+  // Their mat, their board: the guest can fold it away on their side
+  // alone, and it comes back.
+  await guestBoard.getByTestId('opponent-mat-hide').click();
+  await expect(theirMat).toHaveCount(0);
+  await guestBoard.getByTestId('opponent-mat-hide').click();
+  await expect(theirMat).toHaveAttribute('data-mat', id ?? '');
+
+  // Back to a bare table on both sides.
+  await hostApp.getByRole('link', { name: 'Settings' }).first().click();
+  await hostApp.getByRole('button', { name: 'Remove' }).click();
+  await expect(theirMat).toHaveCount(0);
+  // Both pages back where the next test expects to find them: the
+  // Play online page, on the tab these tests connect with.
+  for (const app of [hostApp, guestApp]) {
+    await app.getByRole('link', { name: 'Play online' }).first().click();
+    await expect(app).toHaveURL(/#\/online/);
+    await app.getByRole('tab', { name: 'Invite codes' }).click();
+    await expect(app.getByTestId('panel-p2p')).toBeVisible();
+  }
 });
 
 test('leaving clears the opponent side on both boards', async () => {

@@ -1,4 +1,5 @@
 import type { DebugInput, DebugSnapshot } from '../debug';
+import type { MatChoice } from '../mat';
 import type {
   CardView,
   CommanderMove,
@@ -122,6 +123,10 @@ export const requests = {
   getDebugLog: request<[], DebugSnapshot>(),
   clearDebugLog: request<[], DebugSnapshot>(),
   logDebug: request<[entry: DebugInput]>(),
+  // The play area background: pick a file, or go back to bare table.
+  // The chosen mat is remembered as a setting, so every window hears.
+  chooseMatImage: request<[], MatChoice>(),
+  clearMatImage: request<[]>(),
   getSettings: request<[], Settings>(),
   updateSettings: request<[patch: SettingsPatch], Settings>(),
 };

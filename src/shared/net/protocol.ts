@@ -1,3 +1,4 @@
+import { isMatId, MAT_ID_LENGTH } from '../mat';
 import {
   type CardView,
   type CommanderDamage,
@@ -24,6 +25,10 @@ export const HOST_SEAT = 1;
 export const MAX_DIE_SIDES = 1000;
 
 export const MAX_LOG_TEXT = 300;
+
+// A play area background travels base64'd inside one message: a third
+// bigger than the bytes, which the mat store caps at 180 KB.
+export const MAX_MAT_DATA_CHARS = 250_000;
 
 // A 60-card battlefield is about 20 KB; this leaves room for big boards
 // and stays under the datachannel's own message limit.
@@ -75,7 +80,10 @@ export type NetPayload =
   | ({ kind: 'event' } & TableEvent)
   // One line of the sender's action log, built from public information.
   // Added within v2: older v2 builds drop it as an unknown kind.
-  | { kind: 'log'; text: string };
+  | { kind: 'log'; text: string }
+  // The sender's play area background, named by the hash of the bytes
+  // that follow, or null for the bare table. Added within v2 as well.
+  | { kind: 'mat'; id: string | null; data: string | null };
 
 export type NetMessage = Envelope & NetPayload;
 
@@ -419,6 +427,21 @@ export const parseNetMessage = (raw: unknown): NetMessage => {
         byName: text(fields, 'byName', { max: 64 }),
         roll: rollResult(fields.roll),
       };
+    case 'mat': {
+      if (fields.id === null) {
+        return { ...envelope, kind: 'mat', id: null, data: null };
+      }
+      const id = text(fields, 'id', { max: MAT_ID_LENGTH });
+      if (!isMatId(id)) fail('mat id is not a mat id');
+      return {
+        ...envelope,
+        kind: 'mat',
+        id,
+        // Checked against the id by the mat store, which is the only
+        // thing that makes it safe to keep.
+        data: text(fields, 'data', { max: MAX_MAT_DATA_CHARS }),
+      };
+    }
     case 'log': {
       const line = cleanLogText(text(fields, 'text', { max: MAX_LOG_TEXT }));
       if (line.length === 0) fail('log text is empty');

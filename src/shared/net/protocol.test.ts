@@ -17,6 +17,7 @@ import {
   VersionError,
   MAX_DIE_SIDES,
   MAX_LOG_TEXT,
+  MAX_MAT_DATA_CHARS,
 } from './protocol';
 
 const uuid = (n: number) =>
@@ -381,6 +382,59 @@ const richView = (): PublicView => {
   if (!v) throw new Error('no view');
   return v;
 };
+
+describe('play area backgrounds over the wire', () => {
+  const MAT = 'a'.repeat(64);
+
+  it('carries a mat by the name its bytes hash to', () => {
+    const parsed = parseNetMessage(
+      message({ kind: 'mat', id: MAT, data: 'aGVsbG8=' })
+    );
+    expect(parsed).toMatchObject({ kind: 'mat', id: MAT, data: 'aGVsbG8=' });
+  });
+
+  it('carries a bare table as a mat with no name at all', () => {
+    expect(
+      parseNetMessage(message({ kind: 'mat', id: null, data: null }))
+    ).toMatchObject({ kind: 'mat', id: null, data: null });
+  });
+
+  it('refuses a name that is not one the store could have made', () => {
+    for (const id of ['../../etc/passwd', 'A'.repeat(64), 'abc', '']) {
+      expect(() =>
+        parseNetMessage(message({ kind: 'mat', id, data: 'aa' }))
+      ).toThrow();
+    }
+  });
+
+  it('refuses a mat with no bytes, or more than a message can hold', () => {
+    expect(() =>
+      parseNetMessage(message({ kind: 'mat', id: MAT, data: null }))
+    ).toThrow();
+    expect(() =>
+      parseNetMessage(
+        message({
+          kind: 'mat',
+          id: MAT,
+          data: 'a'.repeat(MAX_MAT_DATA_CHARS + 1),
+        })
+      )
+    ).toThrow();
+  });
+
+  it('leaves room for the envelope inside one message', () => {
+    const raw = encodeNetMessage({
+      v: PROTOCOL_VERSION,
+      seq: 1,
+      from: 'alice',
+      kind: 'mat',
+      id: MAT,
+      data: 'a'.repeat(MAX_MAT_DATA_CHARS),
+    });
+    expect(raw.length).toBeLessThanOrEqual(MAX_MESSAGE_BYTES);
+    expect(parseNetMessage(raw)).toMatchObject({ kind: 'mat', id: MAT });
+  });
+});
 
 describe('card manipulation over the wire', () => {
   it('round-trips counters, faces, face-down, attachments and tokens', () => {

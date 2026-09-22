@@ -12,6 +12,8 @@ export interface RemotePeer {
   // From the roster; null until the host has placed them.
   seat: number | null;
   view: PublicView | null;
+  // Their play area background, once its bytes are on this machine.
+  matId: string | null;
 }
 
 // What the board shows of the other players. seq increases with every
@@ -43,6 +45,7 @@ interface Peer {
   info: PeerInfo;
   lastSeq: number;
   view: PublicView | null;
+  matId: string | null;
 }
 
 export const MAX_LOG = 500;
@@ -81,6 +84,7 @@ export class RemoteViews {
         info: { playerId, name, appVersion },
         lastSeq: message.seq,
         view: known?.view ?? null,
+        matId: known?.matId ?? null,
       });
       return this.changed();
     }
@@ -119,6 +123,16 @@ export class RemoteViews {
     this.seats = new Map(roster.map((entry) => [entry.playerId, entry.seat]));
     this.changed();
     return dropped;
+  };
+
+  // A peer's play area background, once main has its bytes on disk.
+  // Mats arrive on an ordered link and are checked against their own
+  // hash, so they need no sequence of their own.
+  setMat = (playerId: PlayerId, matId: string | null): boolean => {
+    const peer = this.peers.get(playerId);
+    if (!peer || peer.matId === matId) return false;
+    peer.matId = matId;
+    return this.changed();
   };
 
   remove = (playerId: PlayerId): boolean =>
@@ -164,6 +178,7 @@ export class RemoteViews {
         info: peer.info,
         seat: this.seats.get(peer.info.playerId) ?? null,
         view: peer.view,
+        matId: peer.matId,
       }))
       .sort(bySeat),
     log: this.log,

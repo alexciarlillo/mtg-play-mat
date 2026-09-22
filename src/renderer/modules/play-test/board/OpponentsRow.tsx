@@ -60,6 +60,9 @@ const OpponentsRow = ({
   const row = useRef<HTMLDivElement>(null);
   const [resize, setResize] = useState<Resize | null>(null);
   const [hiddenIds, setHiddenIds] = useState<string[]>([]);
+  // Mats folded away here, by player. Player ids last one session, so
+  // this does too.
+  const [matsOff, setMatsOff] = useState<string[]>([]);
   const pod = peers.length > 1;
   const panelWidth = pod ? POD_PANEL_WIDTH : FULL_PANEL_WIDTH;
   const isHidden = (playerId: string) => hiddenIds.includes(playerId);
@@ -83,6 +86,17 @@ const OpponentsRow = ({
   // a player who is no longer at the table.
   const toggleHidden = (playerId: string) => {
     setHiddenIds((ids) =>
+      ids.includes(playerId)
+        ? ids.filter((id) => id !== playerId)
+        : [
+            ...ids.filter((id) => peers.some((p) => p.info.playerId === id)),
+            playerId,
+          ]
+    );
+  };
+
+  const toggleMat = (playerId: string) => {
+    setMatsOff((ids) =>
       ids.includes(playerId)
         ? ids.filter((id) => id !== playerId)
         : [
@@ -164,8 +178,11 @@ const OpponentsRow = ({
             hidden={isHidden(peer.info.playerId)}
             log={log}
             logOpen={logOpen}
+            matId={peer.matId}
+            matHidden={matsOff.includes(peer.info.playerId)}
             onToggleHidden={() => toggleHidden(peer.info.playerId)}
             onToggleLog={() => onLogOpenChange(!logOpen)}
+            onToggleMat={() => toggleMat(peer.info.playerId)}
           />
         </div>
       ))}

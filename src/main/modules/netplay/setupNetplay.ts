@@ -3,6 +3,7 @@ import { relayHost } from '@shared/debug';
 import { app, BrowserWindow, screen } from 'electron';
 
 import type DebugLog from '../../debugLog';
+import type MatStore from '../../mats/MatStore';
 import { type RequestHandlers, type SenderGuards, sendEvent } from '../../ipc';
 import type PlayTest from '../play-test/PlayTest';
 import type SettingsStore from '../settings/SettingsStore';
@@ -89,6 +90,7 @@ export const setupNetplay = ({
   getAppWindow,
   testHooks,
   log,
+  mats,
 }: {
   profile: ProfileStore;
   settings: SettingsStore;
@@ -96,6 +98,7 @@ export const setupNetplay = ({
   getAppWindow(): BrowserWindow | null;
   testHooks: boolean;
   log: DebugLog;
+  mats: MatStore;
 }) => {
   const config: NetConfig = {
     iceServers: iceServers(testHooks),
@@ -125,6 +128,15 @@ export const setupNetplay = ({
       return baseUrl.trim() !== '' && appKey.trim() !== '';
     },
     log,
+    // The share copy is the one the mat's id names, so both ends of the
+    // pod agree on what it is called.
+    localMat: async () => {
+      const id = settings.settings.matImage;
+      if (!id) return null;
+      const bytes = await mats.shareBytes(id);
+      return bytes ? { id, data: bytes.toString('base64') } : null;
+    },
+    receiveMat: (id, data) => mats.receive(id, Buffer.from(data, 'base64')),
     pushOpponent: (state) => {
       growForTable(playTest.boardWindow, state.peers.length);
       sendEvent(playTest.boardWindow, 'opponentView', state);
@@ -142,6 +154,7 @@ export const setupNetplay = ({
   // window changed it.
   settings.onChange((next, previous) => {
     if (next.displayName !== previous.displayName) netplay.resend();
+    if (next.matImage !== previous.matImage) netplay.matChanged();
     if (
       next.relayUrl !== previous.relayUrl ||
       next.relayKey !== previous.relayKey

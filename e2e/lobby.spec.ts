@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -12,12 +12,14 @@ import {
 
 import { loadConfig } from '../server/config';
 import { createRelayServer, type RelayServer } from '../server/server';
+import { writeTestPng } from './makePng';
 
 // Two app instances joined by a lobby code, through a real relay server
 // running in this process. No WebRTC is involved at all.
 
 interface TestHooks {
   openSamplePlayTest(seed?: number): Promise<void>;
+  chooseMatFile(file: string): void;
 }
 
 interface Instance {
@@ -189,6 +191,44 @@ test('each board shows the other side through the relay', async () => {
   await expect(
     guestBoard.getByTestId('opponent-battlefield').getByTestId('card')
   ).toHaveCount(1);
+});
+
+test('a play area background fits through the relay', async () => {
+  const hostApp = await page(host, 'app.html');
+  const guestBoard = await page(guest, 'board.html');
+  // Big enough that the mat message is most of what a relay frame can
+  // hold: the point of the test is that it still gets through.
+  const picture = path.join(host.userDataDir, 'mat.png');
+  writeTestPng(picture, 2400, 1400);
+
+  await hostApp.getByRole('link', { name: 'Settings' }).first().click();
+  await host.app.evaluate(
+    (_electron, file) =>
+      (
+        globalThis as unknown as { testHooks: TestHooks }
+      ).testHooks.chooseMatFile(file),
+    picture
+  );
+  await hostApp.getByRole('button', { name: /Choose an? .*image…/ }).click();
+
+  const preview = hostApp.getByTestId('mat-preview');
+  await expect(preview).toHaveAttribute('data-mat', /^[0-9a-f]{64}$/, {
+    timeout: 20_000,
+  });
+  const id = await preview.getAttribute('data-mat');
+  await expect(guestBoard.getByTestId('opponent-play-mat')).toHaveAttribute(
+    'data-mat',
+    id ?? '',
+    { timeout: 20_000 }
+  );
+  // The share copy is what its name is the hash of, and it is the one
+  // that had to fit.
+  const shared = path.join(host.userDataDir, 'mats', `${id ?? ''}.jpg`);
+  expect(statSync(shared).size).toBeLessThanOrEqual(180 * 1024);
+  expect(statSync(shared).size).toBeGreaterThan(50 * 1024);
+
+  await hostApp.getByRole('link', { name: 'Play online' }).first().click();
+  await expect(hostApp).toHaveURL(/#\/online/);
 });
 
 test('a guest told the wrong code is told why', async () => {

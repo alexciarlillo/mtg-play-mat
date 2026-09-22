@@ -39,6 +39,7 @@ const podOf = (names: string[]): RemotePeer[] =>
     info: { playerId: `p${seat + 2}`, name, appVersion: '0.0.0' },
     seat: seat + 1,
     view: { ...view, playerId: `p${seat + 2}`, name },
+    matId: null,
   }));
 
 const renderRow = (

@@ -1,3 +1,5 @@
+import { isMatId } from './mat';
+
 // App-wide preferences, persisted by main and pushed to every window.
 // Each field pairs its default with a parser, so a new setting is one
 // entry here; a bad or missing value falls back to the default.
@@ -126,6 +128,11 @@ const opponentRowHeight: Parse<number> = (input) =>
       )
     : undefined;
 
+// A mat is named by the hash of its bytes; anything else never came
+// from the store.
+const matId: Parse<string> = (input) =>
+  input === '' || isMatId(input) ? (input as string) : undefined;
+
 const fields = {
   displayName: field(DEFAULT_DISPLAY_NAME, displayName),
   // Turn and phase tracking clutters the board, so it is opt-in.
@@ -144,6 +151,9 @@ const fields = {
     trayPlacement
   ),
   opponentRow: field(DEFAULT_OPPONENT_ROW_HEIGHT, opponentRowHeight),
+  // The player's own play area background, by the id the mat store
+  // names it with; blank for the bare table.
+  matImage: field('', matId),
   // Each opponent's own log, under their seat. One preference for every
   // seat, so folding it away is a single click in a pod.
   seatLog: field(true, boolean),

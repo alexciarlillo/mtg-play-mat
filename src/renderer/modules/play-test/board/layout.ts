@@ -9,6 +9,13 @@ export const FULL_PANEL_WIDTH = 320;
 // so positions mean the same thing on every screen and to every peer.
 export const FIELD_HEIGHT = 640;
 
+// The play area background, in the same logical units as the cards: the
+// shape of a real 24x14 inch playmat, anchored at the field's origin. It
+// scales with the cards, so a card dropped on a patch of art stays on
+// that patch at every window size and on every screen in the pod.
+export const MAT_HEIGHT = FIELD_HEIGHT;
+export const MAT_WIDTH = Math.round((FIELD_HEIGHT * 24) / 14);
+
 // The narrower opponent panel used in a pod of three or four.
 export const POD_PANEL_WIDTH = 184;
 

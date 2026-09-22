@@ -182,6 +182,57 @@ describe('OpponentSide', () => {
     expect(onToggleLog).toHaveBeenCalled();
   });
 
+  it("draws a peer's background under their cards, and folds it away", () => {
+    const id = 'a'.repeat(64);
+    const onToggleMat = vi.fn();
+    Object.assign(window, {
+      api: { dispatch: vi.fn(() => Promise.resolve()) },
+    });
+    const side = (matHidden: boolean) => (
+      <ContextMenuProvider>
+        <OpponentSide
+          peer={peer}
+          view={view}
+          seat={0}
+          matId={id}
+          matHidden={matHidden}
+          onToggleMat={onToggleMat}
+        />
+      </ContextMenuProvider>
+    );
+    const { rerender } = render(side(false));
+
+    const drawn = screen.getByTestId('opponent-play-mat');
+    expect(drawn).toHaveAttribute('data-mat', id);
+    // Behind the cards, in the same field as them.
+    const field = screen.getByTestId('opponent-battlefield');
+    expect(field).toContainElement(drawn);
+    expect(field.querySelector('[data-testid="opponent-play-mat"]')).toBe(
+      field.querySelector('[data-testid]')
+    );
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: `Hide ${peer.name}'s play area background`,
+      })
+    );
+    expect(onToggleMat).toHaveBeenCalled();
+
+    rerender(side(true));
+    expect(screen.queryByTestId('opponent-play-mat')).toBeNull();
+    expect(
+      screen.getByRole('button', {
+        name: `Show ${peer.name}'s play area background`,
+      })
+    ).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('offers nothing to fold away for a player with no background', () => {
+    renderSide(true);
+    expect(screen.queryByTestId('opponent-mat-hide')).toBeNull();
+    expect(screen.queryByTestId('opponent-play-mat')).toBeNull();
+  });
+
   it('keeps the whole name in a pod', () => {
     renderSide(true);
     const name = screen.getByTestId('opponent-name');

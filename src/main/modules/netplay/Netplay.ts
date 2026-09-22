@@ -78,6 +78,13 @@ export interface NetplayDeps {
   // Whether a relay server and key are configured.
   relayReady?(): boolean;
   pushOpponent(state: OpponentState): void;
+  // The local player's play area background, ready to send: the id its
+  // bytes hash to, and those bytes base64'd. Null for a bare table.
+  localMat?(): Promise<{ id: string; data: string } | null>;
+  // Keeps a peer's mat, and says whether it was worth keeping. The
+  // bytes are only ever trusted once they hash to the id they came
+  // under, which is the store's job.
+  receiveMat?(id: string, data: string): Promise<boolean>;
   // Where the networked paths narrate themselves, for the debug log.
   log?: DebugSink;
   // How long the host waits for a channel after pasting a reply.
@@ -111,10 +118,11 @@ interface Seat {
   open: boolean;
   // Bound by the first hello; every later message must be from them.
   playerId: PlayerId | null;
-  // Their latest hello and public view, verbatim, for players who join
-  // later.
+  // Their latest hello, public view and mat, verbatim, for players who
+  // join later.
   hello: string | null;
   public: string | null;
+  mat: string | null;
   error: string | null;
   timer: ReturnType<typeof setTimeout> | null;
 }
@@ -139,6 +147,7 @@ const emptySeat = (seat: number): Seat => ({
   playerId: null,
   hello: null,
   public: null,
+  mat: null,
   error: null,
   timer: null,
 });
@@ -189,6 +198,11 @@ export default class Netplay {
   // Bumped on every new session, so late async work from an old one is
   // ignored.
   private session = 0;
+
+  // Whether this session has told anyone about a background. A player
+  // with a bare table says nothing at all; only one who had a mat needs
+  // to announce that it is gone.
+  private matAnnounced = false;
 
   // Which transport this session runs on; also what NetState reports.
   private mode: NetMode = 'p2p';
@@ -493,8 +507,38 @@ export default class Netplay {
     this.log.info('resending state');
     this.send({ kind: 'hello', ...this.helloInfo() });
     this.send({ kind: 'public', view: this.deps.localView() });
+    void this.sendMat();
     // The roster carries the host's name too.
     if (this.state.role === 'host') this.sendRoster();
+  };
+
+  // The player picked another background (or none): the pod sees it
+  // without waiting for anyone to reconnect.
+  matChanged = () => {
+    void this.sendMat();
+  };
+
+  // The local mat, to everyone or to one seat that has just opened.
+  // Reading it is async, so a session that ended meanwhile drops it.
+  private sendMat = async (to?: number[]) => {
+    if (!this.deps.localMat) return;
+    const session = this.session;
+    let mat: { id: string; data: string } | null;
+    try {
+      mat = await this.deps.localMat();
+    } catch (err) {
+      this.log.warn('could not read the play area background', {
+        why: describeError(err),
+      });
+      return;
+    }
+    if (session !== this.session) return;
+    if (!mat && !this.matAnnounced) return;
+    this.matAnnounced = mat !== null;
+    this.send(
+      { kind: 'mat', id: mat?.id ?? null, data: mat?.data ?? null },
+      to
+    );
   };
 
   // Dice and coins are rolled by the host, so nobody rolls their own.
@@ -577,6 +621,7 @@ export default class Netplay {
         this.updateSeat(seat, { phase: 'connected', error: null });
         this.send({ kind: 'hello', ...this.helloInfo() }, [seat.seat]);
         this.send({ kind: 'public', view: this.deps.localView() }, [seat.seat]);
+        void this.sendMat([seat.seat]);
         return;
       case 'message':
         if (seat.open) this.receiveFromSeat(seat, report.data);
@@ -724,7 +769,7 @@ export default class Netplay {
         // A newcomer learns about everyone already here.
         if (first) {
           const others = this.otherSeats(seat);
-          const backlog = others.flatMap((s) => [s.hello, s.public]);
+          const backlog = others.flatMap((s) => [s.hello, s.public, s.mat]);
           backlog.forEach((data) => data && this.sendRaw(data, [seat.seat]));
         }
         this.relay(raw, seat);
@@ -736,6 +781,13 @@ export default class Netplay {
         seat.public = raw;
         this.relay(raw, seat);
         this.pushOpponent();
+        return;
+      case 'mat':
+        // Kept verbatim like a hello, so a player who joins later gets
+        // the mat without anyone having to send it again.
+        seat.mat = message.id === null ? null : raw;
+        this.relay(raw, seat);
+        void this.applyMat(message.from, message.id, message.data);
         return;
       case 'log':
         if (!this.remote.receive(message)) return;
@@ -794,6 +846,9 @@ export default class Netplay {
       case 'log':
         if (this.remote.receive(message)) this.pushOpponent();
         return;
+      case 'mat':
+        void this.applyMat(message.from, message.id, message.data);
+        return;
       case 'hello':
       case 'public':
       case 'bye': {
@@ -816,6 +871,37 @@ export default class Netplay {
       default:
         return;
     }
+  };
+
+  // A peer's background: the bytes are written before the board is told
+  // about them, so it never points at a mat that is not there yet.
+  private applyMat = async (
+    from: PlayerId,
+    id: string | null,
+    data: string | null
+  ) => {
+    const session = this.session;
+    if (id !== null) {
+      if (!this.deps.receiveMat || data === null) return;
+      let kept: boolean;
+      try {
+        kept = await this.deps.receiveMat(id, data);
+      } catch (err) {
+        this.log.warn('could not keep a play area background', {
+          why: describeError(err),
+        });
+        return;
+      }
+      if (!kept) {
+        this.log.warn('refused a play area background', { from });
+        return;
+      }
+    }
+    if (session !== this.session) return;
+    this.log.info(id ? 'a player changed their mat' : 'a player cleared it', {
+      from,
+    });
+    if (this.remote.setMat(from, id)) this.pushOpponent();
   };
 
   private rollFor = (by: PlayerId, byName: string, request: RollRequest) => {
@@ -1031,6 +1117,7 @@ export default class Netplay {
     this.hostId = null;
     this.seq = 0;
     this.eventId = 0;
+    this.matAnnounced = false;
     this.notice = null;
     this.clearConnectTimer();
     this.seats.forEach((seat) => this.clearSeatTimer(seat));

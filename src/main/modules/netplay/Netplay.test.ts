@@ -80,6 +80,9 @@ const setup = (me = 'alice') => {
     retire: vi.fn(),
   };
   const logged: string[] = [];
+  const keptMats: { id: string; data: string }[] = [];
+  let localMat: { id: string; data: string } | null = null;
+  let keepMats = true;
   let local: PublicView | null = view(me);
   let format: DeckFormat = 'constructed';
   const rolls: number[] = [];
@@ -93,6 +96,11 @@ const setup = (me = 'alice') => {
     pushState: (s) => states.push(s),
     pushOpponent: (s) => opponents.push(s),
     log: { record: (level, _scope, text) => logged.push(`${level} ${text}`) },
+    localMat: () => Promise.resolve(localMat),
+    receiveMat: (id, data) => {
+      keptMats.push({ id, data });
+      return Promise.resolve(keepMats);
+    },
     connectTimeoutMs: 50,
     randomInt: (max) => {
       rolls.push(max);
@@ -114,6 +122,7 @@ const setup = (me = 'alice') => {
     sentTo,
     opponents,
     logged,
+    keptMats,
     rolls,
     opponent: () => opponents.at(-1),
     state: () => netplay.netState,
@@ -122,6 +131,12 @@ const setup = (me = 'alice') => {
     },
     setFormat: (f: DeckFormat) => {
       format = f;
+    },
+    setMat: (next: { id: string; data: string } | null) => {
+      localMat = next;
+    },
+    refuseMats: () => {
+      keepMats = false;
     },
   };
 };
@@ -1178,5 +1193,104 @@ describe('Netplay relay mode', () => {
       lobbyCode: null,
       phase: 'idle',
     });
+  });
+});
+
+describe('Netplay play area backgrounds', () => {
+  const MAT = 'a'.repeat(64);
+  const OTHER = 'b'.repeat(64);
+  const mat = (id: string, data = 'aGVsbG8=') => ({ id, data });
+
+  const matsTo = (t: Harness, seat: number) =>
+    t.sentTo(seat).filter((m) => m.kind === 'mat');
+
+  it('says nothing at all when the player has no background', async () => {
+    const t = await hostWith({ 2: 'bob' });
+    await flush();
+    expect(matsTo(t, 2)).toHaveLength(0);
+  });
+
+  it('sends its own to a seat as that seat opens', async () => {
+    const t = setup();
+    t.setMat(mat(MAT));
+    await t.netplay.host();
+    t.netplay.handleReport({ type: 'invite', seat: 2, code: 'MPM1:i2' });
+    t.netplay.handleReport({ type: 'open', seat: 2 });
+    await flush();
+    expect(matsTo(t, 2)).toMatchObject([
+      { kind: 'mat', id: MAT, data: 'aGVsbG8=' },
+    ]);
+  });
+
+  it('tells the pod when the player picks another, and when they drop it', async () => {
+    const t = await hostWith({ 2: 'bob', 3: 'carol' });
+    t.setMat(mat(MAT));
+    t.netplay.matChanged();
+    await flush();
+    expect(matsTo(t, 2)).toMatchObject([{ id: MAT }]);
+    expect(matsTo(t, 3)).toMatchObject([{ id: MAT }]);
+
+    t.setMat(null);
+    t.netplay.matChanged();
+    await flush();
+    expect(matsTo(t, 2)).toMatchObject([{ id: MAT }, { id: null, data: null }]);
+
+    // Back to a bare table, so there is nothing left to announce.
+    t.netplay.matChanged();
+    await flush();
+    expect(matsTo(t, 2)).toHaveLength(2);
+  });
+
+  it('keeps a guest mat only once its bytes are kept, and shows it', async () => {
+    const t = await hostWith({ 2: 'bob' });
+    say(t, 2, raw('bob', 50, { kind: 'mat', id: MAT, data: 'aGVsbG8=' }));
+    await flush();
+    expect(t.keptMats).toEqual([{ id: MAT, data: 'aGVsbG8=' }]);
+    expect(t.opponent()?.peers[0]).toMatchObject({ matId: MAT });
+
+    say(t, 2, raw('bob', 51, { kind: 'mat', id: null, data: null }));
+    await flush();
+    expect(t.opponent()?.peers[0]).toMatchObject({ matId: null });
+  });
+
+  it('shows nothing when the bytes do not match the name they came under', async () => {
+    const t = await hostWith({ 2: 'bob' });
+    t.refuseMats();
+    say(t, 2, raw('bob', 50, { kind: 'mat', id: MAT, data: 'bm9wZQ==' }));
+    await flush();
+    expect(t.keptMats).toHaveLength(1);
+    expect(t.opponent()?.peers[0]).toMatchObject({ matId: null });
+    expect(t.logged).toContain('warn refused a play area background from=bob');
+  });
+
+  it('passes a guest mat on, and keeps it for whoever joins later', async () => {
+    const t = await hostWith({ 2: 'bob' });
+    const bobMat = raw('bob', 50, { kind: 'mat', id: MAT, data: 'aGVsbG8=' });
+    say(t, 2, bobMat);
+    await flush();
+
+    // Carol arrives afterwards and is told about it without Bob resending.
+    await t.netplay.invite(3);
+    t.netplay.handleReport({ type: 'invite', seat: 3, code: 'MPM1:i3' });
+    t.netplay.handleReport({ type: 'open', seat: 3 });
+    say(t, 3, hello('carol'));
+    await flush();
+    expect(matsTo(t, 3)).toMatchObject([{ id: MAT, data: 'aGVsbG8=' }]);
+
+    // And a live one is relayed as it arrives, unaltered.
+    const again = raw('bob', 51, { kind: 'mat', id: OTHER, data: 'aGVsbG8=' });
+    say(t, 2, again);
+    await flush();
+    expect(
+      t.sends().filter((c) => c.data === again && c.seats.includes(3))
+    ).toHaveLength(1);
+  });
+
+  it('takes the host mat as a guest', async () => {
+    const t = await guestIn();
+    say(t, 1, raw('alice', 50, { kind: 'mat', id: MAT, data: 'aGVsbG8=' }));
+    await flush();
+    expect(t.keptMats).toEqual([{ id: MAT, data: 'aGVsbG8=' }]);
+    expect(t.opponent()?.peers[0]).toMatchObject({ matId: MAT });
   });
 });
