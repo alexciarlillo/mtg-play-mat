@@ -165,7 +165,9 @@ test('a card dragged from the tray lands where it is dropped', async () => {
   const id = await card.getAttribute('data-instance-id');
   const field = await board.getByTestId('battlefield').boundingBox();
   if (!field) throw new Error('no battlefield');
-  const drop = { x: field.x + field.width / 2, y: field.y + 150 };
+  // Far enough from every edge that the card is not held inside the
+  // field, whatever size the field draws cards at.
+  const drop = { x: field.x + field.width / 2, y: field.y + field.height / 2 };
 
   await dragTo(card, drop);
   const placed = board

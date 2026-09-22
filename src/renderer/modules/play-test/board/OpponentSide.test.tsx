@@ -210,6 +210,13 @@ describe('OpponentSide', () => {
     expect(field.querySelector('[data-testid="opponent-play-mat"]')).toBe(
       field.querySelector('[data-testid]')
     );
+    // The rest of the field gets the same art as a backdrop, outside the
+    // scaled field so it fills the whole space.
+    const backdrop = screen.getByTestId('opponent-play-mat-backdrop');
+    expect(field).not.toContainElement(backdrop);
+    expect(backdrop.firstElementChild).toHaveStyle({
+      backgroundImage: `url("mat://${id}")`,
+    });
 
     fireEvent.click(
       screen.getByRole('button', {
@@ -220,6 +227,7 @@ describe('OpponentSide', () => {
 
     rerender(side(true));
     expect(screen.queryByTestId('opponent-play-mat')).toBeNull();
+    expect(screen.queryByTestId('opponent-play-mat-backdrop')).toBeNull();
     expect(
       screen.getByRole('button', {
         name: `Show ${peer.name}'s play area background`,

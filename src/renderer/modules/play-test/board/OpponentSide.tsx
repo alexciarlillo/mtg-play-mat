@@ -26,7 +26,7 @@ import {
 import LibraryActivityBadge from './LibraryActivityBadge';
 import { lifeFlashClass } from './lifeFlash';
 import { phaseLabels } from './phases';
-import PlayMat from './PlayMat';
+import PlayMat, { MatBackdrop } from './PlayMat';
 import { ownerLabel, type OwnerLabels } from './pod';
 import PlayerCounters from './PlayerCounters';
 import RevealPanel from './RevealPanel';
@@ -352,6 +352,12 @@ const OpponentSide = ({
               testId="opponent-battlefield"
               fitWidth={bounds.width}
               offsetX={bounds.offsetX}
+              backdrop={
+                <MatBackdrop
+                  id={matHidden ? null : matId}
+                  testId="opponent-play-mat-backdrop"
+                />
+              }
             >
               {() => (
                 <>

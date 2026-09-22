@@ -78,7 +78,7 @@ describe('fieldDropPosition under a scaled field', () => {
   const pointer = { x: 520, y: 400 };
 
   it('holds the grab point under the pointer at every scale', () => {
-    for (const scale of [1, 0.75, 0.5, 0.31]) {
+    for (const scale of [1.5, 1, 0.75, 0.5, 0.31]) {
       const drop = fieldDropPosition({
         ...scaled(scale),
         pointer,

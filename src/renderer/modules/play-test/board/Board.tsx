@@ -44,7 +44,7 @@ import Library from './Library';
 import { fieldBounds, FULL_PANEL_WIDTH, stackOrder } from './layout';
 import LifeCounter from './LifeCounter';
 import OpponentsRow from './OpponentsRow';
-import PlayMat from './PlayMat';
+import PlayMat, { MatBackdrop } from './PlayMat';
 import {
   controlTargets,
   opponentCommanders,
@@ -295,6 +295,7 @@ const Board = ({ store, opponent, hand }: Props) => {
                 testId="battlefield"
                 fitWidth={bounds.width}
                 offsetX={bounds.offsetX}
+                backdrop={<MatBackdrop id={settings.matImage} />}
               >
                 {(scale) => (
                   <>

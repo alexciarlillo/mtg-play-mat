@@ -148,6 +148,13 @@ test('it keeps its shape and its place among the cards at any size', async () =>
   const wide = await geometry();
   await board.setViewportSize({ width: 1000, height: 620 });
   const small = await geometry();
+  // A big window grows the cards and the mat together.
+  await board.setViewportSize({ width: 2400, height: 1500 });
+  const big = await geometry();
+  expect(big.aspect).toBeCloseTo(24 / 14, 2);
+  expect(big.perCard).toBeCloseTo(wide.perCard, 1);
+  expect(big.onMat.x).toBeCloseTo(wide.onMat.x, 2);
+  expect(big.onMat.y).toBeCloseTo(wide.onMat.y, 2);
 
   // A 24x14 playmat, whatever the window does.
   expect(wide.aspect).toBeCloseTo(24 / 14, 2);
@@ -159,10 +166,33 @@ test('it keeps its shape and its place among the cards at any size', async () =>
   expect(small.onMat.y).toBeCloseTo(wide.onMat.y, 2);
 });
 
+test('a big window fills with the mat instead of bare table', async () => {
+  await board.setViewportSize({ width: 2400, height: 1500 });
+  await settled();
+  const field = board.getByTestId('battlefield');
+  const scale = Number(await field.getAttribute('data-scale'));
+  expect(scale).toBeGreaterThan(1);
+
+  // The mat grows with the field, to its full height or the limit on how
+  // far cards grow, whichever comes first.
+  const space = await field.locator('..').boundingBox();
+  const matBox = await mat().boundingBox();
+  if (!space || !matBox) throw new Error('nothing to measure');
+  expect(matBox.height).toBeCloseTo(Math.min(space.height, 640 * scale), 0);
+
+  // The rest of the field is the same art, as a backdrop behind it all.
+  const backdrop = board.getByTestId('play-mat-backdrop');
+  const behind = await backdrop.boundingBox();
+  if (!behind) throw new Error('no backdrop');
+  expect(behind).toEqual(space);
+  await board.setViewportSize({ width: 1500, height: 900 });
+});
+
 test('removing it puts the bare table back', async () => {
   await appPage.getByRole('button', { name: 'Remove' }).click();
   await expect(appPage.getByTestId('mat-preview')).toHaveText('Bare table');
   await expect(mat()).toHaveCount(0);
+  await expect(board.getByTestId('play-mat-backdrop')).toHaveCount(0);
 });
 
 test('a card back goes on the library and on face-down cards', async () => {

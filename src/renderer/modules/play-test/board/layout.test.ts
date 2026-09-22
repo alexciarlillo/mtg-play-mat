@@ -1,6 +1,22 @@
 import { describe, expect, it } from 'vitest';
 
-import { fieldBounds, stackOrder } from './layout';
+import {
+  FIELD_HEIGHT,
+  fieldBounds,
+  fieldScale,
+  MAX_FIELD_SCALE,
+  stackOrder,
+} from './layout';
+
+describe('fieldScale', () => {
+  it('fits a short field, and grows a tall one up to a limit', () => {
+    expect(fieldScale(FIELD_HEIGHT / 2)).toBe(0.5);
+    expect(fieldScale(FIELD_HEIGHT)).toBe(1);
+    expect(fieldScale(FIELD_HEIGHT * 1.25)).toBe(1.25);
+    expect(fieldScale(FIELD_HEIGHT * 3)).toBe(MAX_FIELD_SCALE);
+    expect(fieldScale(0)).toBe(1);
+  });
+});
 
 const card = (instanceId: string, attachedTo: string | null = null) => ({
   instanceId,

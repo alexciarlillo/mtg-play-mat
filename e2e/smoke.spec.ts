@@ -303,7 +303,15 @@ test('board and hand state survive window reloads', async () => {
   await board.mouse.move(grab.x + 120, grab.y + 60, { steps: 10 });
   await board.mouse.move(grab.x + 240, grab.y + 90, { steps: 10 });
   await board.mouse.up();
-  await expect(wrapper).toHaveAttribute('style', /translate\(240px, ?90px\)/);
+  // The drag is in screen px; the card keeps it in field units, which a
+  // tall field draws larger.
+  const scale = Number(
+    await board.getByTestId('battlefield').getAttribute('data-scale')
+  );
+  const moved = new RegExp(
+    `translate\\(${Math.round(240 / scale)}px, ?${Math.round(90 / scale)}px\\)`
+  );
+  await expect(wrapper).toHaveAttribute('style', moved);
   await card.click();
   await expect(card).toHaveClass(/rotate-90/);
 
@@ -320,7 +328,7 @@ test('board and hand state survive window reloads', async () => {
   await expect(battlefield(board)).toHaveCount(1);
   await expect(card).toHaveAttribute('data-instance-id', id ?? '');
   await expect(card).toHaveClass(/rotate-90/);
-  await expect(wrapper).toHaveAttribute('style', /translate\(240px, ?90px\)/);
+  await expect(wrapper).toHaveAttribute('style', moved);
 
   await hand.reload();
   await expect(handCards(hand)).toHaveCount(9);

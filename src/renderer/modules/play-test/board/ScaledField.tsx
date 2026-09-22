@@ -8,18 +8,21 @@ interface Box {
 }
 
 // Fills its parent and lays children out in logical battlefield units,
-// scaled down to fit when the space is shorter than a full field, or
-// narrower than fitWidth logical units. offsetX shifts the contents
-// right, for fields whose leftmost card overhangs its own position.
+// scaled to the space's height, and down to fit when it is narrower than
+// fitWidth logical units. offsetX shifts the contents right, for fields
+// whose leftmost card overhangs its own position. backdrop fills the
+// whole space, unscaled, behind everything.
 const ScaledField = ({
   testId,
   fitWidth,
   offsetX = 0,
+  backdrop,
   children,
 }: {
   testId: string;
   fitWidth?: number;
   offsetX?: number;
+  backdrop?: ReactNode;
   children(scale: number): ReactNode;
 }) => {
   const outer = useRef<HTMLDivElement>(null);
@@ -39,12 +42,13 @@ const ScaledField = ({
   const scale = box
     ? Math.min(
         fieldScale(box.height),
-        fitWidth && box.width > 0 ? box.width / fitWidth : 1
+        fitWidth && box.width > 0 ? box.width / fitWidth : Infinity
       )
     : 1;
 
   return (
     <div ref={outer} className="relative h-full w-full">
+      {backdrop}
       <div
         data-testid={testId}
         data-scale={scale}

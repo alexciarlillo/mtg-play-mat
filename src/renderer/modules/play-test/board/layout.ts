@@ -5,9 +5,13 @@ import type { Position } from '@shared/game';
 export const FULL_PANEL_WIDTH = 320;
 
 // The battlefield's logical height. Card positions are in these units, and
-// a shorter field (e.g. half a board shared with an opponent) scales down,
-// so positions mean the same thing on every screen and to every peer.
+// a field of another height scales to it, so positions mean the same thing
+// on every screen and to every peer.
 export const FIELD_HEIGHT = 640;
+
+// How far a tall field grows its cards and mat, so a big window is used
+// rather than left as bare table, without cards getting silly.
+export const MAX_FIELD_SCALE = 1.5;
 
 // The play area background, in the same logical units as the cards: the
 // shape of a real 24x14 inch playmat, anchored at the field's origin. It
@@ -54,7 +58,7 @@ export const fieldBounds = (
 };
 
 export const fieldScale = (height: number) =>
-  height > 0 ? Math.min(1, height / FIELD_HEIGHT) : 1;
+  height > 0 ? Math.min(MAX_FIELD_SCALE, height / FIELD_HEIGHT) : 1;
 
 // Draw order for a battlefield: attachments just before their host, the
 // newest (which peeks out furthest) at the back. Orphans keep their place,
