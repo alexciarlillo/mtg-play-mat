@@ -144,6 +144,9 @@ const fields = {
     trayPlacement
   ),
   opponentRow: field(DEFAULT_OPPONENT_ROW_HEIGHT, opponentRowHeight),
+  // Each opponent's own log, under their seat. One preference for every
+  // seat, so folding it away is a single click in a pod.
+  seatLog: field(true, boolean),
   // The relay server that hands out lobby codes, and the key this copy
   // of the app presents to it. Both blank by default: you point the app
   // at your own relay.

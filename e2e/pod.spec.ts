@@ -321,6 +321,41 @@ test('a guest’s dice roll shows up on all four boards', async () => {
   }
 });
 
+test('each seat keeps its own log under its command zone', async () => {
+  const boards = await Promise.all(players.map((p) => page(p, 'board.html')));
+  // Alice reads Carol's seat: only Carol's own lines, newest first.
+  const carol = opponentSide(boards[ALICE], 'Carol');
+  const lines = carol.getByTestId('seat-log-entry');
+  await expect(lines.first()).toHaveText(/rolled a d20: \d+$/);
+  await expect(carol.getByTestId('seat-log')).toHaveAttribute(
+    'data-open',
+    'true'
+  );
+
+  // Bob's seat on the same board never picks up Carol's roll.
+  const bob = opponentSide(boards[ALICE], 'Bob');
+  await expect(
+    bob.getByTestId('seat-log-entry').filter({ hasText: 'd20' })
+  ).toHaveCount(0);
+
+  // Folding one away folds every seat, and it stays folded.
+  await carol.getByTestId('seat-log-toggle').click();
+  for (const name of ['Bob', 'Carol', 'Dave']) {
+    const side = opponentSide(boards[ALICE], name);
+    await expect(side.getByTestId('seat-log-list')).toHaveCount(0);
+  }
+  await boards[ALICE].reload();
+  await expect(
+    opponentSide(boards[ALICE], 'Carol').getByTestId('seat-log-list')
+  ).toHaveCount(0);
+  await opponentSide(boards[ALICE], 'Carol')
+    .getByTestId('seat-log-toggle')
+    .click();
+  await expect(
+    opponentSide(boards[ALICE], 'Carol').getByTestId('seat-log-list')
+  ).toBeVisible();
+});
+
 test('a guest searching their library shows on all four boards', async () => {
   const boards = await Promise.all(players.map((p) => page(p, 'board.html')));
   const hand = await page(players[CAROL], 'hand.html');

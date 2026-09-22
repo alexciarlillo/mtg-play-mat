@@ -1,6 +1,7 @@
 import type { CardView, PublicView } from '@shared/game';
 import type { PeerInfo } from '@shared/net/protocol';
-import { act, render, screen, within } from '@testing-library/react';
+import type { TableEntry } from '@shared/net/remoteViews';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ContextMenuProvider } from '../../../ui/ContextMenuProvider';
@@ -131,6 +132,54 @@ describe('OpponentSide', () => {
     rerender(side({ ...hit, life: hit.life + 3 }));
     expect(life()).toHaveAttribute('data-flash', 'up');
     vi.useRealTimers();
+  });
+
+  it('puts the seat log under the command zone, fed by that player alone', () => {
+    const log: TableEntry[] = [
+      {
+        kind: 'action',
+        id: 1,
+        at: Date.now(),
+        playerId: 'p2',
+        playerName: peer.name,
+        text: 'played Grizzly Bears',
+      },
+      {
+        kind: 'action',
+        id: 2,
+        at: Date.now(),
+        playerId: 'p3',
+        playerName: 'Someone else',
+        text: 'drew a card',
+      },
+    ];
+    const onToggleLog = vi.fn();
+    Object.assign(window, {
+      api: { dispatch: vi.fn(() => Promise.resolve()) },
+    });
+    render(
+      <ContextMenuProvider>
+        <OpponentSide
+          peer={peer}
+          view={{ ...view, zones: { ...view.zones, command: [commander] } }}
+          seat={0}
+          log={log}
+          logOpen
+          onToggleLog={onToggleLog}
+        />
+      </ContextMenuProvider>
+    );
+
+    const entries = screen.getAllByTestId('seat-log-entry');
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toHaveTextContent('played Grizzly Bears');
+    // Last in the panel, after the command zone it belongs under.
+    const panel = screen.getByTestId('seat-log').parentElement;
+    expect(panel?.lastElementChild).toBe(screen.getByTestId('seat-log'));
+    expect(panel).toContainElement(screen.getByTestId('opponent-command'));
+
+    fireEvent.click(screen.getByTestId('seat-log-toggle'));
+    expect(onToggleLog).toHaveBeenCalled();
   });
 
   it('keeps the whole name in a pod', () => {

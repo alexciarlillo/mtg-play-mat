@@ -27,6 +27,7 @@ describe('parseSettings', () => {
       handInBoard: true,
       handTray: { height: 280, collapsed: false },
       opponentRow: DEFAULT_OPPONENT_ROW_HEIGHT,
+      seatLog: true,
       relayUrl: '',
       relayKey: '',
     });

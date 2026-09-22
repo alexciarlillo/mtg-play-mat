@@ -1,6 +1,7 @@
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/20/solid';
 import type { CardView, LibraryActivity, PublicView } from '@shared/game';
 import type { PeerInfo } from '@shared/net/protocol';
+import type { TableEntry } from '@shared/net/remoteViews';
 import classNames from 'classnames';
 import { useState } from 'react';
 
@@ -22,6 +23,7 @@ import { phaseLabels } from './phases';
 import PlayerCounters from './PlayerCounters';
 import RevealPanel from './RevealPanel';
 import ScaledField from './ScaledField';
+import SeatLog from './SeatLog';
 import ZoneBrowser from './ZoneBrowser';
 import ZoneCountBadge from './ZoneCountBadge';
 import useValueFlash from './useValueFlash';
@@ -154,7 +156,10 @@ const OpponentSide = ({
   tight = false,
   showTurn = false,
   hidden = false,
+  log = [],
+  logOpen = false,
   onToggleHidden,
+  onToggleLog,
 }: {
   peer: PeerInfo;
   view: PublicView | null;
@@ -167,7 +172,11 @@ const OpponentSide = ({
   // Board folded away, usually because this player is out of the game.
   // Only the battlefield goes: the panel is how they are still tracked.
   hidden?: boolean;
+  // The whole table history; the seat picks out its own player's part.
+  log?: TableEntry[];
+  logOpen?: boolean;
   onToggleHidden?(): void;
+  onToggleLog?(): void;
 }) => {
   const [open, setOpen] = useState<Pile | null>(null);
   // Damage across the table is the easiest thing to miss, so it is
@@ -306,7 +315,10 @@ const OpponentSide = ({
       >
         <div
           className={classNames(
-            'scroll-visible min-h-0 flex-1 overflow-y-auto flex flex-col gap-2',
+            'scroll-visible min-h-0 overflow-y-auto flex flex-col gap-2',
+            // An open log takes the room the counts do not need, so a
+            // taller row buys history rather than empty panel.
+            logOpen ? 'flex-initial' : 'flex-1',
             compact ? 'p-2' : 'p-3'
           )}
         >
@@ -416,6 +428,14 @@ const OpponentSide = ({
             />
           </div>
         )}
+        <SeatLog
+          log={log}
+          playerId={peer.playerId}
+          name={peer.name}
+          open={logOpen}
+          compact={compact}
+          onToggle={onToggleLog}
+        />
       </aside>
 
       {view && open && (

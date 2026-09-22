@@ -1,5 +1,6 @@
-import type { RollRequest, TableEvent } from '@shared/net/protocol';
-import type { RemotePeer } from '@shared/net/remoteViews';
+import type { PlayerId } from '@shared/game';
+import type { RollResult, RollRequest, TableEvent } from '@shared/net/protocol';
+import type { RemotePeer, TableEntry } from '@shared/net/remoteViews';
 
 import {
   commanderSources,
@@ -32,10 +33,29 @@ export const opponentCommanders = (peers: RemotePeer[]): DamageSource[] =>
       : []
   );
 
-export const describeEvent = ({ byName, roll }: TableEvent) =>
+// What was rolled, without saying by whom: a seat's own log is already
+// under their name.
+export const describeRoll = (roll: RollResult) =>
   roll.type === 'coin'
-    ? `${byName} flipped a coin: ${roll.result}`
-    : `${byName} rolled a d${roll.sides}: ${roll.result}`;
+    ? `flipped a coin: ${roll.result}`
+    : `rolled a d${roll.sides}: ${roll.result}`;
+
+export const describeEvent = ({ byName, roll }: TableEvent) =>
+  `${byName} ${describeRoll(roll)}`;
+
+// One player's part of the table history, newest first. Rolls count as
+// theirs when they were the one who asked for them.
+export const entriesFor = (
+  log: TableEntry[],
+  playerId: PlayerId
+): TableEntry[] =>
+  log
+    .filter((entry) =>
+      entry.kind === 'roll'
+        ? entry.event.by === playerId
+        : entry.playerId === playerId
+    )
+    .reverse();
 
 export const requestRoll = (request: RollRequest) => {
   window.api.netRoll(request).catch((err: unknown) => {

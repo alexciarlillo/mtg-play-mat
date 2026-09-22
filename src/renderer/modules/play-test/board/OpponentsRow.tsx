@@ -1,4 +1,4 @@
-import type { RemotePeer } from '@shared/net/remoteViews';
+import type { RemotePeer, TableEntry } from '@shared/net/remoteViews';
 import {
   MAX_OPPONENT_ROW_HEIGHT,
   MIN_OPPONENT_ROW_HEIGHT,
@@ -43,11 +43,19 @@ const OpponentsRow = ({
   height,
   onHeightChange,
   showTurn,
+  log,
+  logOpen,
+  onLogOpenChange,
 }: {
   peers: RemotePeer[];
   height: number;
   onHeightChange(next: number): void;
   showTurn: boolean;
+  log: TableEntry[];
+  // One preference for every seat: folding one away folds them all, so
+  // nobody has to do it three times in a pod.
+  logOpen: boolean;
+  onLogOpenChange(next: boolean): void;
 }) => {
   const row = useRef<HTMLDivElement>(null);
   const [resize, setResize] = useState<Resize | null>(null);
@@ -154,7 +162,10 @@ const OpponentsRow = ({
             tight={tight}
             showTurn={showTurn}
             hidden={isHidden(peer.info.playerId)}
+            log={log}
+            logOpen={logOpen}
             onToggleHidden={() => toggleHidden(peer.info.playerId)}
+            onToggleLog={() => onLogOpenChange(!logOpen)}
           />
         </div>
       ))}

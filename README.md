@@ -216,6 +216,12 @@ the log says so once; it clears when the dialog closes. Looking at the top is si
 table. A life total that just changed flashes too — red for damage, green for life
 gained — and fades back over a second, on your own counter and on every opponent's,
 so a hit lands visibly even with the log folded away.
+Each opponent's seat carries its own log under their command zone: just that
+player's actions and the rolls they asked for, newest first, scrolling. It takes
+whatever room the opponents row has left over, so dragging the row taller buys more
+history without taking anything from the counts above it, and **Log** folds it away
+(for every seat at once) when it is more noise than context.
+
 **d6, d20, Coin, dN** ask the host to roll; the result and
 who asked for it appear on every board. **Resend state** re-sends
 yours. **Leave** disconnects: when a guest leaves, only their seat is removed and the

@@ -44,7 +44,8 @@ const podOf = (names: string[]): RemotePeer[] =>
 const renderRow = (
   names: string[],
   onHeightChange = vi.fn(),
-  height = DEFAULT_OPPONENT_ROW_HEIGHT
+  height = DEFAULT_OPPONENT_ROW_HEIGHT,
+  { logOpen = false, onLogOpenChange = vi.fn() } = {}
 ) => {
   Object.assign(window, { api: { dispatch: vi.fn(() => Promise.resolve()) } });
   const row = (peers: RemotePeer[]) => (
@@ -54,6 +55,9 @@ const renderRow = (
         height={height}
         onHeightChange={onHeightChange}
         showTurn={false}
+        log={[]}
+        logOpen={logOpen}
+        onLogOpenChange={onLogOpenChange}
       />
     </ContextMenuProvider>
   );

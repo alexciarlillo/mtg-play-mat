@@ -222,6 +222,13 @@ const Board = ({ store, opponent, hand }: Props) => {
               );
             }}
             showTurn={turnTracking}
+            log={log}
+            logOpen={settings.seatLog}
+            onLogOpenChange={(seatLog) => {
+              updateSettings({ seatLog }).catch((err: unknown) =>
+                console.error('[play-test] could not save seat log', err)
+              );
+            }}
           />
         )}
         <div className="flex flex-1 min-h-0" onContextMenu={handleContextMenu}>
