@@ -320,14 +320,20 @@ describe('abuse', () => {
   });
 
   it('hangs up on a frame over the payload limit', async () => {
-    const { baseUrl } = await relay();
-    const { guests } = await pod(baseUrl, 1);
+    const started = await relay();
+    const { host, guests } = await pod(started.baseUrl, 1);
     guests[0].send({
       op: 'send',
       to: 'all',
       data: 'x'.repeat(MAX_RELAY_DATA_BYTES + 8192),
     });
-    expect((await guests[0].closed).code).toBe(1009);
+    // The close code is whichever wins a race: the server's 1009, or an
+    // abnormal close when the connection is reset while the rest of the
+    // oversize frame is still in flight. Windows reliably sees 1006.
+    expect([1009, 1006]).toContain((await guests[0].closed).code);
+    // Either way the relay dropped that seat, told the pod, and stayed up.
+    expect(await host.next()).toEqual({ ev: 'peer', seat: 2, state: 'closed' });
+    await expect.poll(() => started.relay.stats().connections).toBe(1);
   });
 
   it('hangs up on a firehose', async () => {
