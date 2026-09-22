@@ -14,6 +14,7 @@ export default defineConfig([
       'src/main/**/*.ts',
       'src/preload/**/*.ts',
       'e2e/**/*.ts',
+      'server/**/*.ts',
       '*.config.{ts,mjs}',
     ],
     languageOptions: { globals: globals.node },
