@@ -1,17 +1,42 @@
 import type { LibraryActivity } from '@shared/game';
 import classNames from 'classnames';
 
-const labels = (activity: LibraryActivity) => {
+// Silver for looking at the top of a library (a scry), gold for a
+// search. Two activities that mean very different things to the table
+// should not look alike from across it.
+type Tone = 'silver' | 'gold';
+
+const tones: Record<Tone, { ring: string; chip: string }> = {
+  silver: {
+    ring: 'ring-slate-100',
+    chip: 'bg-slate-100 text-slate-900',
+  },
+  gold: {
+    ring: 'ring-amber-300',
+    chip: 'bg-amber-300 text-slate-900',
+  },
+};
+
+const styles = (activity: LibraryActivity) => {
   switch (activity.kind) {
     case 'look':
       return {
+        tone: 'silver' as Tone,
         long: `Looking at top ${activity.count}…`,
         short: `Top ${activity.count}…`,
       };
     case 'search':
-      return { long: 'Searching library…', short: 'Searching…' };
+      return {
+        tone: 'gold' as Tone,
+        long: 'Searching library…',
+        short: 'Searching…',
+      };
     default:
-      return { long: 'In their library…', short: 'In library…' };
+      return {
+        tone: 'gold' as Tone,
+        long: 'In their library…',
+        short: 'In library…',
+      };
   }
 };
 
@@ -27,17 +52,22 @@ const LibraryActivityBadge = ({
   testId: string;
 }) => {
   if (!activity) return null;
-  const { long, short } = labels(activity);
+  const { tone, long, short } = styles(activity);
   return (
     <div
       data-testid={testId}
       data-kind={activity.kind}
+      data-tone={tone}
       title={long}
-      className="pointer-events-none absolute inset-0 flex items-end justify-center rounded-lg ring-4 ring-inset ring-amber-300"
+      className={classNames(
+        'pointer-events-none absolute inset-0 flex items-end justify-center rounded-lg ring-4 ring-inset',
+        tones[tone].ring
+      )}
     >
       <span
         className={classNames(
-          'mb-1 max-w-full animate-pulse rounded bg-amber-300 text-center font-semibold leading-tight text-slate-900 shadow',
+          'mb-1 max-w-full animate-pulse rounded text-center font-semibold leading-tight shadow',
+          tones[tone].chip,
           compact ? 'px-0.5 text-[10px]' : 'px-1 text-xs'
         )}
       >

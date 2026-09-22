@@ -1,11 +1,12 @@
 import type { CardView, PublicView } from '@shared/game';
 import type { PeerInfo } from '@shared/net/protocol';
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ContextMenuProvider } from '../../../ui/ContextMenuProvider';
 import { fieldBounds } from './layout';
 import OpponentSide from './OpponentSide';
+import { FLASH_MS } from './useValueFlash';
 
 const peer: PeerInfo = {
   playerId: 'p2',
@@ -104,6 +105,32 @@ describe('OpponentSide', () => {
     renderSide(true, withCommander);
     const inColumn = screen.getByTestId('opponent-command').parentElement;
     expect(inColumn).toContainElement(screen.getByTestId('opponent-library'));
+  });
+
+  it('flashes an opponent life total that just fell, then lets it fade', () => {
+    vi.useFakeTimers();
+    const { rerender } = renderSide(true);
+    const life = () => screen.getByTestId('opponent-life');
+    expect(life()).not.toHaveAttribute('data-flash');
+
+    const hit = { ...view, life: view.life - 6 };
+    const side = (own: PublicView) => (
+      <ContextMenuProvider>
+        <OpponentSide peer={peer} view={own} seat={0} compact />
+      </ContextMenuProvider>
+    );
+    rerender(side(hit));
+    expect(life()).toHaveAttribute('data-flash', 'down');
+    expect(life().className).toContain('text-red-500');
+
+    act(() => vi.advanceTimersByTime(FLASH_MS));
+    expect(life()).not.toHaveAttribute('data-flash');
+    // The way back is the slow one, so it reads as a fade.
+    expect(life().className).toContain('duration-1000');
+
+    rerender(side({ ...hit, life: hit.life + 3 }));
+    expect(life()).toHaveAttribute('data-flash', 'up');
+    vi.useRealTimers();
   });
 
   it('keeps the whole name in a pod', () => {

@@ -17,12 +17,14 @@ import {
   stackOrder,
 } from './layout';
 import LibraryActivityBadge from './LibraryActivityBadge';
+import { lifeFlashClass } from './lifeFlash';
 import { phaseLabels } from './phases';
 import PlayerCounters from './PlayerCounters';
 import RevealPanel from './RevealPanel';
 import ScaledField from './ScaledField';
 import ZoneBrowser from './ZoneBrowser';
 import ZoneCountBadge from './ZoneCountBadge';
+import useValueFlash from './useValueFlash';
 import ZonePile from './ZonePile';
 
 type Pile = 'graveyard' | 'exile';
@@ -168,6 +170,9 @@ const OpponentSide = ({
   onToggleHidden?(): void;
 }) => {
   const [open, setOpen] = useState<Pile | null>(null);
+  // Damage across the table is the easiest thing to miss, so it is
+  // coloured here too, not only in the log.
+  const lifeFlash = useValueFlash(view?.life ?? null);
   const bounds = view ? fieldBounds(view.zones.battlefield) : null;
   // A pod shows every panel at once and keeps its counts above the fold,
   // so only a duel's panel pins: it is the one a tall hand tray leaves
@@ -221,9 +226,11 @@ const OpponentSide = ({
       <span className="mr-1 text-xs uppercase text-slate-400">Life</span>
       <span
         data-testid="opponent-life"
+        data-flash={lifeFlash ?? undefined}
         className={classNames(
           'font-black tabular-nums',
-          compact ? 'text-3xl' : 'text-4xl'
+          compact ? 'text-3xl' : 'text-4xl',
+          lifeFlashClass(lifeFlash, 'text-slate-100')
         )}
       >
         {view.life}

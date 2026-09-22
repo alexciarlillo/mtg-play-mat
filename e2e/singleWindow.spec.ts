@@ -240,6 +240,7 @@ test('search the library for a land from the tray', async () => {
 
   await tray().getByRole('button', { name: 'Search library…' }).click();
   await expect(activity).toHaveAttribute('data-kind', 'search');
+  await expect(activity).toHaveAttribute('data-tone', 'gold');
   // The board's game keys wait while the dialog is open.
   const libraryCount = await pile('library').getAttribute('data-count');
   await board.keyboard.press('d');
@@ -266,6 +267,8 @@ test('look at the top two and keep them in order', async () => {
     'title',
     'Looking at top 2…'
   );
+  // A look reads as silver, a search as gold: never the same colour.
+  await expect(pile('library-activity')).toHaveAttribute('data-tone', 'silver');
   expect(
     await look.evaluateAll((els) => els.map((el) => el.dataset.instanceId))
   ).toEqual([a, b]);

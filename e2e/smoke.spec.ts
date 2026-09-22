@@ -453,6 +453,9 @@ test('goldfish: mulligan, keep, play, move, drag, life, untap, restart', async (
   const lose = board.getByRole('button', { name: 'Lose 1 life' });
   for (let i = 0; i < 3; i += 1) await lose.click();
   await expect(life).toHaveText('17');
+  // Damage colours the counter, which then fades back to white.
+  await expect(life).toHaveAttribute('data-flash', 'down');
+  await expect(life).not.toHaveAttribute('data-flash', /.*/);
   await board.keyboard.press('u');
   await expect(land).not.toHaveClass(/rotate-90/);
 

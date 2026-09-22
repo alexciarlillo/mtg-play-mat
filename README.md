@@ -210,8 +210,12 @@ action log and the dice. Every player's actions ("Bob drew 2 cards", "Alice play
 Forest") show up on every board, built only from public information: cards drawn,
 searched for, or put into a hand or library are counted, never named. Its **Dice**
 tab shows just the rolls. While a player has Look at top or Search library open,
-their library pile gets an amber badge ("Searching…", "Top 3…") on their own board and
-every opponent's, and the log says so once; it clears when the dialog closes.
+their library pile is ringed and badged on their own board and every opponent's, and
+the log says so once; it clears when the dialog closes. Looking at the top is silver
+("Top 3…") and a search gold ("Searching…"), so the two never read alike across the
+table. A life total that just changed flashes too — red for damage, green for life
+gained — and fades back over a second, on your own counter and on every opponent's,
+so a hit lands visibly even with the log folded away.
 **d6, d20, Coin, dN** ask the host to roll; the result and
 who asked for it appear on every board. **Resend state** re-sends
 yours. **Leave** disconnects: when a guest leaves, only their seat is removed and the

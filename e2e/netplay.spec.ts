@@ -241,7 +241,11 @@ test('each board shows the other side live, read-only', async () => {
 
   // Life and piles.
   await hostBoard.getByRole('button', { name: 'Lose 1 life' }).click();
-  await expect(guestBoard.getByTestId('opponent-life')).toHaveText('19');
+  const theirLife = guestBoard.getByTestId('opponent-life');
+  await expect(theirLife).toHaveText('19');
+  // Damage is coloured across the table, then fades back on its own.
+  await expect(theirLife).toHaveAttribute('data-flash', 'down');
+  await expect(theirLife).not.toHaveAttribute('data-flash', /.*/);
   await ownField(hostBoard).click({ button: 'right' });
   await hostBoard
     .getByRole('menuitem', { name: 'Move to graveyard', exact: true })
