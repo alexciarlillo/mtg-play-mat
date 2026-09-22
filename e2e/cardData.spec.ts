@@ -99,19 +99,23 @@ test('progress events are pushed during a manual update', async () => {
   expect(scryfall.bulkRequests).toHaveLength(2);
 });
 
-test('collection search works on the new data', async () => {
+test('card search works on the new data', async () => {
   const page = await appWindow();
-  await page.getByText('Collection').first().click();
 
-  await page.getByLabel('Card name').fill('llanowar');
-  await page.getByLabel('Card name').press('Enter');
-  const tiles = page.locator('img[alt="Llanowar Elves"]');
-  await expect(tiles).toHaveCount(2);
-  await expect(tiles.first()).toHaveAttribute(
-    'src',
-    /^card:\/\/[0-9a-f-]+\/0\/normal$/
+  const found = await page.evaluate(() =>
+    window.api.searchCards({ keyword: 'llanowar' })
   );
-  await expect(page.locator('i.ss.ss-dom')).toHaveCount(1);
+  expect(found.map((c) => c.name)).toEqual([
+    'Llanowar Elves',
+    'Llanowar Elves',
+  ]);
+  expect(found.map((c) => c.setCode).sort()).toEqual(['dom', 'm19']);
+
+  // Name search is what the deck builder uses, and it groups printings.
+  const names = await page.evaluate(() =>
+    window.api.searchCardNames('llanowar')
+  );
+  expect(names.map((n) => n.name)).toEqual(['Llanowar Elves']);
 
   const sets = await page.evaluate(() => window.api.listSets());
   expect(sets.map((s) => s.code)).toContain('m21');

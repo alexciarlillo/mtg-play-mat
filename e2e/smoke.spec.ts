@@ -130,8 +130,10 @@ test('app window loads with an empty deck list', async () => {
   const cardData = appWindow.getByTestId('card-data-status');
   await expect(cardData).toContainText('No card data yet');
   await expect(cardData).toHaveAttribute('data-phase', 'idle');
-  await appWindow.getByText('Collection').first().click();
-  await expect(appWindow).toHaveURL(/#\/collection/);
+  await appWindow.getByText('Settings').first().click();
+  await expect(appWindow).toHaveURL(/#\/settings/);
+  // The Collection tab is gone; nothing should still link to it.
+  await expect(appWindow.getByText('Collection')).toHaveCount(0);
 
   expect(await windowUrls()).toHaveLength(1);
 });
