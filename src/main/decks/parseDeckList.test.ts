@@ -210,4 +210,74 @@ describe('parseDeckList', () => {
     expect(count('main')).toBe(60);
     expect(count('side')).toBe(5);
   });
+
+  describe('a 100-card list with no commander section', () => {
+    // n singleton lines, "Card 1" first.
+    const singletons = (n: number) =>
+      Array.from({ length: n }, (_, i) => `Card ${i + 1}`).join('\n');
+
+    const boards = (result: ReturnType<typeof parseDeckList>) =>
+      result.cards.reduce<Record<string, number>>((acc, c) => {
+        acc[c.board] = (acc[c.board] ?? 0) + c.qty;
+        return acc;
+      }, {});
+
+    it('reads the first card as the commander', () => {
+      const result = parseDeckList(singletons(100));
+      expect(boards(result)).toEqual({ commander: 1, main: 99 });
+      expect(result.cards[0]).toMatchObject({
+        name: 'Card 1',
+        board: 'commander',
+      });
+      expect(result.notes[0]).toContain('"Card 1" (line 1)');
+      expect(result.notes[0]).toContain('100 cards');
+    });
+
+    it('counts quantities, not lines', () => {
+      // 1 + 9 lines of 11 = 100.
+      const list = ['Solo Card', ...Array(9).fill('11 Forest')].join('\n');
+      expect(boards(parseDeckList(list))).toEqual({ commander: 1, main: 99 });
+    });
+
+    it('leaves a list that is not 100 cards alone', () => {
+      [99, 101, 60].forEach((n) => {
+        const result = parseDeckList(singletons(n));
+        expect(boards(result)).toEqual({ main: n });
+        expect(result.notes).toEqual([]);
+      });
+    });
+
+    it('leaves a list that opens on a playset alone', () => {
+      // 4 + 96 singletons = 100, but the first card is no commander.
+      const list = ['4 Lightning Bolt', singletons(96)].join('\n');
+      expect(boards(parseDeckList(list))).toEqual({ main: 100 });
+      expect(parseDeckList(list).notes).toEqual([]);
+    });
+
+    it('does not touch a list that already names its commander', () => {
+      const list = ['Commander', 'Atraxa', 'Deck', singletons(100)].join('\n');
+      const result = parseDeckList(list);
+      expect(boards(result)).toEqual({ commander: 1, main: 100 });
+      expect(result.cards[0]).toMatchObject({ name: 'Atraxa' });
+      expect(result.notes).toEqual([]);
+    });
+
+    it('counts only the main board, so a sideboard does not confuse it', () => {
+      const list = [singletons(100), 'Sideboard', '3 Duress'].join('\n');
+      expect(boards(parseDeckList(list))).toEqual({
+        commander: 1,
+        main: 99,
+        side: 3,
+      });
+    });
+
+    it('is not fooled by the blank-line sideboard rule', () => {
+      // MTGA style: 60 main, blank line, then 40 more. The trailing group
+      // becomes the sideboard, so the main board is 60, not 100.
+      const list = [singletons(60), '', singletons(40)].join('\n');
+      const result = parseDeckList(list);
+      expect(boards(result)).toEqual({ main: 60, side: 40 });
+      expect(result.notes.some((n) => n.includes('commander'))).toBe(false);
+    });
+  });
 });

@@ -71,6 +71,8 @@ const categoryHeaders = new Set([
 
 const HEADER = /^(?:\/\/\s*)?([a-z][a-z ]*?)\s*(?:\(\d+\))?\s*:?\s*$/i;
 
+const COMMANDER_DECK_SIZE = 100;
+
 // qty (optional, "4" or "4x"), name, then an optional "(SET) number" and
 // Moxfield finish markers such as *F* or *E*.
 const CARD =
@@ -105,6 +107,23 @@ export const parseCardText = (
     ...(number && { number }),
     ...(markers && finishOf(markers) && { finish: finishOf(markers) }),
   };
+};
+
+// A list of exactly 100 with no Commander section is a Commander deck
+// that lost its header on the way out, and exports put the commander on
+// the first line. Only a singleton first card qualifies, so a list that
+// opens "4 Lightning Bolt" is left alone.
+const promoteCommander = (cards: ParsedCardLine[], notes: string[]) => {
+  if (cards.some((card) => card.board === 'commander')) return;
+  const main = cards.filter((card) => card.board === 'main');
+  const total = main.reduce((n, card) => n + card.qty, 0);
+  if (total !== COMMANDER_DECK_SIZE || main[0].qty !== 1) return;
+  main[0].board = 'commander';
+  notes.push(
+    `No commander section, but the list is ${COMMANDER_DECK_SIZE} cards, so ` +
+      `"${main[0].name}" (line ${main[0].line}) was read as the commander. ` +
+      'Change the format or move the card if that is wrong.'
+  );
 };
 
 // Parses plain, MTGA, and Moxfield text exports. It never looks cards up;
@@ -204,6 +223,8 @@ export const parseDeckList = (input: string): ParsedDeckList => {
         `(from line ${sideboard[0].line}) as the sideboard.`
     );
   }
+
+  promoteCommander(cards, notes);
 
   const maybe = ignored.filter((i) => i.reason === 'maybeboard').length;
   if (maybe > 0) {

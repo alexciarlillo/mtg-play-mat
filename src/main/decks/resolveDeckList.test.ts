@@ -264,6 +264,19 @@ describe('resolveDeckList', () => {
     expect(resolve(db, '4 Lightning Bolt').format).toBe('constructed');
   });
 
+  it('detects the commander format from a 100-card list', () => {
+    const { db } = bolts();
+    // 1 Lightning Bolt then 99 more, so the first line is the commander.
+    const list = ['Lightning Bolt', '99 Lightning Bolt'].join('\n');
+    const report = resolve(db, list);
+    expect(report.format).toBe('commander');
+    expect(report.resolved.map((r) => [r.board, r.qty])).toEqual([
+      ['commander', 1],
+      ['main', 99],
+    ]);
+    expect(report.notes[0]).toContain('read as the commander');
+  });
+
   it('marks everything unresolved when there is no card data', () => {
     const report = resolveDeckList(parseDeckList('4 Lightning Bolt'), null);
     expect(report.cardDataMissing).toBe(true);
