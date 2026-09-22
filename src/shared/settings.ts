@@ -36,6 +36,30 @@ export const cleanDisplayName = (input: unknown): string => {
 const displayName: Parse<string> = (input) =>
   typeof input === 'string' ? cleanDisplayName(input) : undefined;
 
+export const MAX_RELAY_URL_LENGTH = 200;
+export const MAX_RELAY_KEY_LENGTH = 128;
+
+// Where lobby codes are brokered. Blank means lobby codes are off and
+// only peer-to-peer invites work.
+const relayUrl: Parse<string> = (input) => {
+  if (typeof input !== 'string') return undefined;
+  const text = input.trim().slice(0, MAX_RELAY_URL_LENGTH);
+  if (text === '') return '';
+  try {
+    const url = new URL(text);
+    return url.protocol === 'http:' || url.protocol === 'https:'
+      ? text
+      : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+const relayKey: Parse<string> = (input) =>
+  typeof input === 'string'
+    ? input.replace(/\s+/g, '').slice(0, MAX_RELAY_KEY_LENGTH)
+    : undefined;
+
 // Where a floating panel sits, as a fraction of the room it can move in
 // (0 is the left or top edge, 1 the right or bottom), so it keeps its
 // corner when the window is resized.
@@ -120,6 +144,11 @@ const fields = {
     trayPlacement
   ),
   opponentRow: field(DEFAULT_OPPONENT_ROW_HEIGHT, opponentRowHeight),
+  // The relay server that hands out lobby codes, and the key this copy
+  // of the app presents to it. Both blank by default: you point the app
+  // at your own relay.
+  relayUrl: field('', relayUrl),
+  relayKey: field('', relayKey),
 };
 
 type Fields = typeof fields;

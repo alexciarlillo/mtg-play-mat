@@ -175,6 +175,8 @@ test('window.api is a narrow typed bridge', async () => {
       'startPlayTest',
       'getNetState',
       'netHost',
+      'netHostLobby',
+      'netJoinLobby',
       'netInvite',
       'netAcceptReply',
       'netCloseSeat',

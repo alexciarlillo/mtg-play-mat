@@ -7,6 +7,8 @@ import type SettingsStore from '../settings/SettingsStore';
 import Netplay from './Netplay';
 import NetWindow from './NetWindow';
 import type ProfileStore from './ProfileStore';
+import { relaySettings } from './relayConfig';
+import RelayTransport from './RelayTransport';
 
 const PUBLIC_STUN: IceServer[] = [
   { urls: 'stun:stun.l.google.com:19302' },
@@ -65,6 +67,8 @@ type NetplaySetupHandlers = Pick<
   RequestHandlers,
   | 'getNetState'
   | 'netHost'
+  | 'netHostLobby'
+  | 'netJoinLobby'
   | 'netInvite'
   | 'netAcceptReply'
   | 'netCloseSeat'
@@ -98,8 +102,13 @@ export const setupNetplay = ({
     netplay.transportLost();
   });
 
+  const relay = new RelayTransport({
+    settings: () => relaySettings(settings.settings),
+    report: (report) => netplay.handleReport(report),
+  });
+
   const netplay: Netplay = new Netplay({
-    transport: netWindow,
+    transports: { p2p: netWindow, relay },
     config,
     appVersion: app.getVersion(),
     profile: () => profile.profile,

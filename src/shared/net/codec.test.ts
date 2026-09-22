@@ -6,8 +6,10 @@ import {
   extractCode,
   findJoinLink,
   joinLink,
+  lobbyLink,
   packDescription,
   parseJoinLink,
+  parseLobbyLink,
   unpackDescription,
 } from './codec';
 
@@ -104,5 +106,33 @@ describe('join links', () => {
     'not a url',
   ])('ignores %s', (link) => {
     expect(parseJoinLink(link)).toBeNull();
+  });
+});
+
+describe('lobby links', () => {
+  it('round-trips a lobby code', () => {
+    const link = lobbyLink('ABC123');
+    expect(link).toBe('mtgplaymat://join?l=ABC123');
+    expect(parseLobbyLink(link)).toBe('ABC123');
+  });
+
+  it('keeps the two kinds of link apart', () => {
+    expect(parseJoinLink(lobbyLink('ABC123'))).toBeNull();
+    expect(parseLobbyLink(joinLink('MPM1:abc'))).toBeNull();
+  });
+
+  it('ignores anything that is not one of ours', () => {
+    [
+      'https://example.com/join?l=ABC123',
+      'mtgplaymat://other?l=ABC123',
+      'mtgplaymat://join?l=',
+      'not a url',
+    ].forEach((link) => expect(parseLobbyLink(link)).toBeNull());
+  });
+
+  it('is found on the command line like an invite is', () => {
+    expect(findJoinLink(['/app', '.', lobbyLink('ABC123')])).toBe(
+      'mtgplaymat://join?l=ABC123'
+    );
   });
 });

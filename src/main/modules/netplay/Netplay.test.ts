@@ -72,11 +72,18 @@ const setup = (me = 'alice') => {
     send: (command: NetCommand) => commands.push(command),
     retire: vi.fn(),
   };
+  // The relay transport records into the same list, so a test reads one
+  // stream of commands whichever mode it drove.
+  const relay = {
+    open: vi.fn(() => Promise.resolve(true)),
+    send: (command: NetCommand) => commands.push(command),
+    retire: vi.fn(),
+  };
   let local: PublicView | null = view(me);
   let format: DeckFormat = 'constructed';
   const rolls: number[] = [];
   const netplay = new Netplay({
-    transport,
+    transports: { p2p: transport, relay },
     config: { iceServers: [], recordWire: false },
     appVersion: '9.9.9',
     profile: () => ({ playerId: me, displayName: names[me] }),
@@ -99,6 +106,7 @@ const setup = (me = 'alice') => {
   return {
     netplay,
     transport,
+    relay,
     commands,
     sends,
     sentTo,
@@ -946,5 +954,224 @@ describe('Netplay solo', () => {
     expect(t.opponent()?.log).toMatchObject([
       { kind: 'action', playerName: 'Alice', text: 'drew a card' },
     ]);
+  });
+});
+
+describe('Netplay relay mode', () => {
+  // The host in a lobby, with guests seated and greeted.
+  const relayHostWith = async (guests: Record<number, string>) => {
+    const t = setup();
+    await t.netplay.hostLobby();
+    t.netplay.handleReport({ type: 'lobby', seat: 1, code: 'ABC123' });
+    for (const [seatKey, id] of Object.entries(guests)) {
+      const seat = Number(seatKey);
+      t.netplay.handleReport({ type: 'open', seat });
+      say(t, seat, hello(id));
+    }
+    return t;
+  };
+
+  it('opens a lobby and waits, with no invite to gather', async () => {
+    const t = setup();
+    await t.netplay.hostLobby();
+    expect(t.relay.retire).toHaveBeenCalled();
+    expect(t.transport.retire).toHaveBeenCalled();
+    expect(t.commands.at(-1)).toEqual({ op: 'hostLobby', slots: 4 });
+    expect(t.state()).toMatchObject({
+      role: 'host',
+      mode: 'relay',
+      phase: 'creatingInvite',
+      lobbyCode: null,
+      status: 'Opening a lobby…',
+    });
+
+    t.netplay.handleReport({ type: 'lobby', seat: 1, code: 'ABC123' });
+    expect(t.state()).toMatchObject({
+      phase: 'awaitingReply',
+      lobbyCode: 'ABC123',
+      status: 'Share the code. Players join whenever they are ready.',
+    });
+    // Seats stay empty until someone types the code; none has an invite.
+    expect(t.state().seats.map((seat) => seat.phase)).toEqual([
+      'empty',
+      'empty',
+      'empty',
+    ]);
+    expect(t.state().seats.every((seat) => seat.invite === null)).toBe(true);
+  });
+
+  it('greets a guest the moment the relay seats them', async () => {
+    const t = await relayHostWith({ 2: 'bob' });
+    expect(t.state()).toMatchObject({
+      phase: 'connected',
+      lobbyCode: 'ABC123',
+    });
+    expect(t.sentTo(2).map((m) => m.kind)).toEqual([
+      'hello',
+      'public',
+      'roster',
+    ]);
+    expect(t.state().players).toEqual([
+      { playerId: 'alice', name: 'Alice', seat: 1 },
+      { playerId: 'bob', name: 'Bob', seat: 2 },
+    ]);
+  });
+
+  it('relays between guests exactly as a peer-to-peer pod does', async () => {
+    const t = await relayHostWith({ 2: 'bob', 3: 'carol' });
+    const before = t.sends().length;
+    say(t, 2, raw('bob', 9, { kind: 'log', text: 'Bob draws a card.' }));
+    const relayed = t.sends().slice(before);
+    expect(relayed.map((c) => c.seats)).toEqual([[3]]);
+    expect(JSON.parse(relayed[0].data)).toMatchObject({
+      from: 'bob',
+      kind: 'log',
+    });
+  });
+
+  it('drops a seat when the relay says it closed', async () => {
+    const t = await relayHostWith({ 2: 'bob' });
+    t.netplay.handleReport({ type: 'closed', seat: 2 });
+    expect(t.state().seats[0]).toMatchObject({ seat: 2, phase: 'empty' });
+    expect(t.state().status).toContain('Bob left the game.');
+  });
+
+  it('joins by code, normalizing what the player typed', async () => {
+    const t = setup('bob');
+    await t.netplay.joinLobby('  abc-123 ');
+    expect(t.commands.at(-1)).toEqual({ op: 'joinLobby', code: 'ABC123' });
+    expect(t.state()).toMatchObject({
+      role: 'guest',
+      mode: 'relay',
+      phase: 'connecting',
+      lobbyCode: 'ABC123',
+    });
+  });
+
+  it('refuses something that is not a code, without a session', async () => {
+    const t = setup('bob');
+    await t.netplay.joinLobby('nope');
+    expect(t.commands).toEqual([]);
+    expect(t.state()).toMatchObject({ role: null, error: expect.any(String) });
+  });
+
+  it('greets the host once the relay reports the link open', async () => {
+    const t = setup('bob');
+    await t.netplay.joinLobby('ABC123');
+    t.netplay.handleReport({ type: 'lobby', seat: 1, code: 'ABC123' });
+    t.netplay.handleReport({ type: 'open', seat: 1 });
+    expect(t.state().phase).toBe('connected');
+    expect(t.sentTo(1).map((m) => m.kind)).toEqual(['hello', 'public']);
+    say(t, 1, hello('alice'));
+    expect(t.state().status).toContain('Alice');
+  });
+
+  it('ends a guest session when the lobby fails', async () => {
+    const t = setup('bob');
+    await t.netplay.joinLobby('ABC123');
+    t.netplay.handleReport({
+      type: 'lobbyFailed',
+      seat: 1,
+      message: 'That game is already full.',
+    });
+    expect(t.state()).toMatchObject({
+      phase: 'ended',
+      error: 'That game is already full.',
+    });
+  });
+
+  it('ends a connected guest when the lobby goes away', async () => {
+    const t = setup('bob');
+    await t.netplay.joinLobby('ABC123');
+    t.netplay.handleReport({ type: 'lobby', seat: 1, code: 'ABC123' });
+    t.netplay.handleReport({ type: 'open', seat: 1 });
+    say(t, 1, hello('alice'));
+    t.netplay.handleReport({
+      type: 'lobbyFailed',
+      seat: 1,
+      message: 'The relay server is restarting.',
+    });
+    expect(t.state()).toMatchObject({
+      phase: 'ended',
+      error: 'The relay server is restarting.',
+    });
+  });
+
+  it('ends a host session when the lobby never opened', async () => {
+    const t = setup();
+    await t.netplay.hostLobby();
+    t.netplay.handleReport({
+      type: 'lobbyFailed',
+      seat: 1,
+      message: 'No relay server is set.',
+    });
+    expect(t.state()).toMatchObject({
+      phase: 'ended',
+      error: 'No relay server is set.',
+    });
+  });
+
+  it('keeps a running lobby alive when one message fails', async () => {
+    const t = await relayHostWith({ 2: 'bob' });
+    t.netplay.handleReport({
+      type: 'lobbyFailed',
+      seat: 1,
+      message: 'Could not send.',
+    });
+    expect(t.state()).toMatchObject({
+      phase: 'connected',
+      error: 'Could not send.',
+    });
+  });
+
+  it('kicks a seat through the relay', async () => {
+    const t = await relayHostWith({ 2: 'bob' });
+    t.netplay.closeSeat(2);
+    expect(t.commands.at(-1)).toEqual({ op: 'close', seat: 2 });
+  });
+
+  it('stands both transports down when a mode changes', async () => {
+    const t = setup();
+    await t.netplay.hostLobby();
+    t.transport.retire.mockClear();
+    t.relay.retire.mockClear();
+    await t.netplay.host();
+    expect(t.transport.retire).toHaveBeenCalled();
+    expect(t.relay.retire).toHaveBeenCalled();
+    expect(t.state()).toMatchObject({ mode: 'p2p', lobbyCode: null });
+  });
+
+  it('takes a lobby code from a deep link without connecting', () => {
+    const t = setup('bob');
+    expect(t.netplay.receiveLink('mtgplaymat://join?l=ABC123')).toBe(true);
+    expect(t.state()).toMatchObject({
+      pendingLobbyCode: 'ABC123',
+      role: null,
+    });
+    expect(t.commands).toEqual([]);
+  });
+
+  it('still takes a peer-to-peer invite from a deep link', () => {
+    const t = setup('bob');
+    expect(t.netplay.receiveLink('mtgplaymat://join?c=MPM1:abc')).toBe(true);
+    expect(t.state()).toMatchObject({
+      pendingInvite: 'MPM1:abc',
+      pendingLobbyCode: null,
+    });
+  });
+
+  it('leaves a lobby by saying goodbye first', async () => {
+    const t = await relayHostWith({ 2: 'bob' });
+    t.netplay.leave();
+    const byes = t
+      .sends()
+      .filter((c) => (JSON.parse(c.data) as NetMessage).kind === 'bye');
+    expect(byes).toHaveLength(1);
+    expect(t.state()).toMatchObject({
+      role: null,
+      mode: null,
+      lobbyCode: null,
+      phase: 'idle',
+    });
   });
 });

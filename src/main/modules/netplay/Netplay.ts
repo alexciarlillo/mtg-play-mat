@@ -5,6 +5,7 @@ import {
   CodeError,
   extractCode,
   parseJoinLink,
+  parseLobbyLink,
   type SessionDescription,
   unpackDescription,
 } from '@shared/net/codec';
@@ -13,17 +14,20 @@ import {
   idleNetState,
   type NetCommand,
   type NetConfig,
+  type NetMode,
   type NetPhase,
   type NetReport,
   type NetState,
   parseNetReport,
   type SeatState,
 } from '@shared/net/lobby';
+import { normalizeLobbyCode } from '@shared/net/lobbyCode';
 import {
   cleanLogText,
   encodeNetMessage,
   HOST_SEAT,
   MAX_MESSAGE_BYTES,
+  MAX_SEATS,
   type NetMessage,
   type NetPayload,
   type PeerInfo,
@@ -56,7 +60,8 @@ export interface Transport {
 }
 
 export interface NetplayDeps {
-  transport: Transport;
+  // One per connection mode; a session uses whichever it started in.
+  transports: Record<NetMode, Transport>;
   config: NetConfig;
   appVersion: string;
   profile(): { playerId: string; displayName: string };
@@ -75,6 +80,8 @@ type NetplayHandlers = Pick<
   RequestHandlers,
   | 'getNetState'
   | 'netHost'
+  | 'netHostLobby'
+  | 'netJoinLobby'
   | 'netInvite'
   | 'netAcceptReply'
   | 'netCloseSeat'
@@ -173,6 +180,9 @@ export default class Netplay {
   // ignored.
   private session = 0;
 
+  // Which transport this session runs on; also what NetState reports.
+  private mode: NetMode = 'p2p';
+
   // Synthetic opponents for testing pod layouts. Built once per count
   // because each one runs the game engine, and never while a session is
   // live, so they cannot reach the wire or a roster.
@@ -193,6 +203,8 @@ export default class Netplay {
   readonly handlers: NetplayHandlers = {
     getNetState: () => this.state,
     netHost: () => this.host(),
+    netHostLobby: () => this.hostLobby(),
+    netJoinLobby: (code: unknown) => this.joinLobby(code),
     netInvite: (seat: unknown) => this.invite(seat),
     netAcceptReply: (seat: unknown, code: unknown) =>
       this.acceptReply(seat, code),
@@ -210,6 +222,10 @@ export default class Netplay {
 
   get netState(): NetState {
     return this.state;
+  }
+
+  private get transport(): Transport {
+    return this.deps.transports[this.mode];
   }
 
   get opponentCount(): number {
@@ -249,6 +265,11 @@ export default class Netplay {
   // An invite from a mtgplaymat:// link waits in the lobby until the user
   // joins with it; it never connects on its own.
   receiveLink = (link: string): boolean => {
+    const lobby = parseLobbyLink(link);
+    if (lobby) {
+      this.update({ pendingLobbyCode: lobby });
+      return true;
+    }
     const code = parseJoinLink(link);
     if (!code) return false;
     this.update({ pendingInvite: code });
@@ -306,14 +327,54 @@ export default class Netplay {
   };
 
   host = async () => {
-    const session = this.reset({ role: 'host', status: 'Gathering routes…' });
+    const session = this.reset(
+      { role: 'host', status: 'Gathering routes…' },
+      'p2p'
+    );
     this.seats = new Map(guestSeats.map((seat) => [seat, emptySeat(seat)]));
     this.remote.setRoster(this.roster());
     this.update({ players: this.roster() });
-    if (!(await this.deps.transport.open()) || session !== this.session) {
+    if (!(await this.transport.open()) || session !== this.session) {
       return;
     }
     this.startInvite(guestSeats[0]);
+  };
+
+  // Relay: open a lobby and wait. There is no invite to gather and no
+  // reply to paste; seats fill themselves as people type the code.
+  hostLobby = async () => {
+    const session = this.reset(
+      { role: 'host', phase: 'creatingInvite', status: 'Opening a lobby…' },
+      'relay'
+    );
+    this.seats = new Map(guestSeats.map((seat) => [seat, emptySeat(seat)]));
+    this.remote.setRoster(this.roster());
+    this.update({ players: this.roster() });
+    if (!(await this.transport.open()) || session !== this.session) return;
+    this.transport.send({ op: 'hostLobby', slots: MAX_SEATS });
+  };
+
+  // Relay: take a seat in someone else's lobby.
+  joinLobby = async (input: unknown) => {
+    const code = normalizeLobbyCode(input);
+    if (!code) {
+      this.update({
+        error: 'That is not a lobby code. They are six characters long.',
+      });
+      return;
+    }
+    const session = this.reset(
+      {
+        role: 'guest',
+        phase: 'connecting',
+        status: 'Joining the lobby…',
+        lobbyCode: code,
+        pendingLobbyCode: null,
+      },
+      'relay'
+    );
+    if (!(await this.transport.open()) || session !== this.session) return;
+    this.transport.send({ op: 'joinLobby', code });
   };
 
   // Host: a fresh invite for an empty seat, e.g. for a third player or
@@ -324,7 +385,7 @@ export default class Netplay {
     const session = this.session;
     this.updateSeat(seat, { phase: 'creatingInvite', error: null });
     // Starts a new net window if the old one went away.
-    if (!(await this.deps.transport.open()) || session !== this.session) {
+    if (!(await this.transport.open()) || session !== this.session) {
       return;
     }
     this.startInvite(seat.seat);
@@ -341,7 +402,7 @@ export default class Netplay {
     }
 
     this.updateSeat(seat, { phase: 'connecting', error: null });
-    this.deps.transport.send({ op: 'acceptReply', seat: seat.seat, code });
+    this.transport.send({ op: 'acceptReply', seat: seat.seat, code });
     this.clearSeatTimer(seat);
     seat.timer = setTimeout(() => {
       if (session === this.session && seat.phase === 'connecting') {
@@ -362,16 +423,19 @@ export default class Netplay {
     const desc = await this.check(code, 'offer');
     if (!desc) return;
 
-    const session = this.reset({
-      role: 'guest',
-      phase: 'creatingReply',
-      status: 'Gathering routes…',
-      pendingInvite: null,
-    });
-    if (!(await this.deps.transport.open()) || session !== this.session) {
+    const session = this.reset(
+      {
+        role: 'guest',
+        phase: 'creatingReply',
+        status: 'Gathering routes…',
+        pendingInvite: null,
+      },
+      'p2p'
+    );
+    if (!(await this.transport.open()) || session !== this.session) {
       return;
     }
-    this.deps.transport.send({ op: 'join', code, config: this.deps.config });
+    this.transport.send({ op: 'join', code, config: this.deps.config });
   };
 
   leave = () => {
@@ -404,6 +468,15 @@ export default class Netplay {
   };
 
   handleReport = (report: NetReport) => {
+    if (report.type === 'lobby') {
+      this.update({ lobbyCode: report.code });
+      if (this.state.role === 'host') this.refreshHost();
+      return;
+    }
+    if (report.type === 'lobbyFailed') {
+      this.lobbyFailed(report.message);
+      return;
+    }
     if (this.state.role === 'host') {
       this.handleHostReport(report);
     } else if (this.state.role === 'guest' && report.seat === HOST_SEAT) {
@@ -700,7 +773,7 @@ export default class Netplay {
     const name = seat.playerId
       ? this.remote.peer(seat.playerId)?.name
       : undefined;
-    this.deps.transport.send({ op: 'close', seat: seat.seat });
+    this.transport.send({ op: 'close', seat: seat.seat });
     this.clearSeatTimer(seat);
     const wasBound = seat.playerId !== null;
     if (seat.playerId) this.remote.remove(seat.playerId);
@@ -721,7 +794,7 @@ export default class Netplay {
     seat.phase = 'creatingInvite';
     this.seats.set(seatNumber, seat);
     this.refreshHost();
-    this.deps.transport.send({
+    this.transport.send({
       op: 'host',
       seat: seatNumber,
       config: this.deps.config,
@@ -753,7 +826,7 @@ export default class Netplay {
   };
 
   private sendRaw = (data: string, seats: number[]) => {
-    this.deps.transport.send({ op: 'send', seats, data });
+    this.transport.send({ op: 'send', seats, data });
   };
 
   // Where this player's own messages go: every open guest link, or the
@@ -802,6 +875,22 @@ export default class Netplay {
     }
   };
 
+  // The lobby itself failed, rather than one link inside it. For a host
+  // that is the whole session; for a guest it is the same as losing the
+  // host.
+  private lobbyFailed = (text: string) => {
+    if (this.state.role === 'guest') {
+      if (this.hostOpen) this.end('The lobby ended.', text);
+      else this.update({ phase: 'ended', status: '', error: text });
+      return;
+    }
+    if (this.state.role !== 'host') return;
+    this.update({ error: text });
+    if (this.state.lobbyCode === null) {
+      this.update({ phase: 'ended', status: '' });
+    }
+  };
+
   // Guest: the pod is over for us.
   private end = (status: string, error: string | null = null) => {
     // The first reason wins: a goodbye is followed by the channel closing.
@@ -812,10 +901,15 @@ export default class Netplay {
     this.update({ phase: 'ended', status, error, players: [] });
   };
 
-  // Every new session (and leaving) starts from a fresh transport.
-  private reset = (next: Partial<NetState>): number => {
-    this.deps.transport.send({ op: 'leave' });
-    this.deps.transport.retire();
+  // Every new session (and leaving) starts from a fresh transport. A
+  // session may have started on either one, and the next may want the
+  // other, so both are stood down.
+  private reset = (next: Partial<NetState>, mode?: NetMode): number => {
+    Object.values(this.deps.transports).forEach((transport) => {
+      transport.send({ op: 'leave' });
+      transport.retire();
+    });
+    if (mode) this.mode = mode;
     this.session += 1;
     this.hostOpen = false;
     this.hostId = null;
@@ -830,6 +924,8 @@ export default class Netplay {
     this.state = {
       ...idleNetState,
       pendingInvite: this.state.pendingInvite,
+      pendingLobbyCode: this.state.pendingLobbyCode,
+      mode: next.role ? this.mode : null,
       ...next,
     };
     this.deps.pushState(this.state);
@@ -857,15 +953,27 @@ export default class Netplay {
     const seats = [...this.seats.values()].sort((a, b) => a.seat - b.seat);
     const has = (phase: SeatState['phase']) =>
       seats.some((s) => s.phase === phase);
-    let phase: NetPhase = 'creatingInvite';
+    // In a relay pod the seats have no invite of their own: they are
+    // empty until someone types the code, so the lobby itself is the
+    // phase.
+    const relay = this.mode === 'relay';
+    let phase: NetPhase = relay
+      ? this.state.lobbyCode
+        ? 'awaitingReply'
+        : 'creatingInvite'
+      : 'creatingInvite';
     if (has('connected')) phase = 'connected';
     else if (has('connecting')) phase = 'connecting';
-    else if (has('awaitingReply')) phase = 'awaitingReply';
+    else if (!relay && has('awaitingReply')) phase = 'awaitingReply';
 
     let status = this.notice ? `${this.notice} ` : '';
     if (phase === 'connected') status = this.connectedStatus();
     else if (phase === 'connecting') status += 'Connecting…';
-    else if (phase === 'awaitingReply') {
+    else if (relay) {
+      status += this.state.lobbyCode
+        ? 'Share the code. Players join whenever they are ready.'
+        : 'Opening a lobby…';
+    } else if (phase === 'awaitingReply') {
       status += 'Send an invite to each player, then paste their reply.';
     } else if (has('creatingInvite')) status += 'Gathering routes…';
     else status += 'Invite players to a seat.';

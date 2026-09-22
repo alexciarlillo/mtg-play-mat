@@ -7,6 +7,10 @@ import {
 
 export type NetRole = 'host' | 'guest';
 
+// How a pod is connected. A lobby code goes through a relay server; peer
+// to peer pastes WebRTC codes and involves no server at all.
+export type NetMode = 'relay' | 'p2p';
+
 export type NetPhase =
   | 'idle'
   // Host: gathering routes for the invite, then waiting for the reply.
@@ -52,6 +56,12 @@ export interface NetState {
   error: string | null;
   // An invite that arrived through a mtgplaymat:// link, not yet used.
   pendingInvite: string | null;
+  // Null until a session starts.
+  mode: NetMode | null;
+  // Relay only: the code to share, once the server has given us one.
+  lobbyCode: string | null;
+  // A lobby code that arrived through a mtgplaymat:// link.
+  pendingLobbyCode: string | null;
 }
 
 export const idleNetState: NetState = {
@@ -63,6 +73,9 @@ export const idleNetState: NetState = {
   status: 'Not connected.',
   error: null,
   pendingInvite: null,
+  mode: null,
+  lobbyCode: null,
+  pendingLobbyCode: null,
 };
 
 export const guestSeats = Array.from(
@@ -96,6 +109,9 @@ export type NetCommand =
   | { op: 'host'; seat: number; config: NetConfig }
   | { op: 'acceptReply'; seat: number; code: string }
   | { op: 'join'; code: string; config: NetConfig }
+  // Relay only: open a lobby, or take a seat in someone else's.
+  | { op: 'hostLobby'; slots: number }
+  | { op: 'joinLobby'; code: string }
   | { op: 'send'; seats: number[]; data: string }
   | { op: 'close'; seat: number }
   | { op: 'leave' };
@@ -103,6 +119,10 @@ export type NetCommand =
 // Net window -> main.
 export type NetReport =
   | { type: 'invite'; seat: number; code: string }
+  // Relay only: the lobby is open, and this is the code to share.
+  | { type: 'lobby'; seat: number; code: string }
+  // Relay only: the lobby itself failed, not one link inside it.
+  | { type: 'lobbyFailed'; seat: number; message: string }
   | { type: 'reply'; seat: number; code: string }
   | { type: 'open'; seat: number }
   | { type: 'message'; seat: number; data: string }
@@ -132,8 +152,13 @@ export const parseNetReport = (input: unknown): NetReport | null => {
   switch (fields.type) {
     case 'invite':
     case 'reply':
+    case 'lobby':
       return isText(fields.code)
         ? { type: fields.type, seat, code: fields.code }
+        : null;
+    case 'lobbyFailed':
+      return isText(fields.message)
+        ? { type: 'lobbyFailed', seat, message: fields.message.slice(0, 500) }
         : null;
     case 'message':
       return isText(fields.data)

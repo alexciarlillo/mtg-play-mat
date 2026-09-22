@@ -96,6 +96,9 @@ export const requests = {
   // Lobby actions; results and errors arrive as netState.
   getNetState: request<[], NetState>(),
   netHost: request<[]>(),
+  // Relay: open a lobby, or take a seat in one by its code.
+  netHostLobby: request<[]>(),
+  netJoinLobby: request<[code: string]>(),
   // Host: a new invite for an empty guest seat.
   netInvite: request<[seat: number]>(),
   netAcceptReply: request<[seat: number, code: string]>(),

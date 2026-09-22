@@ -122,9 +122,10 @@ export const unpackDescription = async (
 export const joinLink = (code: string): string =>
   `${DEEP_LINK_SCHEME}://join?c=${code}`;
 
-// The invite code in a mtgplaymat://join?c=… link, or null for any other
-// link.
-export const parseJoinLink = (link: string): string | null => {
+export const lobbyLink = (code: string): string =>
+  `${DEEP_LINK_SCHEME}://join?l=${code}`;
+
+const linkParam = (link: string, key: 'c' | 'l'): string | null => {
   let url: URL;
   try {
     url = new URL(link.trim());
@@ -135,9 +136,21 @@ export const parseJoinLink = (link: string): string | null => {
   // Custom schemes put "join" in the host or the path depending on parser.
   const target = (url.host || url.pathname).replace(/^\/+|\/+$/g, '');
   if (target !== 'join') return null;
-  const code = url.searchParams.get('c')?.trim();
-  return code ? code : null;
+  const value = url.searchParams.get(key)?.trim();
+  return value ? value : null;
 };
 
+// The lobby code in a mtgplaymat://join?l=… link, or null for any other
+// link.
+export const parseLobbyLink = (link: string): string | null =>
+  linkParam(link, 'l');
+
+// The invite code in a mtgplaymat://join?c=… link, or null for any other
+// link.
+export const parseJoinLink = (link: string): string | null =>
+  linkParam(link, 'c');
+
 export const findJoinLink = (argv: readonly string[]): string | null =>
-  argv.find((arg) => parseJoinLink(arg) !== null) ?? null;
+  argv.find(
+    (arg) => parseJoinLink(arg) !== null || parseLobbyLink(arg) !== null
+  ) ?? null;

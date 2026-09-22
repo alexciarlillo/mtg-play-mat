@@ -27,6 +27,8 @@ describe('parseSettings', () => {
       handInBoard: true,
       handTray: { height: 280, collapsed: false },
       opponentRow: DEFAULT_OPPONENT_ROW_HEIGHT,
+      relayUrl: '',
+      relayKey: '',
     });
   });
 
@@ -152,5 +154,40 @@ describe('handTray', () => {
     ].forEach((handTray) => {
       expect(parseSettingsPatch({ handTray })).toEqual({});
     });
+  });
+});
+
+describe('relay settings', () => {
+  it('takes an http or https address', () => {
+    expect(
+      parseSettingsPatch({ relayUrl: 'https://relay.example.com' })
+    ).toEqual({ relayUrl: 'https://relay.example.com' });
+    expect(parseSettingsPatch({ relayUrl: ' http://localhost:8787 ' })).toEqual(
+      {
+        relayUrl: 'http://localhost:8787',
+      }
+    );
+  });
+
+  it('takes blank, which turns lobby codes off', () => {
+    expect(parseSettingsPatch({ relayUrl: '   ' })).toEqual({ relayUrl: '' });
+  });
+
+  it('drops anything that is not a web address', () => {
+    ['relay.example.com', 'ws://relay.example.com', 'file:///x', 7].forEach(
+      (relayUrl) => expect(parseSettingsPatch({ relayUrl })).toEqual({})
+    );
+  });
+
+  it('strips whitespace out of a key', () => {
+    expect(parseSettingsPatch({ relayKey: ' abc 123 ' })).toEqual({
+      relayKey: 'abc123',
+    });
+    expect(parseSettingsPatch({ relayKey: 7 })).toEqual({});
+  });
+
+  it('defaults both to blank', () => {
+    expect(defaultSettings.relayUrl).toBe('');
+    expect(defaultSettings.relayKey).toBe('');
   });
 });
