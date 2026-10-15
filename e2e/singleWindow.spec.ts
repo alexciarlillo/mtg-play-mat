@@ -307,6 +307,30 @@ test('scry 2 by keyboard and view the bottom card, docked', async () => {
   await expect(board.getByTestId('bottom-card')).toHaveCount(0);
 });
 
+test('reveal until, docked: Space shows a card, Enter puts it away', async () => {
+  const before = await gameState();
+  const [top] = me(before).zones.library;
+  await pile('library').click({ button: 'right' });
+  await board
+    .getByRole('menuitem', { name: 'Reveal until…', exact: true })
+    .click();
+  await expect(board.getByTestId('reveal-until')).toBeFocused();
+  // The board's own keys wait while the dialog has them: no draw.
+  await board.keyboard.press('Space');
+  await expect(
+    board.getByTestId('reveal-panel').getByTestId('card')
+  ).toHaveCount(1);
+  await board.keyboard.press('Enter');
+  await expect(board.getByTestId('reveal-until')).toHaveCount(0);
+  await expect(board.getByTestId('reveal-panel')).toHaveCount(0);
+  const after = await gameState();
+  expect(after.log.slice(before.log.length).map((a) => a.type)).toEqual([
+    'reveal',
+    'arrangeTop',
+  ]);
+  expect(me(after).zones.hand).toContain(top);
+});
+
 test('put two cards back on the bottom from the docked tray', async () => {
   const before = await gameState();
   const [a, b] = me(before).zones.hand;

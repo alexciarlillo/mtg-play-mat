@@ -109,6 +109,9 @@ export interface PlayerState {
   turn: number;
   phase: Phase;
   revealed?: Reveal;
+  // Plays with the top card of the library face up for everyone, until
+  // turned off. Unlike a reveal, other actions leave it on.
+  topRevealed?: boolean;
 }
 
 export interface CommanderDamage {
@@ -349,7 +352,7 @@ export interface MillAction {
 }
 
 // Applies a look at the top of the library (scry, surveil, and the like)
-// in one step. The five lists together must be exactly the top cards;
+// in one step. The lists together must be exactly the top cards;
 // top and bottom keep the order given, first nearest the top.
 export interface ArrangeTopAction {
   type: 'arrangeTop';
@@ -359,6 +362,8 @@ export interface ArrangeTopAction {
   graveyard: InstanceId[];
   exile: InstanceId[];
   hand: InstanceId[];
+  // Optional, unlike the others, since only a reveal-until uses it.
+  battlefield?: InstanceId[];
   // Shuffles the bottom cards among themselves instead of keeping order.
   bottomRandom?: boolean;
   // Shuffles the whole library once the cards are placed (Ponder).
@@ -410,6 +415,12 @@ export interface HideRevealAction {
   playerId: PlayerId;
 }
 
+export interface SetTopRevealedAction {
+  type: 'setTopRevealed';
+  playerId: PlayerId;
+  revealed: boolean;
+}
+
 // Starts the player's next turn, optionally untapping and drawing.
 export interface NextTurnAction {
   type: 'nextTurn';
@@ -431,6 +442,7 @@ export type LibraryAction =
   | PutFromHandAction
   | RevealAction
   | HideRevealAction
+  | SetTopRevealedAction
   | NextTurnAction
   | SetPhaseAction;
 

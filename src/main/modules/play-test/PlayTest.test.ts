@@ -102,3 +102,26 @@ describe('PlayTest batch moves with a borrowed permanent', () => {
     expect(playTest.gameState.cards[own].zone).toBe('graveyard');
   });
 });
+
+describe('PlayTest look at top', () => {
+  it('is private, tells both windows, and is off in a new game', async () => {
+    const { playTest, log } = await open();
+    const publicBefore = playTest.currentPublicView();
+    expect(playTest.handlers.getLookAtTop()).toBe(false);
+
+    playTest.handlers.setLookAtTop(true);
+    expect(playTest.handlers.getLookAtTop()).toBe(true);
+    const board = playTest.boardWindow as unknown as ReturnType<
+      typeof fakeWindow
+    >;
+    expect(board.webContents.send).toHaveBeenCalledWith('lookAtTop', true);
+    // Nothing public changes, and nothing is logged.
+    expect(playTest.currentPublicView()).toEqual(publicBefore);
+    expect(log.some((line) => /top/.test(line))).toBe(false);
+    expect(() => playTest.handlers.setLookAtTop('yes' as never)).toThrow();
+
+    playTest.handlers.restartPlayTest();
+    expect(playTest.handlers.getLookAtTop()).toBe(false);
+    expect(board.webContents.send).toHaveBeenCalledWith('lookAtTop', false);
+  });
+});

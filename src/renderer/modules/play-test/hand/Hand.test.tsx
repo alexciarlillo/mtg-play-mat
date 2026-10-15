@@ -114,6 +114,8 @@ const getCardFacts = vi.fn(() =>
 const setLibraryActivity = vi.fn(() => Promise.resolve());
 let pushGameStarted: () => void;
 let pushHandCommand: (command: HandCommand) => void;
+let pushLookAtTop: (on: boolean) => void;
+const getLookAtTop = vi.fn(() => Promise.resolve(false));
 
 beforeEach(() => {
   Object.assign(window, {
@@ -136,6 +138,11 @@ beforeEach(() => {
       },
       onUndoState: () => () => {},
       getUndoState: () => new Promise(() => {}),
+      getLookAtTop,
+      onLookAtTop: (listener: typeof pushLookAtTop) => {
+        pushLookAtTop = listener;
+        return () => {};
+      },
     },
   });
 });
@@ -955,5 +962,183 @@ describe('Hand', () => {
     fireEvent.mouseEnter(cards()[0]);
     fireEvent.keyDown(window, { key: 'g' });
     expect(dispatch).not.toHaveBeenCalled();
+  });
+});
+
+describe('Hand reveal until', () => {
+  const revealing = (count: number): Partial<PrivateView> => ({
+    keptHand: true,
+    revealed: {
+      source: 'libraryTop',
+      cards: library.slice(0, count).map((card) => card.ref!),
+    },
+  });
+
+  const open = async (patch: Partial<PrivateView> = { keptHand: true }) => {
+    const rendered = renderHand(viewOf(patch));
+    act(() => pushHandCommand('revealUntil'));
+    await screen.findByTestId('reveal-until');
+    return rendered;
+  };
+
+  const shownCards = () => screen.queryAllByTestId('reveal-until-card');
+
+  it('reveals one more card at a time, telling the table', async () => {
+    await open();
+    expect(setLibraryActivity).toHaveBeenCalledWith({ kind: 'reveal' });
+    await waitFor(() => expect(getLibrary).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /Reveal next/ })).toBeEnabled()
+    );
+    fireEvent.keyDown(window, { key: ' ' });
+    expect(dispatch).toHaveBeenLastCalledWith({
+      type: 'reveal',
+      playerId: 'p1',
+      source: 'libraryTop',
+      count: 1,
+    });
+    // Nothing is shown here until the table is shown it.
+    expect(shownCards()).toHaveLength(0);
+    // A second press before the view catches up asks for one more.
+    fireEvent.keyDown(window, { key: ' ' });
+    expect(dispatch).toHaveBeenLastCalledWith(
+      expect.objectContaining({ type: 'reveal', count: 2 })
+    );
+  });
+
+  it('reveals up to the first card the stop matches, in one reveal', async () => {
+    await open(revealing(1));
+    await waitFor(() => expect(shownCards()).toHaveLength(1));
+    // With no stop, the latest card is the hit.
+    expect(shownCards()[0]).toHaveAttribute('data-hit', 'true');
+    fireEvent.keyDown(window, { key: '2' });
+    const auto = screen.getByRole('button', { name: /Reveal until a hit/ });
+    await waitFor(() => expect(auto).toBeEnabled());
+    fireEvent.keyDown(window, { key: 'a' });
+    expect(dispatch).toHaveBeenLastCalledWith({
+      type: 'reveal',
+      playerId: 'p1',
+      source: 'libraryTop',
+      count: 2,
+    });
+  });
+
+  it('a free query stop reports mistakes and matches on card facts', async () => {
+    await open(revealing(1));
+    fireEvent.keyDown(window, { key: '5' });
+    const input = screen.getByLabelText('Stop at a card matching');
+    expect(input).toHaveFocus();
+    fireEvent.change(input, { target: { value: 'foo:1' } });
+    expect(screen.getByTestId('reveal-query-error')).toBeInTheDocument();
+    fireEvent.change(input, { target: { value: 'o:target' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(screen.getByTestId('reveal-until')).toHaveFocus();
+    const auto = screen.getByRole('button', { name: /Reveal until a hit/ });
+    await waitFor(() => expect(auto).toBeEnabled());
+    fireEvent.keyDown(window, { key: 'a' });
+    expect(dispatch).toHaveBeenLastCalledWith(
+      expect.objectContaining({ type: 'reveal', count: 3 })
+    );
+  });
+
+  it('finishes with the hit and the rest in one action', async () => {
+    await open(revealing(3));
+    await waitFor(() => expect(shownCards()).toHaveLength(3));
+    // Nonland: Grizzly Bears, the first card, is the hit.
+    fireEvent.keyDown(window, { key: '3' });
+    expect(shownCards()[0]).toHaveAttribute('data-hit', 'true');
+    expect(screen.getByTestId('reveal-until-status')).toHaveTextContent(
+      'Hit: Grizzly Bears'
+    );
+    fireEvent.keyDown(window, { key: 'Enter' });
+    expect(dispatch).toHaveBeenLastCalledWith({
+      type: 'arrangeTop',
+      playerId: 'p1',
+      top: [],
+      bottom: ['p1:21', 'p1:22'],
+      graveyard: [],
+      exile: [],
+      hand: ['p1:20'],
+      bottomRandom: true,
+    });
+    expect(screen.queryByTestId('reveal-until')).toBeNull();
+  });
+
+  it('can pick another hit, the battlefield and the graveyard', async () => {
+    await open(revealing(3));
+    await waitFor(() => expect(shownCards()).toHaveLength(3));
+    fireEvent.click(shownCards()[1]!);
+    fireEvent.keyDown(window, { key: 'b' });
+    fireEvent.keyDown(window, { key: 'g' });
+    fireEvent.click(screen.getByRole('button', { name: /Finish/ }));
+    expect(dispatch).toHaveBeenLastCalledWith({
+      type: 'arrangeTop',
+      playerId: 'p1',
+      top: [],
+      bottom: [],
+      graveyard: ['p1:20', 'p1:22'],
+      exile: [],
+      hand: [],
+      battlefield: ['p1:21'],
+    });
+  });
+
+  it('clicking the hit leaves no hit, so everything goes with the rest', async () => {
+    await open(revealing(2));
+    await waitFor(() => expect(shownCards()).toHaveLength(2));
+    fireEvent.click(shownCards()[1]!);
+    expect(shownCards()[1]).not.toHaveAttribute('data-hit');
+    fireEvent.keyDown(window, { key: 'Enter' });
+    expect(dispatch).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        bottom: ['p1:20', 'p1:21'],
+        hand: [],
+        bottomRandom: true,
+      })
+    );
+  });
+
+  it('a chosen hit that is undone away falls back to the automatic one', async () => {
+    const { rerender } = await open(revealing(3));
+    await waitFor(() => expect(shownCards()).toHaveLength(3));
+    fireEvent.click(shownCards()[2]!);
+    fireEvent.click(shownCards()[1]!);
+    expect(shownCards()[1]).toHaveAttribute('data-hit', 'true');
+    rerender(
+      <ContextMenuProvider>
+        <CardPreviewProvider>
+          <Hand store={storeOf(viewOf({ ...revealing(1), seq: 2 }))} />
+        </CardPreviewProvider>
+      </ContextMenuProvider>
+    );
+    await waitFor(() => expect(shownCards()).toHaveLength(1));
+    expect(shownCards()[0]).toHaveAttribute('data-hit', 'true');
+  });
+
+  it('closing leaves the reveal as it is', async () => {
+    await open(revealing(2));
+    const dialog = screen.getByTestId('reveal-until');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
+    expect(screen.queryByTestId('reveal-until')).toBeNull();
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(setLibraryActivity).toHaveBeenLastCalledWith(null);
+  });
+});
+
+describe('Hand always looking at the top card', () => {
+  it('shows the top card in the hand only while on', async () => {
+    renderHand(viewOf({ keptHand: true }));
+    await waitFor(() => expect(getLookAtTop).toHaveBeenCalled());
+    expect(screen.queryByTestId('own-top-card')).toBeNull();
+    act(() => pushLookAtTop(true));
+    const peek = await screen.findByTestId('own-top-card');
+    await waitFor(() =>
+      expect(within(peek).getByTestId('card')).toHaveAttribute(
+        'data-card-name',
+        'Grizzly Bears'
+      )
+    );
+    act(() => pushLookAtTop(false));
+    expect(screen.queryByTestId('own-top-card')).toBeNull();
   });
 });

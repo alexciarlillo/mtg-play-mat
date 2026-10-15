@@ -761,6 +761,58 @@ describe('turns and reveals over the wire', () => {
   });
 });
 
+describe('the top card played revealed', () => {
+  const showing = (): PublicView => {
+    const state = applyAll(game(), [
+      { type: 'setTopRevealed', playerId: 'alice', revealed: true },
+    ]);
+    const v = publicView(state, 'alice');
+    if (!v) throw new Error('no view');
+    return v;
+  };
+
+  it('round-trips the top card, or null for an empty library', () => {
+    const v = showing();
+    expect(v.topCard).toEqual(expect.objectContaining({ name: 'Card 4' }));
+    const parsed = parseNetMessage(
+      encodeNetMessage({
+        v: PROTOCOL_VERSION,
+        seq: 1,
+        from: 'alice',
+        kind: 'public',
+        view: v,
+      })
+    );
+    if (parsed.kind !== 'public') throw new Error('not public');
+    expect(parsed.view).toEqual(v);
+    expect(parsePublicView({ ...v, topCard: null }).topCard).toBeNull();
+  });
+
+  it('is absent from views of players not showing it, or older builds', () => {
+    const parsed = parsePublicView(view());
+    expect('topCard' in parsed).toBe(false);
+  });
+
+  // An older build rebuilds a view from the fields it knows, which is
+  // what lets this one be added without a version bump.
+  it('is dropped like any field a build does not know', () => {
+    const { topCard, ...v } = showing();
+    const parsed = parsePublicView({ ...v, futureTopCard: topCard });
+    expect(parsed).toEqual(v);
+  });
+
+  it('keeps only known fields of the card, and rejects a bad one', () => {
+    const v = showing();
+    expect(
+      parsePublicView({ ...v, topCard: { ...v.topCard, secret: 'x' } }).topCard
+    ).toEqual(v.topCard);
+    const bad: unknown[] = ['Card 4', 3, { name: 1 }, []];
+    bad.forEach((topCard) =>
+      expect(() => parsePublicView({ ...v, topCard })).toThrow(/bad message/)
+    );
+  });
+});
+
 describe('library activity', () => {
   const base = (): PublicView => {
     const v = publicView(game(), 'alice');
@@ -782,10 +834,11 @@ describe('library activity', () => {
     return parsed.view;
   };
 
-  it('round-trips looking, searching, and nothing', () => {
+  it('round-trips looking, searching, revealing, and nothing', () => {
     const activities = [
       { kind: 'look', count: 3 },
       { kind: 'search' },
+      { kind: 'reveal' },
       null,
     ] as const;
     activities.forEach((libraryActivity) => {

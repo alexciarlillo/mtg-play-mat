@@ -466,6 +466,7 @@ const Board = ({ store, opponent, hand }: Props) => {
                         count={view.libraryCount}
                         size={pileSize}
                         activity={view.libraryActivity}
+                        topCard={view.topCard}
                         onDrawMany={() => setDialog('drawMany')}
                         onMill={() => setDialog('mill')}
                         onExileTop={() => setDialog('exileTop')}

@@ -14,6 +14,7 @@ import { useCardPreview } from '../../../ui/CardPreview';
 import { Modal } from '../common/Dialogs';
 import { useLibraryActivity } from '../common/useLibraryActivity';
 import { dispatch } from '../viewStore';
+import { keepFocusOnClick, ownsKey } from './dialogKeys';
 import {
   type Arrangement,
   applyPreset,
@@ -48,16 +49,6 @@ const DRAG_SLOP = 4;
 
 const button =
   'rounded px-3 py-1 text-sm font-medium ring-1 ring-slate-400 disabled:opacity-40';
-
-// Keys belong to a field being typed in, and Enter to a focused button.
-const ownsKey = (target: EventTarget | null, key: string) => {
-  if (!(target instanceof HTMLElement)) return false;
-  if (target instanceof HTMLInputElement) {
-    return target.type !== 'checkbox' || key === ' ';
-  }
-  if (target.tagName === 'BUTTON') return key === 'Enter' || key === ' ';
-  return ['TEXTAREA', 'SELECT'].includes(target.tagName);
-};
 
 const tileId = (instanceId: string) => `look-tile-${instanceId}`;
 
@@ -412,6 +403,7 @@ const LookAtTopDialog = ({
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={cancelDrag}
+        onMouseDown={keepFocusOnClick}
       >
         <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 text-sm">
           <label className="flex items-center gap-1">

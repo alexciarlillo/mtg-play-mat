@@ -29,10 +29,13 @@ import {
   useGameShortcuts,
 } from '../common/useGameShortcuts';
 import { dispatch, useView, type ViewStore } from '../viewStore';
+import { useLookAtTop } from '../common/useLookAtTop';
 import BottomCardDialog from './BottomCardDialog';
 import LookAtTopDialog from './LookAtTopDialog';
 import LookPrompt, { type LookChoice } from './LookPrompt';
+import RevealUntilDialog from './RevealUntilDialog';
 import SearchLibraryDialog from './SearchLibraryDialog';
+import { useLibrary } from './useLibrary';
 
 const play = (card: CardView) => moveTo(card, 'battlefield');
 
@@ -106,6 +109,27 @@ const handMenu = (
   return [...moves.slice(0, at), ...extras, ...moves.slice(at), ...putBack];
 };
 
+// "Always look at the top card": the owner's private view of it, kept
+// to the hand like the face-down peek beside it.
+const TopCardPeek = ({ seq }: { seq: number }) => {
+  const top = useLibrary(seq)?.[0];
+  return (
+    <div
+      data-testid="own-top-card"
+      className="flex shrink-0 flex-col gap-1 border-l border-slate-600 pl-3"
+    >
+      <div className="text-xs font-semibold uppercase tracking-wide text-slate-300">
+        Top of library
+      </div>
+      {top ? (
+        <Card card={top} size="sm" />
+      ) : (
+        <div className="text-xs text-slate-400">Empty</div>
+      )}
+    </div>
+  );
+};
+
 // The owner's private look at their face-down permanents. Only the hand
 // window has their identities; the board never does.
 const FaceDownPeek = ({ cards }: { cards: CardView[] }) => (
@@ -133,7 +157,14 @@ const revealTitles = {
   card: 'a card from your hand',
 };
 
-type Dialog = 'help' | 'lookCount' | 'look' | 'search' | 'bottom' | 'restart';
+type Dialog =
+  | 'help'
+  | 'lookCount'
+  | 'look'
+  | 'search'
+  | 'bottom'
+  | 'revealUntil'
+  | 'restart';
 
 const libraryDialogOf: Record<LibraryDialog, Dialog> = {
   search: 'search',
@@ -142,6 +173,7 @@ const libraryDialogOf: Record<LibraryDialog, Dialog> = {
 
 const commandDialogs: Record<HandCommand, Dialog> = {
   viewBottom: 'bottom',
+  revealUntil: 'revealUntil',
   ...libraryDialogOf,
 };
 
@@ -150,6 +182,7 @@ const libraryDialogs: (Dialog | null)[] = [
   'look',
   'search',
   'bottom',
+  'revealUntil',
 ];
 
 type PickMode = 'mulligan' | LibraryEnd;
@@ -397,6 +430,7 @@ const Hand = ({ store, dock }: Props) => {
       }),
     []
   );
+  const lookAtTop = useLookAtTop();
   const { turnTracking } = useSettings().settings;
   // Docked, the board window's own shortcuts already cover the keys.
   useGameShortcuts(view, {
@@ -603,6 +637,7 @@ const Hand = ({ store, dock }: Props) => {
               </div>
             );
           })}
+          {view && lookAtTop && <TopCardPeek seq={view.seq} />}
           {faceDown.length > 0 && <FaceDownPeek cards={faceDown} />}
         </div>
       )}
@@ -643,6 +678,15 @@ const Hand = ({ store, dock }: Props) => {
       )}
       {view && dialog === 'bottom' && (
         <BottomCardDialog seq={view.seq} onClose={close} />
+      )}
+      {view && dialog === 'revealUntil' && (
+        <RevealUntilDialog
+          playerId={view.playerId}
+          seq={view.seq}
+          revealed={view.revealed}
+          libraryCount={view.libraryCount}
+          onClose={close}
+        />
       )}
       {view && dialog === 'search' && (
         <SearchLibraryDialog

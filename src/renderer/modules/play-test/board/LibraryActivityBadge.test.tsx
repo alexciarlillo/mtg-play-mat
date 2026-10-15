@@ -32,6 +32,19 @@ describe('LibraryActivityBadge', () => {
     expect(screen.getByText('Searching library…')).toBeInTheDocument();
   });
 
+  it('says when cards are being revealed from the top', () => {
+    render(
+      <LibraryActivityBadge
+        activity={{ kind: 'reveal' }}
+        compact
+        testId="activity"
+      />
+    );
+    expect(badge()).toHaveAttribute('data-tone', 'silver');
+    expect(badge()).toHaveAttribute('title', 'Revealing cards…');
+    expect(screen.getByText('Revealing…')).toBeInTheDocument();
+  });
+
   it('shortens its label in a pod, keeping the colour', () => {
     render(
       <LibraryActivityBadge

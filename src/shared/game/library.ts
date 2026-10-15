@@ -9,6 +9,7 @@ import {
 } from './core';
 import { untapAll } from './mtg';
 import { shuffle } from './rng';
+import { MAX_REVEALED_CARDS } from './views';
 import type {
   ArrangeTopAction,
   GameState,
@@ -27,7 +28,7 @@ const moveAll = (
   state: GameState,
   rules: Rules,
   ids: InstanceId[],
-  to: 'graveyard' | 'exile' | 'hand'
+  to: 'graveyard' | 'exile' | 'hand' | 'battlefield'
 ) => ids.reduce((next, id) => moveCard(next, rules, id, to), state);
 
 const distinct = (ids: InstanceId[]) => new Set(ids).size === ids.length;
@@ -44,8 +45,15 @@ const arrangeTop = (
   player: PlayerState,
   action: ArrangeTopAction
 ): GameState => {
-  const { top, graveyard, exile, hand } = action;
-  const all = [...top, ...action.bottom, ...graveyard, ...exile, ...hand];
+  const { top, graveyard, exile, hand, battlefield = [] } = action;
+  const all = [
+    ...top,
+    ...action.bottom,
+    ...graveyard,
+    ...exile,
+    ...hand,
+    ...battlefield,
+  ];
   const library = player.zones.library;
   const looked = new Set(library.slice(0, all.length));
   if (
@@ -61,8 +69,17 @@ const arrangeTop = (
     ? shuffle(action.bottom, state.rng)
     : [action.bottom, state.rng];
   const rest = library.slice(all.length);
-  const order = [...top, ...graveyard, ...exile, ...hand, ...rest, ...bottom];
-  const moves = graveyard.length + exile.length + hand.length;
+  const order = [
+    ...top,
+    ...graveyard,
+    ...exile,
+    ...hand,
+    ...battlefield,
+    ...rest,
+    ...bottom,
+  ];
+  const moves =
+    graveyard.length + exile.length + hand.length + battlefield.length;
   // A random order or a shuffle is a change even if nothing moved.
   const randomised =
     action.shuffleAfter || (action.bottomRandom && bottom.length > 1);
@@ -74,17 +91,14 @@ const arrangeTop = (
     ...updateZone(state, player.id, 'library', () => order),
     rng,
   };
-  const placed = moveAll(
-    moveAll(
-      moveAll(arranged, rules, graveyard, 'graveyard'),
-      rules,
-      exile,
-      'exile'
-    ),
-    rules,
-    hand,
-    'hand'
-  );
+  const placed = (
+    [
+      [graveyard, 'graveyard'],
+      [exile, 'exile'],
+      [hand, 'hand'],
+      [battlefield, 'battlefield'],
+    ] as const
+  ).reduce((next, [ids, to]) => moveAll(next, rules, ids, to), arranged);
   return action.shuffleAfter ? shuffleLibrary(placed, player.id) : placed;
 };
 
@@ -151,7 +165,11 @@ const revealedIds = (
     case 'hand':
       return player.zones.hand;
     case 'libraryTop':
-      return player.zones.library.slice(0, Math.max(0, action.count));
+      // Peers refuse a bigger reveal, and with it the whole view.
+      return player.zones.library.slice(
+        0,
+        Math.max(0, Math.min(action.count, MAX_REVEALED_CARDS))
+      );
     case 'card':
       return state.cards[action.instanceId]?.zone === 'hand' &&
         player.zones.hand.includes(action.instanceId)
@@ -193,6 +211,24 @@ export const hideReveal = (state: GameState, playerId: PlayerId): GameState => {
   };
 };
 
+// Stored only while on, so states from before it look the same.
+const setTopRevealed = (
+  state: GameState,
+  player: PlayerState,
+  revealed: boolean
+): GameState => {
+  if (Boolean(player.topRevealed) === revealed) return state;
+  return {
+    ...state,
+    players: state.players.map((p) => {
+      if (p.id !== player.id) return p;
+      const rest = { ...p };
+      delete rest.topRevealed;
+      return revealed ? { ...rest, topRevealed: true } : rest;
+    }),
+  };
+};
+
 // Where a new turn lands once its automatic steps are done.
 const turnPhase = (untap: boolean, draw: boolean): Phase => {
   if (draw) return 'main1';
@@ -225,6 +261,8 @@ export const reduceLibrary = (
       return reveal(state, player, action);
     case 'hideReveal':
       return hideReveal(state, player.id);
+    case 'setTopRevealed':
+      return setTopRevealed(state, player, action.revealed);
     case 'nextTurn': {
       const untapped = action.untap ? untapAll(state, player) : state;
       const drawn = action.draw

@@ -4,7 +4,12 @@ import {
   PhotoIcon,
   StopIcon,
 } from '@heroicons/react/20/solid';
-import type { CardView, LibraryActivity, PublicView } from '@shared/game';
+import type {
+  CardRef,
+  CardView,
+  LibraryActivity,
+  PublicView,
+} from '@shared/game';
 import type { PeerInfo } from '@shared/net/protocol';
 import type { TableEntry } from '@shared/net/remoteViews';
 import classNames from 'classnames';
@@ -14,6 +19,7 @@ import Card from '../../../ui/Card';
 import { useCardBack } from '../../../ui/CardBackProvider';
 import { cardWidths } from '../../../ui/cardSizes';
 import CardImg from '../../../ui/CardImg';
+import { shownCard } from '../common/shownCard';
 import { hasCommanders } from './commanders';
 import { CommanderDamageTaken } from './CommanderTracker';
 import CommandZone from './CommandZone';
@@ -57,12 +63,14 @@ const ZoneCount = ({
   count,
   testId,
   activity,
+  topCard,
   onOpen,
 }: {
   label: string;
   count: number;
   testId: string;
   activity?: LibraryActivity | null;
+  topCard?: CardRef | null;
   onOpen?(): void;
 }) => {
   const body = (
@@ -71,7 +79,18 @@ const ZoneCount = ({
       <span className="font-bold tabular-nums">{count}</span>
     </>
   );
-  return (
+  // A tile has no room for a card, so it names the top card instead.
+  const top = topCard && (
+    <div
+      data-testid={`${testId}-top-card`}
+      data-card-name={topCard.name}
+      title={`Top card: ${topCard.name}`}
+      className="col-span-2 truncate rounded bg-amber-200 px-1.5 text-[11px] font-semibold text-slate-900"
+    >
+      Top: {topCard.name}
+    </div>
+  );
+  const tileNode = (
     <div
       data-testid={testId}
       data-count={count}
@@ -95,6 +114,14 @@ const ZoneCount = ({
         testId={`${testId}-activity`}
       />
     </div>
+  );
+  return top ? (
+    <>
+      {tileNode}
+      {top}
+    </>
+  ) : (
+    tileNode
   );
 };
 
@@ -125,12 +152,15 @@ const Count = ({
   back,
   activity,
   owner,
+  topCard,
 }: {
   label: string;
   count: number;
   testId: string;
   back?: boolean;
   activity?: LibraryActivity | null;
+  // A library played with its top card revealed shows that card.
+  topCard?: CardRef | null;
   // Whose card back the library shows.
   owner?: string;
 }) => {
@@ -152,7 +182,14 @@ const Count = ({
           !back && 'text-2xl font-bold tabular-nums'
         )}
       >
-        {back ? count > 0 && <CardImg name={label} back={owned} /> : count}
+        {back && topCard && (
+          <div data-testid={`${testId}-top-card`} className="contents">
+            <Card card={shownCard(topCard, `top-${owner}`)} size="xs" />
+          </div>
+        )}
+        {back
+          ? count > 0 && !topCard && <CardImg name={label} back={owned} />
+          : count}
         <LibraryActivityBadge
           activity={activity}
           compact
@@ -429,6 +466,7 @@ const OpponentSide = ({
                     count={view.libraryCount}
                     testId="opponent-library"
                     activity={view.libraryActivity}
+                    topCard={view.topCard}
                   />
                   <ZoneCount
                     label="Hand"
@@ -454,6 +492,7 @@ const OpponentSide = ({
                     back
                     owner={peer.playerId}
                     activity={view.libraryActivity}
+                    topCard={view.topCard}
                   />
                   <Count
                     label="Hand"

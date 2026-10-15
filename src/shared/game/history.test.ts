@@ -153,6 +153,11 @@ const steps: Record<PlayerAction['type'], (s: GameState) => PlayerAction> = {
   }),
   reveal: () => ({ type: 'reveal', playerId: P1, source: 'hand' }),
   hideReveal: () => ({ type: 'hideReveal', playerId: P1 }),
+  setTopRevealed: () => ({
+    type: 'setTopRevealed',
+    playerId: P1,
+    revealed: true,
+  }),
   nextTurn: () => ({
     type: 'nextTurn',
     playerId: P1,
@@ -224,6 +229,7 @@ const order: PlayerAction['type'][] = [
   'putFromHand',
   'reveal',
   'hideReveal',
+  'setTopRevealed',
   'nextTurn',
   'setPhase',
   'setTapped',

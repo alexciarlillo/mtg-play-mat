@@ -71,7 +71,8 @@ under **Settings → Online play**, with the key its `RELAY_APP_KEYS` lists for
 to each other and no server is involved at all.
 
 Either way a pod is a star — guests talk to the host, and the host passes messages on. Hands
-and libraries never leave the machine they are on.
+and libraries never leave the machine they are on, except for cards a player chooses to show:
+a reveal, or the top card while playing with it revealed.
 
 ## Development
 
@@ -240,7 +241,12 @@ tab shows just the rolls. While a player has Look at top or Search library open,
 their library pile is ringed and badged on their own board and every opponent's, and
 the log says so once; it clears when the dialog closes. Looking at the top is silver
 ("Top 3…") and a search gold ("Searching…"), so the two never read alike across the
-table. A life total that just changed flashes too — red for damage, green for life
+table. **Reveal until…** in the library menu shows the table one more card at a time
+(Space), or up to the first card that matches a stop such as "a nonland card" or any
+search query (A), then puts the hit into the hand, onto the battlefield or into exile and
+the rest on the bottom at random or into the graveyard, as one action. **Play with the top
+card revealed** turns the library pile face up on every board until it is turned off;
+**Always look at the top card** shows it in your hand window only. A life total that just changed flashes too — red for damage, green for life
 gained — and fades back over a second, on your own counter and on every opponent's,
 so a hit lands visibly even with the log folded away.
 Each opponent's seat carries its own log under their command zone: just that

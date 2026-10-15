@@ -5,6 +5,7 @@ import {
   type ControlChange,
   type DummyOpponent,
   type LentCard,
+  MAX_REVEALED_CARDS,
   parseCardRef,
   type PermanentState,
   parseLibraryActivity,
@@ -266,7 +267,6 @@ const dummy = (value: unknown): DummyOpponent => {
 };
 
 const MAX_TURN = 100_000;
-const MAX_REVEALED = 100;
 const revealSources: readonly RevealSource[] = ['hand', 'libraryTop', 'card'];
 
 // Turn and phase are optional, for views from builds without them.
@@ -287,7 +287,7 @@ const revealed = (value: unknown): RevealView | null => {
   }
   return {
     source: fields.source as RevealSource,
-    cards: list(fields.cards, 'revealed.cards', MAX_REVEALED).map((ref) =>
+    cards: list(fields.cards, 'revealed.cards', MAX_REVEALED_CARDS).map((ref) =>
       parseCardRef(ref, fail)
     ),
   };
@@ -393,6 +393,12 @@ export const parsePublicView = (value: unknown): PublicView => {
     ...turnFields(fields),
     ...(fields.revealed !== undefined && {
       revealed: revealed(fields.revealed),
+    }),
+    // Added within v2, like the rest of these: older builds rebuild a
+    // view from the fields they know, so they simply never see it.
+    ...(fields.topCard !== undefined && {
+      topCard:
+        fields.topCard === null ? null : parseCardRef(fields.topCard, fail),
     }),
     // Added within v2; older builds rebuild views without it.
     ...(fields.libraryActivity !== undefined && {

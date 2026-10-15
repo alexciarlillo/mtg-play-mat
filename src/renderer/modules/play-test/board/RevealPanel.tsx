@@ -1,6 +1,7 @@
-import type { CardRef, CardView, RevealSource, RevealView } from '@shared/game';
+import type { RevealSource, RevealView } from '@shared/game';
 
 import Card from '../../../ui/Card';
+import { shownCard } from '../common/shownCard';
 import type { CardSize } from '../../../ui/cardSizes';
 
 const titles: Record<RevealSource, string> = {
@@ -8,22 +9,6 @@ const titles: Record<RevealSource, string> = {
   libraryTop: 'Revealed from the top of the library',
   card: 'Revealed from hand',
 };
-
-// A revealed card carries only its identity, so give it a throwaway view.
-const shownCard = (ref: CardRef, index: number): CardView => ({
-  instanceId: `revealed-${index}`,
-  ref,
-  owner: '',
-  controller: '',
-  zone: 'hand',
-  position: null,
-  tapped: false,
-  faceDown: false,
-  faceIndex: 0,
-  counters: {},
-  isToken: false,
-  attachedTo: null,
-});
 
 interface Props {
   reveal: RevealView | null | undefined;

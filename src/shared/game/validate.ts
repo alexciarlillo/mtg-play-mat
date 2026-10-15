@@ -15,6 +15,7 @@ import type {
 } from './types';
 import { MAX_TOKENS } from './mtg';
 import { phases, zoneIds } from './types';
+import { MAX_REVEALED_CARDS } from './views';
 
 export class InvalidActionError extends Error {
   constructor(message: string) {
@@ -235,6 +236,13 @@ const parsePutFromHand = (input: Fields): PlayerAction => {
   };
 };
 
+// Left out when absent or empty, so the action stays as small as before.
+const optionalIds = (input: Fields, key: 'battlefield') => {
+  if (input[key] === undefined) return {};
+  const ids = strings(input, key, MAX_COUNT);
+  return ids.length > 0 ? { [key]: ids } : {};
+};
+
 const parseReveal = (input: Fields): PlayerAction => {
   const playerId = string(input, 'playerId');
   switch (input.source) {
@@ -245,7 +253,7 @@ const parseReveal = (input: Fields): PlayerAction => {
         type: 'reveal',
         playerId,
         source: 'libraryTop',
-        count: integer(input, 'count', 1, MAX_COUNT),
+        count: integer(input, 'count', 1, MAX_REVEALED_CARDS),
       };
     case 'card':
       return {
@@ -443,6 +451,7 @@ export const parsePlayerAction = (input: unknown): PlayerAction => {
         graveyard: strings(input, 'graveyard', MAX_COUNT),
         exile: strings(input, 'exile', MAX_COUNT),
         hand: strings(input, 'hand', MAX_COUNT),
+        ...optionalIds(input, 'battlefield'),
         ...(flag(input, 'bottomRandom') && { bottomRandom: true }),
         ...(flag(input, 'shuffleAfter') && { shuffleAfter: true }),
       };
@@ -459,6 +468,12 @@ export const parsePlayerAction = (input: unknown): PlayerAction => {
       return parseReveal(input);
     case 'hideReveal':
       return { type: 'hideReveal', playerId: string(input, 'playerId') };
+    case 'setTopRevealed':
+      return {
+        type: 'setTopRevealed',
+        playerId: string(input, 'playerId'),
+        revealed: bool(input, 'revealed'),
+      };
     case 'nextTurn':
       return {
         type: 'nextTurn',

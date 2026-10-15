@@ -347,11 +347,31 @@ test('each player’s actions show in the log on both boards', async () => {
   ).toHaveText(/Bob drew a card$/);
 });
 
-test('the wire never carries the sender’s hidden cards', async () => {
+interface WireMessage {
+  from: string;
+  kind: string;
+  view?: {
+    zones: Record<string, { zone: string }[]>;
+    handCount: number;
+    libraryCount: number;
+    topCard?: { id: string; name: string } | null;
+  } | null;
+}
+
+const netWire = async () => {
   const net = await page(host, 'net.html');
-  const wire = await net.evaluate(
+  return net.evaluate(
     () => (window as unknown as { netWire: string[] }).netWire
   );
+};
+
+// Checks raw host messages against the host's game as it is now. The
+// one deliberate exception, a library top card played revealed, is
+// allowed only where asked for and only in a view's topCard.
+const expectNoHiddenCards = async (
+  wire: string[],
+  { allowTopCard }: { allowTopCard: boolean }
+) => {
   const state = await gameState(host);
   const { playerId } = await profileOf(host);
   const me = state.players.find((p) => p.id === playerId);
@@ -359,7 +379,6 @@ test('the wire never carries the sender’s hidden cards', async () => {
 
   const hidden = [...me.zones.hand, ...me.zones.library];
   expect(hidden.length).toBeGreaterThan(50);
-  expect(wire.length).toBeGreaterThan(5);
 
   const deckNames = new Set(Object.values(state.cards).map((c) => c.ref.name));
   const deckIds = new Set(Object.values(state.cards).map((c) => c.ref.id));
@@ -377,21 +396,14 @@ test('the wire never carries the sender’s hidden cards', async () => {
   const hiddenOnly = [...deckNames].filter((name) => !shownNames.has(name));
   expect(hiddenOnly.length).toBeGreaterThan(0);
   let logLines = 0;
+  const topCards: string[] = [];
 
   for (const raw of wire) {
     // Nothing ever names a card that is in the hand or library now; none
     // of them has been public during this test.
     for (const id of hidden) expect(raw).not.toContain(JSON.stringify(id));
 
-    const message = JSON.parse(raw) as {
-      from: string;
-      kind: string;
-      view?: {
-        zones: Record<string, { zone: string }[]>;
-        handCount: number;
-        libraryCount: number;
-      } | null;
-    };
+    const message = JSON.parse(raw) as WireMessage;
     expect(message.from).toBe(playerId);
     if (message.kind === 'log') {
       // Log lines may name only cards that have been public.
@@ -406,7 +418,7 @@ test('the wire never carries the sender’s hidden cards', async () => {
 
     // Card identities appear only as cards in public zones, and every card
     // of the 60 is accounted for by those zones plus the two counts.
-    const { zones, handCount, libraryCount } = message.view;
+    const { zones, handCount, libraryCount, topCard } = message.view;
     expect(Object.keys(zones).sort()).toEqual([...publicZones].sort());
     let shown = 0;
     for (const zone of publicZones) {
@@ -415,12 +427,85 @@ test('the wire never carries the sender’s hidden cards', async () => {
     }
     expect(shown + handCount + libraryCount).toBe(60);
 
-    const rest = JSON.stringify({ ...message.view, zones: null });
+    if (allowTopCard) {
+      if (topCard) {
+        expect(deckIds).toContain(topCard.id);
+        topCards.push(topCard.name);
+      }
+    } else {
+      expect(message.view).not.toHaveProperty('topCard');
+    }
+    const rest = JSON.stringify({
+      ...message.view,
+      zones: null,
+      topCard: null,
+    });
     for (const text of [...deckNames, ...deckIds]) {
       expect(rest).not.toContain(text);
     }
   }
+  return { logLines, topCards };
+};
+
+test('the wire never carries the sender’s hidden cards', async () => {
+  const wire = await netWire();
+  expect(wire.length).toBeGreaterThan(5);
+  const { logLines } = await expectNoHiddenCards(wire, {
+    allowTopCard: false,
+  });
   expect(logLines).toBeGreaterThan(3);
+});
+
+test('a top card played revealed reaches the other board, and only it', async () => {
+  const [hostBoard, guestBoard] = await Promise.all([
+    page(host, 'board.html'),
+    page(guest, 'board.html'),
+  ]);
+  const { playerId } = await profileOf(host);
+  const hostTop = async () => {
+    const state = await gameState(host);
+    const me = state.players.find((p) => p.id === playerId)!;
+    return state.cards[me.zones.library[0]!].ref.name;
+  };
+  const menu = async (item: string) => {
+    await hostBoard.getByTestId('library').click({ button: 'right' });
+    await hostBoard.getByRole('menuitem', { name: item, exact: true }).click();
+  };
+  const theirTop = guestBoard
+    .getByTestId('opponent-library-top-card')
+    .getByTestId('card');
+  const from = (await netWire()).length;
+  await expect(theirTop).toHaveCount(0);
+
+  await menu('Play with the top card revealed');
+  await expect(theirTop).toHaveAttribute('data-card-name', await hostTop());
+  await expect(
+    guestBoard.getByTestId('table-log').getByTestId('log-entry').last()
+  ).toHaveText(
+    /Alice started playing with the top card of their library revealed$/
+  );
+  await hostBoard.getByRole('button', { name: 'Draw a card' }).click();
+  await expect(theirTop).toHaveAttribute('data-card-name', await hostTop());
+  await menu('Shuffle library');
+  await expect(theirTop).toHaveAttribute('data-card-name', await hostTop());
+  await menu('Stop playing with the top card revealed');
+  await expect(guestBoard.getByTestId('opponent-library-top-card')).toHaveCount(
+    0
+  );
+
+  // Only views sent while it was on carry a top card, and nothing else
+  // about the library or hand went out meanwhile.
+  const wire = (await netWire()).slice(from);
+  const views = wire
+    .map((raw) => JSON.parse(raw) as WireMessage)
+    .filter((message) => message.kind === 'public' && message.view);
+  const carried = views.map((message) => Boolean(message.view?.topCard));
+  expect(carried.at(-1)).toBe(false);
+  expect(carried.indexOf(true)).toBeGreaterThanOrEqual(0);
+  // One run of views with a top card, between switching on and off.
+  expect(carried.join('').replace(/(true)+/, 'T')).not.toMatch(/true/);
+  const { topCards } = await expectNoHiddenCards(wire, { allowTopCard: true });
+  expect(topCards.length).toBeGreaterThanOrEqual(3);
 });
 
 test('a play area background reaches the other board, and can be folded away', async () => {

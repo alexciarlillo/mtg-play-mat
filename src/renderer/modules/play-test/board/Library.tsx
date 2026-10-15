@@ -1,11 +1,14 @@
-import type { LibraryActivity } from '@shared/game';
+import type { CardRef, LibraryActivity } from '@shared/game';
 import classNames from 'classnames';
 import type { MouseEvent } from 'react';
 
+import Card from '../../../ui/Card';
 import { type CardSize, cardWidths } from '../../../ui/cardSizes';
 import { useCardBack } from '../../../ui/CardBackProvider';
 import CardImg from '../../../ui/CardImg';
 import { useContextMenu } from '../../../ui/ContextMenuProvider';
+import { setLookAtTop, useLookAtTop } from '../common/useLookAtTop';
+import { shownCard } from '../common/shownCard';
 import { dispatch } from '../viewStore';
 import LibraryActivityBadge from './LibraryActivityBadge';
 import ZoneCountBadge from './ZoneCountBadge';
@@ -15,6 +18,8 @@ interface Props {
   count: number;
   size?: CardSize;
   activity?: LibraryActivity | null;
+  // Set only while the player plays with the top card revealed.
+  topCard?: CardRef | null;
   onDrawMany(): void;
   onMill(): void;
   onExileTop(): void;
@@ -26,6 +31,7 @@ const Library = ({
   count,
   size = 'sm',
   activity = null,
+  topCard,
   onDrawMany,
   onMill,
   onExileTop,
@@ -34,14 +40,16 @@ const Library = ({
   const menu = useContextMenu();
   const canDraw = playerId !== undefined && count > 0;
   const back = useCardBack(playerId);
+  const topRevealed = topCard !== undefined;
+  const lookAtTop = useLookAtTop();
 
   const drawCard = () => {
     if (playerId) dispatch({ type: 'draw', playerId, count: 1 });
   };
 
-  const viewBottom = () => {
-    window.api.openHandDialog('viewBottom').catch((err: unknown) => {
-      console.error('[play-test] failed to open the bottom card', err);
+  const openInHand = (command: 'viewBottom' | 'revealUntil') => () => {
+    window.api.openHandDialog(command).catch((err: unknown) => {
+      console.error(`[play-test] failed to open ${command}`, err);
     });
   };
 
@@ -70,7 +78,7 @@ const Library = ({
         // Opens where the hand is, never on the shared board.
         {
           title: 'View bottom card',
-          action: count > 0 ? viewBottom : null,
+          action: count > 0 ? openInHand('viewBottom') : null,
         },
         {
           title: 'Reveal the top card',
@@ -84,6 +92,28 @@ const Library = ({
                     count: 1,
                   })
               : null,
+        },
+        {
+          title: 'Reveal until…',
+          action: count > 0 ? openInHand('revealUntil') : null,
+        },
+        {
+          title: topRevealed
+            ? 'Stop playing with the top card revealed'
+            : 'Play with the top card revealed',
+          action: () =>
+            dispatch({
+              type: 'setTopRevealed',
+              playerId,
+              revealed: !topRevealed,
+            }),
+        },
+        // Shown only where the hand is, so nobody else ever sees it.
+        {
+          title: lookAtTop
+            ? 'Stop looking at the top card'
+            : 'Always look at the top card',
+          action: () => setLookAtTop(!lookAtTop),
         },
       ],
       x: e.pageX,
@@ -113,7 +143,12 @@ const Library = ({
         )}
         onClick={canDraw ? drawCard : undefined}
       >
-        {count > 0 && <CardImg name="Library" back={back} />}
+        {count > 0 && !topCard && <CardImg name="Library" back={back} />}
+        {topCard && (
+          <div data-testid="library-top-card" className="contents">
+            <Card card={shownCard(topCard, `top-${playerId}`)} size={size} />
+          </div>
+        )}
         <LibraryActivityBadge
           activity={activity}
           compact={size === 'xs'}

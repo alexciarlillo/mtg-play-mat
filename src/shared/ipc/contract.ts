@@ -97,6 +97,10 @@ export const requests = {
   // Opens a private dialog in whichever window shows the hand (the board
   // itself when the hand is docked). Board or hand only.
   openHandDialog: request<[command: HandCommand]>(),
+  // The player's own look at the top of their library whenever the hand
+  // shows: never game state or public, and off again in each new game.
+  getLookAtTop: request<[], boolean>(),
+  setLookAtTop: request<[on: boolean]>(),
   getCardDataStatus: request<[], CardDataStatus>(),
   // Starts a check-and-download; progress arrives as cardDataStatus.
   updateCardData: request<[], CardDataStatus>(),
@@ -166,6 +170,8 @@ export const events = {
   boardMenuCommand: event<BoardMenuCommand>(),
   // To the window that shows the hand.
   handCommand: event<HandCommand>(),
+  // To the board and hand, whenever "always look at the top" changes.
+  lookAtTop: event<boolean>(),
   // To the app window.
   navigate: event<AppRoute>(),
   debugLog: event<DebugSnapshot>(),

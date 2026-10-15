@@ -1,7 +1,7 @@
 import type { LibraryActivity } from '@shared/game';
 import classNames from 'classnames';
 
-// Silver for looking at the top of a library (a scry), gold for a
+// Silver for looking at or revealing the top of a library, gold for a
 // search. Two activities that mean very different things to the table
 // should not look alike from across it.
 type Tone = 'silver' | 'gold';
@@ -30,6 +30,12 @@ const styles = (activity: LibraryActivity) => {
         tone: 'gold' as Tone,
         long: 'Searching library…',
         short: 'Searching…',
+      };
+    case 'reveal':
+      return {
+        tone: 'silver' as Tone,
+        long: 'Revealing cards…',
+        short: 'Revealing…',
       };
     default:
       return {

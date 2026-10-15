@@ -40,8 +40,13 @@ describe('card facts cache', () => {
       .mockResolvedValue({ a: facts });
     const { cardFacts, loadCardFacts } = await freshModule(getCardFacts);
 
+    const { factsSettled } = await import('./cardFacts');
     loadCardFacts(['a']);
+    expect(factsSettled('a')).toBe(false);
     await vi.waitFor(() => expect(console.error).toHaveBeenCalled());
+    // A failure is an answer for now, so nothing waits on it forever.
+    expect(factsSettled('a')).toBe(true);
+    expect(cardFacts('a')).toBeUndefined();
     loadCardFacts(['a']);
     await vi.waitFor(() => expect(cardFacts('a')).toEqual(facts));
     expect(getCardFacts).toHaveBeenCalledTimes(2);

@@ -306,6 +306,26 @@ describe('OpponentSide', () => {
     ).not.toBeNull();
   });
 
+  it('names a top card played revealed in a pod, and shows it in a duel', () => {
+    const showing = { ...view, topCard: card.ref! };
+    const { unmount } = renderSide(true, showing);
+    expect(screen.getByTestId('opponent-library-top-card')).toHaveTextContent(
+      'Top: Grizzly Bears'
+    );
+    unmount();
+    renderSide(false, showing);
+    expect(
+      within(screen.getByTestId('opponent-library-top-card')).getByTestId(
+        'card'
+      )
+    ).toHaveAttribute('data-card-name', 'Grizzly Bears');
+  });
+
+  it('shows only the back without a revealed top card', () => {
+    renderSide(false);
+    expect(screen.queryByTestId('opponent-library-top-card')).toBeNull();
+  });
+
   it('shows the command zone and its tax in a pod', () => {
     const commanderView: PublicView = {
       ...view,

@@ -95,6 +95,8 @@ type PlayTestHandlers = Pick<
   | 'getLibrary'
   | 'setLibraryActivity'
   | 'openHandDialog'
+  | 'getLookAtTop'
+  | 'setLookAtTop'
 >;
 
 const badActivity = (message: string): never => {
@@ -138,6 +140,10 @@ export default class PlayTest {
   private undoFloor = 0;
 
   private redoStack: PlayerAction[] = [];
+
+  // "Always look at the top card": a private aid, so it lives here and
+  // never in the game, the log, or a view anyone else gets.
+  private lookAtTop = false;
 
   private readonly libraryActivity = new LibraryActivityTracker({
     changed: () => this.pushBoardView(),
@@ -295,6 +301,21 @@ export default class PlayTest {
       target.focus();
       sendEvent(target, 'handCommand', command);
     },
+    getLookAtTop: () => this.lookAtTop,
+    setLookAtTop: (on: unknown) => {
+      if (!this.isOpen) return;
+      if (typeof on !== 'boolean') {
+        throw new Error('[play-test] look at top must be on or off');
+      }
+      this.setLookAtTop(on);
+    },
+  };
+
+  private setLookAtTop = (on: boolean) => {
+    if (on === this.lookAtTop) return;
+    this.lookAtTop = on;
+    sendEvent(this.board, 'lookAtTop', on);
+    sendEvent(this.hand, 'lookAtTop', on);
   };
 
   private isPlayTestSender = (sender: WebContents) =>
@@ -313,6 +334,7 @@ export default class PlayTest {
     getHandView: (sender) => mayReadHand(this.senders(), sender),
     setLibraryActivity: (sender) => this.isPlayTestSender(sender),
     openHandDialog: (sender) => this.isPlayTestSender(sender),
+    setLookAtTop: (sender) => this.isPlayTestSender(sender),
   };
 
   // A fixed seed is only passed by end-to-end tests, which may also ask
@@ -661,6 +683,7 @@ export default class PlayTest {
     this.redoStack = [];
     this.commanderPrompts = [];
     this.libraryActivity.reset();
+    this.setLookAtTop(false);
     sendEvent(this.board, 'commanderPrompts', []);
     sendEvent(this.board, 'gameStarted', null);
     sendEvent(this.hand, 'gameStarted', null);

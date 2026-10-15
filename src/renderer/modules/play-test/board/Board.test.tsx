@@ -94,6 +94,9 @@ const renderBoard = (
     redo: vi.fn(async () => {}),
     restartPlayTest: vi.fn(async () => {}),
     openHandDialog: vi.fn(async () => {}),
+    getLookAtTop: vi.fn(async () => false),
+    setLookAtTop: vi.fn(async () => {}),
+    onLookAtTop: vi.fn(() => () => {}),
   };
   Object.assign(window, {
     api: {
@@ -662,5 +665,65 @@ describe('Board multi-select', () => {
     );
     expect(screen.queryByTestId('selection-box')).toBeNull();
     expect(selected()).toEqual(['p1:1']);
+  });
+});
+
+describe('Board top of the library', () => {
+  const ref = (name: string) => ({
+    id: `id-${name}`,
+    name,
+    typeLine: 'Creature — Bear',
+    faces: [{ name, typeLine: 'Creature — Bear' }],
+  });
+
+  it('offers reveal-until and both top card toggles', async () => {
+    renderBoard(defaultSettings);
+    await act(async () => {});
+    expect(screen.queryByTestId('library-top-card')).toBeNull();
+    const choose = (name: string) => {
+      fireEvent.contextMenu(screen.getByTestId('library'));
+      fireEvent.click(screen.getByRole('menuitem', { name }));
+    };
+    choose('Reveal until…');
+    expect(api.openHandDialog).toHaveBeenCalledWith('revealUntil');
+    choose('Play with the top card revealed');
+    expect(api.dispatch).toHaveBeenCalledWith({
+      type: 'setTopRevealed',
+      playerId: 'p1',
+      revealed: true,
+    });
+    choose('Always look at the top card');
+    expect(api.setLookAtTop).toHaveBeenCalledWith(true);
+  });
+
+  it('shows a revealed top card on your library and theirs', async () => {
+    const theirs: OpponentState = {
+      ...opponent,
+      peers: opponent.peers.map((peer) => ({
+        ...peer,
+        view: peer.view && { ...peer.view, topCard: ref('Their Bear') },
+      })),
+    };
+    renderBoard(defaultSettings, { ...view, topCard: ref('My Bear') }, theirs);
+    await act(async () => {});
+    expect(
+      within(screen.getByTestId('library-top-card')).getByTestId('card')
+    ).toHaveAttribute('data-card-name', 'My Bear');
+    expect(
+      within(screen.getByTestId('opponent-library-top-card')).getByTestId(
+        'card'
+      )
+    ).toHaveAttribute('data-card-name', 'Their Bear');
+    fireEvent.contextMenu(screen.getByTestId('library'));
+    fireEvent.click(
+      screen.getByRole('menuitem', {
+        name: 'Stop playing with the top card revealed',
+      })
+    );
+    expect(api.dispatch).toHaveBeenCalledWith({
+      type: 'setTopRevealed',
+      playerId: 'p1',
+      revealed: false,
+    });
   });
 });

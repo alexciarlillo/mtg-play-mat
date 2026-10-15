@@ -20,6 +20,9 @@ export type CardView = Omit<CardInstance, 'ref'> & { ref: CardRef | null };
 
 export type PublicZoneId = Exclude<ZoneId, 'library' | 'hand'>;
 
+// Peers refuse a view showing more, so nothing may reveal more at once.
+export const MAX_REVEALED_CARDS = 100;
+
 // Exactly the hidden cards a player is showing everyone, by identity only.
 export interface RevealView {
   source: RevealSource;
@@ -27,7 +30,8 @@ export interface RevealView {
 }
 
 // What every player (and a screenshare) may see of one player. It holds
-// no identity of hand or library cards, not even instance ids.
+// no identity of hand or library cards, not even instance ids, beyond
+// what the player shows (a reveal, or a top card played revealed).
 export interface PublicView {
   seq: number;
   playerId: PlayerId;
@@ -47,6 +51,9 @@ export interface PublicView {
   turn?: number;
   phase?: Phase;
   revealed?: RevealView | null;
+  // Present only while the player plays with the top of their library
+  // revealed: that card, or null for an empty library.
+  topCard?: CardRef | null;
   // Not game state: set while the player has a library dialog open.
   libraryActivity?: LibraryActivity | null;
 }
@@ -121,6 +128,11 @@ const revealView = (
   return cards.length > 0 ? { source: reveal.source, cards } : null;
 };
 
+const topCardOf = (state: GameState, player: PlayerState): CardRef | null => {
+  const top = player.zones.library[0];
+  return top === undefined ? null : (state.cards[top]?.ref ?? null);
+};
+
 export const publicView = (
   state: GameState,
   playerId: PlayerId
@@ -147,6 +159,7 @@ export const publicView = (
     turn: player.turn,
     phase: player.phase,
     revealed: revealView(state, player),
+    ...(player.topRevealed && { topCard: topCardOf(state, player) }),
   };
 };
 

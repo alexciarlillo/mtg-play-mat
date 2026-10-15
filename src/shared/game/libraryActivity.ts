@@ -1,9 +1,12 @@
 // What a player is doing in their own library right now, so the table
-// can see it: looking at the top N cards, or searching it. It says only
-// that it is happening, never which cards are involved.
+// can see it: looking at the top N cards, searching it, or revealing
+// cards from the top one at a time. It says only that it is happening,
+// never which cards are involved.
 export type LibraryActivity =
   | { kind: 'look'; count: number }
   | { kind: 'search' }
+  // Older builds read it as 'other'.
+  | { kind: 'reveal' }
   // Something a newer build does that this one has no words for.
   | { kind: 'other' };
 
@@ -27,6 +30,7 @@ export const parseLibraryActivity = (
     return fail('libraryActivity.kind must be a short string');
   }
   if (kind === 'search') return { kind: 'search' };
+  if (kind === 'reveal') return { kind: 'reveal' };
   if (kind !== 'look') return { kind: 'other' };
   if (
     !Number.isInteger(count) ||
@@ -57,6 +61,8 @@ export const describeLibraryActivity = (activity: LibraryActivity): string => {
         : `is looking at the top ${activity.count} cards of their library`;
     case 'search':
       return 'is searching their library';
+    case 'reveal':
+      return 'is revealing cards from the top of their library';
     default:
       return 'is working in their library';
   }

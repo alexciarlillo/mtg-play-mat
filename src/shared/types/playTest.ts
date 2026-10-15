@@ -22,7 +22,12 @@ export type BoardMenuCommand =
   | 'addDummy';
 
 // Private dialogs the board may ask the hand to open, wherever it is.
-export const handCommands = ['viewBottom', 'search', 'look'] as const;
+export const handCommands = [
+  'viewBottom',
+  'search',
+  'look',
+  'revealUntil',
+] as const;
 export type HandCommand = (typeof handCommands)[number];
 
 export const isHandCommand = (value: unknown): value is HandCommand =>

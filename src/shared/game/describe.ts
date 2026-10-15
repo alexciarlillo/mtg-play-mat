@@ -1,5 +1,6 @@
 import { currentFace } from './cardRefs';
 import type {
+  CardRef,
   CardTypeFilter,
   GameAction,
   GameState,
@@ -341,8 +342,9 @@ const describeArrange = (
     action.bottom.length +
     action.graveyard.length +
     action.exile.length +
-    action.hand.length;
-  const named = (zone: 'graveyard' | 'exile') =>
+    action.hand.length +
+    (action.battlefield?.length ?? 0);
+  const named = (zone: 'graveyard' | 'exile' | 'battlefield') =>
     listNames(arrived(before, after, zone).map(nameOf));
   const bottom =
     action.bottomRandom && action.bottom.length > 1
@@ -356,8 +358,19 @@ const describeArrange = (
     action.graveyard.length > 0 && `${named('graveyard')} into their graveyard`,
     action.exile.length > 0 && `${named('exile')} into exile`,
     action.hand.length > 0 && `${cards(action.hand.length)} into their hand`,
+    (action.battlefield?.length ?? 0) > 0 &&
+      `${named('battlefield')} ${into.battlefield}`,
   ].filter((part): part is string => typeof part === 'string');
-  const looked = `looked at the top ${cards(total)} of their library`;
+  // Cards the table already saw weren't just looked at. A reveal-until
+  // keeps none on top, so a later look of the same size isn't one.
+  const shown =
+    before.revealed?.source === 'libraryTop' &&
+    before.revealed.cards.length === total &&
+    action.top.length === 0 &&
+    !action.shuffleAfter;
+  const looked = shown
+    ? `finished revealing ${cards(total)} from their library`
+    : `looked at the top ${cards(total)} of their library`;
   const line = parts.length > 0 ? `${looked}: ${parts.join(', ')}` : looked;
   if (!action.shuffleAfter) return line;
   return parts.length > 0 ? `${line}, then shuffled` : `${line} and shuffled`;
@@ -411,18 +424,38 @@ const describePutFromHand = (
   return `put ${joinParts(parts)} of their library from their hand`;
 };
 
+const refName = (ref: CardRef) => currentFace(ref, 0)?.name ?? ref.name;
+
+// Revealing one more from the top extends the reveal already shown.
+const nextRevealed = (before: PublicView, after: PublicView) => {
+  const was = before.revealed;
+  const now = after.revealed;
+  if (was?.source !== 'libraryTop' || now?.source !== 'libraryTop') {
+    return null;
+  }
+  const grew =
+    now.cards.length > was.cards.length &&
+    was.cards.every((ref, i) => ref.id === now.cards[i]?.id);
+  return grew ? now.cards.slice(was.cards.length).map(refName) : null;
+};
+
 const describeReveal = (
+  before: PublicView,
   after: PublicView,
   action: Extract<GameAction, { type: 'reveal' }>
 ) => {
-  const shown = (after.revealed?.cards ?? []).map(
-    (ref) => currentFace(ref, 0)?.name ?? ref.name
-  );
+  const shown = (after.revealed?.cards ?? []).map(refName);
   if (shown.length === 0) return null;
+  const next = action.source === 'libraryTop' && nextRevealed(before, after);
   switch (action.source) {
     case 'hand':
       return `revealed their hand: ${listNames(shown)}`;
     case 'libraryTop':
+      if (next) {
+        const which =
+          next.length === 1 ? 'the next card' : `the next ${next.length} cards`;
+        return `revealed ${which} of their library (${shown.length} so far): ${listNames(next)}`;
+      }
       return shown.length === 1
         ? `revealed the top card of their library: ${shown[0]}`
         : `revealed the top ${shown.length} cards of their library: ` +
@@ -535,9 +568,13 @@ export const describeAction = (
     case 'putFromHand':
       return describePutFromHand(action);
     case 'reveal':
-      return describeReveal(after, action);
+      return describeReveal(before, after, action);
     case 'hideReveal':
       return 'stopped revealing';
+    case 'setTopRevealed':
+      return action.revealed
+        ? 'started playing with the top card of their library revealed'
+        : 'stopped playing with the top card of their library revealed';
     case 'nextTurn': {
       const drew = before.libraryCount > after.libraryCount;
       return `started turn ${after.turn ?? '?'}${drew ? ' and drew a card' : ''}`;
