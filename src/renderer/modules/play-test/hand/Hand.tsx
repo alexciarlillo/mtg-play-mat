@@ -16,6 +16,7 @@ import {
 import Card from '../../../ui/Card';
 import type { ContextMenuSpec } from '../../../ui/ContextMenuStore';
 import { moveMenu, moveTo } from '../common/cardMenus';
+import LibraryPositionPrompt from '../common/LibraryPositionPrompt';
 import ShortcutHelp from '../common/ShortcutHelp';
 import UndoButtons from '../common/UndoButtons';
 import { useGameShortcuts } from '../common/useGameShortcuts';
@@ -29,7 +30,7 @@ const play = (card: CardView) => moveTo(card, 'battlefield');
 
 const playAs = (
   card: CardView,
-  options: { faceDown?: boolean; faceIndex?: number }
+  options: { faceDown?: boolean; faceIndex?: number; tapped?: boolean }
 ) =>
   dispatch({
     type: 'moveCard',
@@ -46,12 +47,28 @@ const revealCard = (card: CardView) =>
     instanceId: card.instanceId,
   });
 
+type LibraryEnd = 'top' | 'bottom';
+
+interface HandMenuOptions {
+  onPutInLibrary(card: CardView): void;
+  // Left out until the opening hand is kept.
+  onPutBack?(card: CardView, end: LibraryEnd): void;
+}
+
 // Play, discard and the other moves, plus the alternate ways to play:
-// face down (morph, manifest), or as the back of a modal DFC.
-const handMenu = (card: CardView): ContextMenuSpec[] => {
-  const moves = moveMenu(card, { battlefield: 'Play', graveyard: 'Discard' });
+// tapped, face down (morph, manifest), or as the back of a modal DFC.
+const handMenu = (
+  card: CardView,
+  { onPutInLibrary, onPutBack }: HandMenuOptions
+): ContextMenuSpec[] => {
+  const moves = moveMenu(
+    card,
+    { battlefield: 'Play', graveyard: 'Discard' },
+    { onPutInLibrary }
+  );
   const back = card.ref && isModalDfc(card.ref) ? card.ref.faces[1] : undefined;
   const extras: ContextMenuSpec[] = [
+    { title: 'Play tapped', action: () => playAs(card, { tapped: true }) },
     ...(back
       ? [
           {
@@ -63,8 +80,17 @@ const handMenu = (card: CardView): ContextMenuSpec[] => {
     { title: 'Play face down', action: () => playAs(card, { faceDown: true }) },
     { title: 'Reveal', action: () => revealCard(card) },
   ];
+  const putBack: ContextMenuSpec[] = onPutBack
+    ? [
+        { title: 'Put cards on top…', action: () => onPutBack(card, 'top') },
+        {
+          title: 'Put cards on the bottom…',
+          action: () => onPutBack(card, 'bottom'),
+        },
+      ]
+    : [];
   const at = moves.findIndex((item) => item.title === 'Play') + 1;
-  return [...moves.slice(0, at), ...extras, ...moves.slice(at)];
+  return [...moves.slice(0, at), ...extras, ...moves.slice(at), ...putBack];
 };
 
 // The owner's private look at their face-down permanents. Only the hand
@@ -102,6 +128,8 @@ const libraryDialogs: (Dialog | null)[] = [
   'search',
   'bottom',
 ];
+
+type PickMode = 'mulligan' | LibraryEnd;
 
 const mulliganButton =
   'rounded px-2 text-xs font-semibold disabled:opacity-40 [-webkit-app-region:no-drag]';
@@ -180,6 +208,42 @@ const MulliganBar = ({
   );
 };
 
+interface PutBackBarProps {
+  end: LibraryEnd;
+  count: number;
+  onConfirm(): void;
+  onCancel(): void;
+}
+
+// Picks are numbered in click order, which is the order they go in.
+const putBackHint: Record<LibraryEnd, string> = {
+  top: 'Click cards in order: 1 ends up on top',
+  bottom: 'Click cards in order: the last ends up at the very bottom',
+};
+
+const PutBackBar = ({ end, count, onConfirm, onCancel }: PutBackBarProps) => (
+  <div data-testid="put-back-bar" className={mulliganBar}>
+    <span className="font-semibold">
+      {putBackHint[end]} ({count})
+    </span>
+    <button
+      type="button"
+      className={`${mulliganButton} bg-slate-800 text-white`}
+      disabled={count === 0}
+      onClick={onConfirm}
+    >
+      Put {count} on {end === 'top' ? 'top' : 'the bottom'}
+    </button>
+    <button
+      type="button"
+      className={`${mulliganButton} ring-1 ring-slate-600`}
+      onClick={onCancel}
+    >
+      Cancel
+    </button>
+  </div>
+);
+
 // Beside the mulligan controls, and for the same reason: a strip of its
 // own pushed the cards down every time something was revealed, and the
 // tray has no height to lose.
@@ -233,7 +297,9 @@ const Hand = ({ store, dock }: Props) => {
   useEffect(() => {
     onBusyChange.current = dock?.onBusyChange;
   });
-  const busy = dialog !== null;
+  // The card a "Put Xth from top" prompt is open for.
+  const [placing, setPlacing] = useState<CardView | null>(null);
+  const busy = dialog !== null || placing !== null;
   useEffect(() => {
     onBusyChange.current?.(busy);
   }, [busy]);
@@ -254,18 +320,41 @@ const Hand = ({ store, dock }: Props) => {
       }),
     []
   );
-  // A look or search belongs to the game it started in.
+  // Choosing which cards pay for mulligans, or go back into the library,
+  // is a local, uncommitted pick; main only hears about it as one action.
+  const [pickMode, setPickMode] = useState<PickMode | null>(null);
+  const [picked, setPicked] = useState<string[]>([]);
+  // A look, search or pick belongs to the game it started in.
   useEffect(
     () =>
-      window.api.onGameStarted(() =>
-        setDialog((open) => (libraryDialogs.includes(open) ? null : open))
-      ),
+      window.api.onGameStarted(() => {
+        setDialog((open) => (libraryDialogs.includes(open) ? null : open));
+        setPlacing(null);
+        setPickMode((mode) => (mode === 'mulligan' ? mode : null));
+        // Instance ids repeat from game to game.
+        setPicked([]);
+      }),
     []
   );
-  // Choosing which cards pay for mulligans is a local, uncommitted pick;
-  // main only hears about it as one keepHand action.
-  const [choosing, setChoosing] = useState(false);
-  const [picked, setPicked] = useState<string[]>([]);
+  // Putting back waits for a kept hand, so it never hides the mulligan.
+  const kept = view?.keptHand ?? false;
+  const putBackEnd = pickMode === 'mulligan' || !kept ? null : pickMode;
+  const [wasKept, setWasKept] = useState(kept);
+  if (wasKept !== kept) {
+    setWasKept(kept);
+    if (!kept && pickMode !== 'mulligan') setPickMode(null);
+  }
+  useEffect(() => {
+    if (!putBackEnd) return undefined;
+    // Docked, a board dialog or menu may own this Escape.
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      if (document.querySelector('[role="dialog"], [role="menu"]')) return;
+      setPickMode(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [putBackEnd]);
 
   const toggleHelp = useCallback(
     () =>
@@ -277,7 +366,7 @@ const Hand = ({ store, dock }: Props) => {
   );
   // Docked, the board window's own shortcuts already cover the keys.
   useGameShortcuts(view, {
-    enabled: dialog === null,
+    enabled: !busy,
     onHelp: toggleHelp,
     listen: !docked,
   });
@@ -286,7 +375,9 @@ const Hand = ({ store, dock }: Props) => {
   const faceDown =
     view?.zones.battlefield.filter((card) => card.faceDown) ?? [];
   const chosen = picked.filter((id) => handIds.has(id));
-  const selecting = Boolean(view && !view.keptHand && choosing);
+  const selecting = Boolean(
+    view && (putBackEnd !== null || (!view.keptHand && pickMode === 'mulligan'))
+  );
 
   const keep = () => {
     if (!view) return;
@@ -294,27 +385,51 @@ const Hand = ({ store, dock }: Props) => {
       dispatch({ type: 'keepHand', playerId: view.playerId, bottom: [] });
     } else {
       setPicked([]);
-      setChoosing(true);
+      setPickMode('mulligan');
     }
   };
 
   const confirm = () => {
     if (!view) return;
     dispatch({ type: 'keepHand', playerId: view.playerId, bottom: chosen });
-    setChoosing(false);
+    setPickMode(null);
+    setPicked([]);
+  };
+
+  const startPutBack = (card: CardView, end: LibraryEnd) => {
+    setPicked([card.instanceId]);
+    setPickMode(end);
+  };
+
+  const putBack = () => {
+    if (!view || !putBackEnd || chosen.length === 0) return;
+    dispatch({
+      type: 'putFromHand',
+      playerId: view.playerId,
+      top: putBackEnd === 'top' ? chosen : [],
+      bottom: putBackEnd === 'bottom' ? chosen : [],
+    });
+    setPickMode(null);
     setPicked([]);
   };
 
   const togglePick = (card: CardView) => {
     if (!view) return;
-    const owed = Math.min(view.mulligans, view.hand.length);
+    const limit = putBackEnd
+      ? Infinity
+      : Math.min(view.mulligans, view.hand.length);
     setPicked((current) => {
       const live = current.filter((id) => handIds.has(id));
       if (live.includes(card.instanceId)) {
         return live.filter((id) => id !== card.instanceId);
       }
-      return live.length < owed ? [...live, card.instanceId] : live;
+      return live.length < limit ? [...live, card.instanceId] : live;
     });
+  };
+
+  const menuOptions: HandMenuOptions = {
+    onPutInLibrary: setPlacing,
+    onPutBack: kept ? startPutBack : undefined,
   };
 
   return (
@@ -368,14 +483,22 @@ const Hand = ({ store, dock }: Props) => {
           {!dock?.collapsed && view?.revealed && (
             <RevealBar view={view} reveal={view.revealed} />
           )}
-          {!dock?.collapsed && view && !view.keptHand && (
+          {!dock?.collapsed && putBackEnd && (
+            <PutBackBar
+              end={putBackEnd}
+              count={chosen.length}
+              onConfirm={putBack}
+              onCancel={() => setPickMode(null)}
+            />
+          )}
+          {!dock?.collapsed && view && !view.keptHand && !putBackEnd && (
             <MulliganBar
               view={view}
               choosing={selecting}
               chosen={chosen}
               onKeep={keep}
               onConfirm={confirm}
-              onCancel={() => setChoosing(false)}
+              onCancel={() => setPickMode(null)}
             />
           )}
           <span className="truncate">
@@ -407,24 +530,36 @@ const Hand = ({ store, dock }: Props) => {
           )}
         >
           {view?.hand.map((card) => {
-            const isPicked = selecting && chosen.includes(card.instanceId);
+            const order = selecting ? chosen.indexOf(card.instanceId) : -1;
+            const isPicked = order >= 0;
             const face = (
               <Card
                 card={card}
                 size="md"
                 onClick={selecting ? togglePick : play}
-                menu={selecting ? [] : handMenu(card)}
+                menu={selecting ? [] : handMenu(card, menuOptions)}
               />
             );
             return (
               <div
                 key={card.instanceId}
-                className={classNames('shrink-0 rounded-lg transition', {
-                  'outline-4 outline-sky-400 translate-y-1 opacity-70':
-                    isPicked,
-                })}
+                className={classNames(
+                  'relative shrink-0 rounded-lg transition',
+                  {
+                    'outline-4 outline-sky-400 translate-y-1 opacity-70':
+                      isPicked,
+                  }
+                )}
               >
                 {dock && !selecting ? dock.wrapCard(card, face) : face}
+                {isPicked && (
+                  <span
+                    data-testid="pick-number"
+                    className="pointer-events-none absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 rounded-full bg-sky-600 px-3 py-1 text-lg font-bold text-white shadow-lg"
+                  >
+                    {order + 1}
+                  </span>
+                )}
               </div>
             );
           })}
@@ -432,6 +567,13 @@ const Hand = ({ store, dock }: Props) => {
         </div>
       )}
       {dialog === 'help' && <ShortcutHelp onClose={close} />}
+      {view && placing && (
+        <LibraryPositionPrompt
+          card={placing}
+          libraryCount={view.libraryCount}
+          onClose={() => setPlacing(null)}
+        />
+      )}
       {view && dialog === 'lookCount' && (
         <LookPrompt
           initial={{ ...look, count: Math.min(look.count, view.libraryCount) }}

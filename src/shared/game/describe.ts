@@ -85,11 +85,18 @@ const phaseNames: Record<Phase, string> = {
   end: 'end step',
 };
 
+// 1st, 2nd, 3rd, 4th … 11th, 12th, 13th … 21st.
+const ordinal = (n: number) => {
+  const teen = n % 100 >= 11 && n % 100 <= 13;
+  const suffix = teen ? 'th' : (['th', 'st', 'nd', 'rd'][n % 10] ?? 'th');
+  return `${n}${suffix}`;
+};
+
 const libraryPlace = (index: number | undefined, size: number) => {
   if (index === 0) return 'on top of their library';
   if (index === undefined || index >= size)
     return 'on the bottom of their library';
-  return `into their library, ${index + 1} from the top`;
+  return `into their library ${ordinal(index + 1)} from the top`;
 };
 
 // Where a card that wasn't public came from, told by the hidden counts.
@@ -113,22 +120,25 @@ const describeMove = (
   if (source === 'battlefield' && to === 'battlefield') return null;
 
   const name = bestName(before, after, id);
+  const tapped = to === 'battlefield' && now?.tapped ? ' tapped' : '';
   const destination =
     to === 'library'
       ? libraryPlace(action.index, after.libraryCount - 1)
-      : into[to];
+      : `${into[to]}${tapped}`;
 
   if (!was && !now) {
     // Hidden to hidden: only the zones are known.
     return `put ${cards(1)} from ${from[source]} ${destination}`;
   }
   if (source === 'hand' && to === 'battlefield') {
-    return now?.ref ? `played ${name}` : 'played a card face down';
+    return now?.ref
+      ? `played ${name}${tapped}`
+      : `played a card face down${tapped}`;
   }
   if (source === 'hand' && to === 'graveyard') return `discarded ${name}`;
   if (source === 'library' && to === 'graveyard') return `milled ${name}`;
   if (to === 'battlefield' && now && !now.ref) {
-    return `put a card from ${from[source]} onto the battlefield face down`;
+    return `put a card from ${from[source]} ${into.battlefield} face down${tapped}`;
   }
   return `put ${name} ${destination} from ${from[source]}`;
 };
@@ -222,6 +232,17 @@ const describeSearch = (
   return count('top') + count('bottom') > 0
     ? `searched their library, then shuffled, and put ${found}`
     : `searched their library and put ${found}, then shuffled`;
+};
+
+// Hand to library is hidden to hidden, so only the counts are told.
+const describePutFromHand = (
+  action: Extract<GameAction, { type: 'putFromHand' }>
+) => {
+  const parts = [
+    action.top.length > 0 && `${cards(action.top.length)} on top`,
+    action.bottom.length > 0 && `${cards(action.bottom.length)} on the bottom`,
+  ].filter((part): part is string => typeof part === 'string');
+  return `put ${joinParts(parts)} of their library from their hand`;
 };
 
 const describeReveal = (
@@ -343,6 +364,8 @@ export const describeAction = (
       return describeArrange(before, after, action);
     case 'searchLibrary':
       return describeSearch(before, after, action);
+    case 'putFromHand':
+      return describePutFromHand(action);
     case 'reveal':
       return describeReveal(after, action);
     case 'hideReveal':

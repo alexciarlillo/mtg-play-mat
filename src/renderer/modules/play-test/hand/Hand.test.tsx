@@ -280,6 +280,174 @@ describe('Hand', () => {
     });
   });
 
+  it('plays a card tapped', () => {
+    renderHand(viewOf({ keptHand: true }));
+    fireEvent.contextMenu(cards()[2]);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Play tapped' }));
+    expect(dispatch).toHaveBeenCalledWith({
+      type: 'moveCard',
+      instanceId: 'p1:2',
+      to: 'battlefield',
+      tapped: true,
+    });
+  });
+
+  it('puts a card 3rd from the top, or the bottom past the end', () => {
+    renderHand(viewOf({ keptHand: true, libraryCount: 5 }));
+    const putAt = (n: number, position: string) => {
+      fireEvent.contextMenu(cards()[n]);
+      fireEvent.click(
+        screen.getByRole('menuitem', { name: 'Put Xth from top…' })
+      );
+      const input = screen.getByLabelText(/Position from the top/);
+      expect(input).toHaveValue(3);
+      fireEvent.change(input, { target: { value: position } });
+      fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    };
+    putAt(1, '3');
+    expect(dispatch).toHaveBeenLastCalledWith({
+      type: 'moveCard',
+      instanceId: 'p1:1',
+      to: 'library',
+      index: 2,
+    });
+    putAt(4, '40');
+    expect(dispatch).toHaveBeenLastCalledWith({
+      type: 'moveCard',
+      instanceId: 'p1:4',
+      to: 'library',
+      index: 5,
+    });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('puts cards back on top in the order clicked, as one action', () => {
+    renderHand(viewOf({ keptHand: true }));
+    fireEvent.contextMenu(cards()[5]);
+    fireEvent.click(
+      screen.getByRole('menuitem', { name: 'Put cards on top…' })
+    );
+    const bar = screen.getByTestId('put-back-bar');
+    expect(bar).toHaveTextContent('1 ends up on top');
+
+    // Clicking picks instead of playing; a second click unpicks.
+    fireEvent.click(cards()[2]);
+    fireEvent.click(cards()[0]);
+    fireEvent.click(cards()[0]);
+    fireEvent.click(cards()[0]);
+    expect(dispatch).not.toHaveBeenCalled();
+    // Badges read in hand order: cards 0, 2 and 5.
+    expect(
+      screen.getAllByTestId('pick-number').map((n) => n.textContent)
+    ).toEqual(['3', '2', '1']);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Put 3 on top' }));
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect(dispatch).toHaveBeenCalledWith({
+      type: 'putFromHand',
+      playerId: 'p1',
+      top: ['p1:5', 'p1:2', 'p1:0'],
+      bottom: [],
+    });
+    expect(screen.queryByTestId('put-back-bar')).not.toBeInTheDocument();
+  });
+
+  it('puts cards on the bottom, or cancels with Escape', () => {
+    renderHand(viewOf({ keptHand: true }));
+    fireEvent.contextMenu(cards()[1]);
+    fireEvent.click(
+      screen.getByRole('menuitem', { name: 'Put cards on the bottom…' })
+    );
+    expect(screen.getByTestId('put-back-bar')).toHaveTextContent(
+      'the last ends up at the very bottom'
+    );
+    fireEvent.click(cards()[3]);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Put 2 on the bottom' })
+    );
+    expect(dispatch).toHaveBeenLastCalledWith({
+      type: 'putFromHand',
+      playerId: 'p1',
+      top: [],
+      bottom: ['p1:1', 'p1:3'],
+    });
+
+    dispatch.mockClear();
+    fireEvent.contextMenu(cards()[1]);
+    fireEvent.click(
+      screen.getByRole('menuitem', { name: 'Put cards on top…' })
+    );
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByTestId('put-back-bar')).not.toBeInTheDocument();
+    fireEvent.click(cards()[1]);
+    expect(dispatch).toHaveBeenLastCalledWith({
+      type: 'moveCard',
+      instanceId: 'p1:1',
+      to: 'battlefield',
+    });
+  });
+
+  it('offers putting back only once the hand is kept', () => {
+    let view = viewOf({ keptHand: true });
+    const listeners = new Set<() => void>();
+    const store: ViewStore<PrivateView> = {
+      subscribe: (listener) => {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+      getSnapshot: () => view,
+    };
+    render(
+      <ContextMenuProvider>
+        <Hand store={store} />
+      </ContextMenuProvider>
+    );
+    fireEvent.contextMenu(cards()[0]);
+    fireEvent.click(
+      screen.getByRole('menuitem', { name: 'Put cards on top…' })
+    );
+    expect(screen.getByTestId('put-back-bar')).toBeInTheDocument();
+
+    // An undone keep brings the mulligan back and ends the put-back.
+    act(() => {
+      view = viewOf({ keptHand: false });
+      listeners.forEach((listener) => listener());
+    });
+    expect(screen.queryByTestId('put-back-bar')).not.toBeInTheDocument();
+    expect(screen.getByTestId('mulligan-bar')).toBeInTheDocument();
+    expect(screen.queryAllByTestId('pick-number')).toHaveLength(0);
+    fireEvent.contextMenu(cards()[0]);
+    expect(
+      screen.queryByRole('menuitem', { name: 'Put cards on top…' })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('menuitem', { name: 'Put cards on the bottom…' })
+    ).not.toBeInTheDocument();
+  });
+
+  it('leaves Escape to a dialog open elsewhere, and forgets picks on a new game', () => {
+    renderHand(viewOf({ keptHand: true }));
+    fireEvent.contextMenu(cards()[0]);
+    fireEvent.click(
+      screen.getByRole('menuitem', { name: 'Put cards on top…' })
+    );
+    const other = document.createElement('div');
+    other.setAttribute('role', 'dialog');
+    document.body.append(other);
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.getByTestId('put-back-bar')).toBeInTheDocument();
+    other.remove();
+
+    act(() => pushGameStarted());
+    expect(screen.queryByTestId('put-back-bar')).not.toBeInTheDocument();
+    fireEvent.contextMenu(cards()[2]);
+    fireEvent.click(
+      screen.getByRole('menuitem', { name: 'Put cards on top…' })
+    );
+    // Only the newly right-clicked card is picked.
+    expect(screen.getAllByTestId('pick-number')).toHaveLength(1);
+  });
+
   it('lets the owner peek at their face-down permanents', () => {
     const hidden: CardView = {
       ...handCard(9),

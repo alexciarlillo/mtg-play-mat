@@ -54,6 +54,7 @@ const libraryActionTypes: ReadonlySet<string> = new Set<LibraryAction['type']>([
   'mill',
   'arrangeTop',
   'searchLibrary',
+  'putFromHand',
   'reveal',
   'hideReveal',
   'nextTurn',

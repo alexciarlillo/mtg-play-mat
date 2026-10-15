@@ -192,6 +192,20 @@ describe('BattlefieldCard', () => {
     });
   });
 
+  it('asks where in the library to put its own permanents only', () => {
+    const onPutInLibrary = vi.fn();
+    const { unmount } = renderCard(card, { onPutInLibrary });
+    clickMenu('Put Xth from top…');
+    expect(onPutInLibrary).toHaveBeenCalledWith(card);
+    unmount();
+
+    renderCard({ ...card, owner: 'p2' }, { onPutInLibrary });
+    fireEvent.contextMenu(screen.getByTestId('card'));
+    expect(
+      screen.queryByRole('menuitem', { name: 'Put Xth from top…' })
+    ).not.toBeInTheDocument();
+  });
+
   it('steps counters from its hover controls without tapping', () => {
     renderCard({ ...card, counters: { charge: 2 } });
     const remove = screen.getByRole('button', {

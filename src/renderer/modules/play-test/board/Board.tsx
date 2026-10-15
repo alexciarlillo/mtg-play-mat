@@ -22,6 +22,7 @@ import { cardWidths } from '../../../ui/cardSizes';
 import { useContextMenu } from '../../../ui/ContextMenuProvider';
 import FloatingPanel from '../../../ui/FloatingPanel';
 import { ConfirmDialog, NumberPrompt } from '../common/Dialogs';
+import LibraryPositionPrompt from '../common/LibraryPositionPrompt';
 import ShortcutHelp from '../common/ShortcutHelp';
 import { useGameShortcuts } from '../common/useGameShortcuts';
 import { useUndoState } from '../common/useUndoState';
@@ -79,7 +80,10 @@ type Dialog =
   | 'rollDie';
 
 // Dialogs about one permanent, opened from its menu.
-type CardDialog = { kind: 'counter' | 'attach'; card: CardView };
+type CardDialog = {
+  kind: 'counter' | 'attach' | 'libraryPosition';
+  card: CardView;
+};
 
 const dummyName = (view: PublicView) => {
   const names = new Set(view.dummies.map((d) => d.name));
@@ -109,6 +113,10 @@ const Board = ({ store, opponent, hand }: Props) => {
   );
   const onAttach = useCallback(
     (card: CardView) => setCardDialog({ kind: 'attach', card }),
+    []
+  );
+  const onPutInLibrary = useCallback(
+    (card: CardView) => setCardDialog({ kind: 'libraryPosition', card }),
     []
   );
   const toggleHelp = useCallback(
@@ -310,6 +318,7 @@ const Board = ({ store, opponent, hand }: Props) => {
                           offsetX={bounds.offsetX}
                           onAddCounter={onAddCounter}
                           onAttach={onAttach}
+                          onPutInLibrary={onPutInLibrary}
                           giveTo={giveTo}
                           ownerName={ownerNameOf(card)}
                           owner={ownerLabel(card, view.playerId, owners)}
@@ -527,6 +536,13 @@ const Board = ({ store, opponent, hand }: Props) => {
         )}
         {cardDialog?.kind === 'counter' && (
           <CounterDialog card={cardDialog.card} onClose={closeCardDialog} />
+        )}
+        {view && cardDialog?.kind === 'libraryPosition' && (
+          <LibraryPositionPrompt
+            card={cardDialog.card}
+            libraryCount={view.libraryCount}
+            onClose={closeCardDialog}
+          />
         )}
         {view && cardDialog?.kind === 'attach' && (
           <AttachDialog

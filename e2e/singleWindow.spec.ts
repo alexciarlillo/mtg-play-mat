@@ -307,6 +307,25 @@ test('scry 2 by keyboard and view the bottom card, docked', async () => {
   await expect(board.getByTestId('bottom-card')).toHaveCount(0);
 });
 
+test('put two cards back on the bottom from the docked tray', async () => {
+  const before = await gameState();
+  const [a, b] = me(before).zones.hand;
+  const card = (id: string) =>
+    handCards().and(board.locator(`[data-instance-id="${id}"]`));
+  await card(a).click({ button: 'right' });
+  await menuItem('Put cards on the bottom…').click();
+  await card(b).click();
+  await expect(tray().getByTestId('pick-number')).toHaveCount(2);
+  await tray().getByRole('button', { name: 'Put 2 on the bottom' }).click();
+  await expect
+    .poll(async () => me(await gameState()).zones.library.slice(-2))
+    .toEqual([a, b]);
+  const after = await gameState();
+  expect(after.log).toHaveLength(before.log.length + 1);
+  expect(after.log.at(-1)?.type).toBe('putFromHand');
+  await expect(tray().getByTestId('put-back-bar')).toHaveCount(0);
+});
+
 test('a new game closes an open search', async () => {
   await tray().getByRole('button', { name: 'Search library…' }).click();
   await expect(board.getByLabel('Search the library')).toBeVisible();

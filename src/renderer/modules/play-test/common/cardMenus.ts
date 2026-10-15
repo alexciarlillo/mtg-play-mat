@@ -46,12 +46,18 @@ export const commanderMenu = (card: CardView): ContextMenuSpec[] => {
   ];
 };
 
+export interface MoveMenuOptions {
+  // Asks where in the library the card goes; adds "Put Xth from top…".
+  onPutInLibrary?(card: CardView): void;
+}
+
 // "Move to…" items for every zone but the card's own, plus a shuffle into
 // the library. Titles can be renamed per zone, e.g. graveyard -> Discard.
 // Only commanders may go to the command zone, and they get tax items.
 export const moveMenu = (
   card: CardView,
-  titles: Partial<Record<ZoneId, string>> = {}
+  titles: Partial<Record<ZoneId, string>> = {},
+  { onPutInLibrary }: MoveMenuOptions = {}
 ): ContextMenuSpec[] => [
   ...(card.isCommander ? [toCommand, ...destinations] : destinations)
     .filter(({ to }) => to !== card.zone)
@@ -59,6 +65,9 @@ export const moveMenu = (
       title: titles[to] ?? title,
       action: () => moveTo(card, to, index),
     })),
+  ...(onPutInLibrary && card.zone !== 'library'
+    ? [{ title: 'Put Xth from top…', action: () => onPutInLibrary(card) }]
+    : []),
   {
     title: 'Shuffle into library',
     action: () =>

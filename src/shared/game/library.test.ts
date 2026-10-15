@@ -407,6 +407,129 @@ describe('searchLibrary', () => {
   });
 });
 
+describe('putFromHand', () => {
+  // Brainstorm: draw three, then put two back.
+  const brainstorm = () =>
+    reduce(fresh(), { type: 'draw', playerId: P1, count: 3 });
+  const put = (state: GameState, top: string[], bottom: string[] = []) =>
+    reduce(state, { type: 'putFromHand', playerId: P1, top, bottom });
+
+  it('puts cards on top in the order given, first topmost', () => {
+    const state = brainstorm();
+    const [a, , c] = zone(state, P1, 'hand');
+    const rest = library(state);
+    const next = put(state, [c, a]);
+    expect(library(next)).toEqual([c, a, ...rest]);
+    expect(zone(next, P1, 'hand')).toHaveLength(1);
+    expect(next.log).toHaveLength(state.log.length + 1);
+    expect(next.rng).toBe(state.rng);
+  });
+
+  it('puts cards on the bottom in the order given, last lowest', () => {
+    const state = brainstorm();
+    const [a, b, c] = zone(state, P1, 'hand');
+    const next = put(state, [b], [c, a]);
+    expect(library(next)[0]).toBe(b);
+    expect(library(next).slice(-2)).toEqual([c, a]);
+    expect(zone(next, P1, 'hand')).toEqual([]);
+  });
+
+  it('refuses cards not in the hand, repeats and an empty pick', () => {
+    const state = brainstorm();
+    const [a] = zone(state, P1, 'hand');
+    const [top] = library(state);
+    expect(put(state, [a, top])).toBe(state);
+    expect(put(state, [a], [a])).toBe(state);
+    expect(put(state, [])).toBe(state);
+  });
+
+  it('a Brainstorm is undone in one step', () => {
+    const state = brainstorm();
+    const [a, b] = zone(state, P1, 'hand');
+    const next = put(state, [b, a]);
+    const undone = undoLast(next, P1, 1);
+    expect(undone?.action.type).toBe('putFromHand');
+    expect(undone?.state.players).toEqual(state.players);
+    expect(undone?.state.cards).toEqual(state.cards);
+  });
+
+  it('never names the cards in the public view', () => {
+    const state = brainstorm();
+    const [a, b] = zone(state, P1, 'hand');
+    const next = put(state, [a], [b]);
+    const text = JSON.stringify(publicView(next, P1));
+    expect(text).not.toContain(next.cards[a].ref.name);
+    expect(text).not.toContain(next.cards[b].ref.name);
+  });
+});
+
+describe('placement', () => {
+  const hand = () => reduce(fresh(), { type: 'draw', playerId: P1, count: 1 });
+
+  it('plays a card tapped', () => {
+    const state = hand();
+    const [card] = zone(state, P1, 'hand');
+    const next = reduce(state, {
+      type: 'moveCard',
+      instanceId: card,
+      to: 'battlefield',
+      tapped: true,
+    });
+    expect(next.cards[card].zone).toBe('battlefield');
+    expect(next.cards[card].tapped).toBe(true);
+    expect(next.cards[card].position).not.toBeNull();
+  });
+
+  it('ignores tapped anywhere but onto the battlefield', () => {
+    const state = hand();
+    const [card] = zone(state, P1, 'hand');
+    const next = reduce(state, {
+      type: 'moveCard',
+      instanceId: card,
+      to: 'graveyard',
+      tapped: true,
+    });
+    expect(next.cards[card].tapped).toBe(false);
+  });
+
+  it('puts a card 3rd from the top, or at the bottom past the end', () => {
+    const state = hand();
+    const [card] = zone(state, P1, 'hand');
+    const rest = library(state);
+    const third = reduce(state, {
+      type: 'moveCard',
+      instanceId: card,
+      to: 'library',
+      index: 2,
+    });
+    expect(library(third)).toEqual([rest[0], rest[1], card, ...rest.slice(2)]);
+    const past = reduce(state, {
+      type: 'moveCard',
+      instanceId: card,
+      to: 'library',
+      index: 99,
+    });
+    expect(library(past)).toEqual([...rest, card]);
+  });
+
+  it('moves a permanent 2nd from the top, untapped', () => {
+    const played = reduce(hand(), {
+      type: 'moveCard',
+      instanceId: 'p1:0',
+      to: 'battlefield',
+      tapped: true,
+    });
+    const next = reduce(played, {
+      type: 'moveCard',
+      instanceId: 'p1:0',
+      to: 'library',
+      index: 1,
+    });
+    expect(library(next)[1]).toBe('p1:0');
+    expect(next.cards['p1:0'].tapped).toBe(false);
+  });
+});
+
 describe('reveal', () => {
   const withHand = () =>
     reduce(fresh(), { type: 'draw', playerId: P1, count: 3 });
@@ -587,6 +710,51 @@ describe('turns', () => {
 describe('parsing library and turn actions', () => {
   it('accepts well-formed actions and drops unknown fields', () => {
     expect(
+      parsePlayerAction({
+        type: 'putFromHand',
+        playerId: P1,
+        top: ['a', 'b'],
+        bottom: [],
+        x: 1,
+      })
+    ).toEqual({
+      type: 'putFromHand',
+      playerId: P1,
+      top: ['a', 'b'],
+      bottom: [],
+    });
+    expect(
+      parsePlayerAction({
+        type: 'moveCard',
+        instanceId: 'a',
+        to: 'battlefield',
+        tapped: true,
+      })
+    ).toEqual({
+      type: 'moveCard',
+      instanceId: 'a',
+      to: 'battlefield',
+      tapped: true,
+    });
+    // Tapped only means something on the way onto the battlefield.
+    expect(
+      parsePlayerAction({
+        type: 'moveCard',
+        instanceId: 'a',
+        to: 'library',
+        index: 2,
+        tapped: true,
+      })
+    ).toEqual({ type: 'moveCard', instanceId: 'a', to: 'library', index: 2 });
+    expect(
+      parsePlayerAction({
+        type: 'moveCard',
+        instanceId: 'a',
+        to: 'battlefield',
+        tapped: false,
+      })
+    ).toEqual({ type: 'moveCard', instanceId: 'a', to: 'battlefield' });
+    expect(
       parsePlayerAction({ type: 'mill', playerId: P1, count: 2, x: 1 })
     ).toEqual({ type: 'mill', playerId: P1, count: 2 });
     expect(
@@ -759,6 +927,13 @@ describe('parsing library and turn actions', () => {
       },
       { type: 'searchLibrary', playerId: P1, picks: ['a'], shuffle: true },
       { type: 'searchLibrary', playerId: P1, picks: [] },
+      { type: 'putFromHand', playerId: P1, top: [], bottom: [] },
+      { type: 'putFromHand', playerId: P1, top: ['a'], bottom: ['a'] },
+      { type: 'putFromHand', playerId: P1, top: ['a', 'a'], bottom: [] },
+      { type: 'putFromHand', playerId: P1, top: ['a'] },
+      { type: 'putFromHand', playerId: P1, top: 'a', bottom: [] },
+      { type: 'putFromHand', top: ['a'], bottom: [] },
+      { type: 'moveCard', instanceId: 'a', to: 'battlefield', tapped: 1 },
       { type: 'reveal', playerId: P1, source: 'graveyard' },
       { type: 'reveal', playerId: P1, source: 'libraryTop' },
       { type: 'reveal', playerId: P1, source: 'card' },

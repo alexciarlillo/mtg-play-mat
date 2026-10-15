@@ -181,6 +181,8 @@ export interface MoveCardAction {
   // another face (the back of a modal double-faced card).
   faceDown?: boolean;
   faceIndex?: number;
+  // Enters the battlefield tapped; ignored for any other move.
+  tapped?: boolean;
 }
 
 export interface SetPositionAction {
@@ -332,6 +334,16 @@ export interface SearchLibraryAction {
   shuffle: boolean;
 }
 
+// Puts hand cards into the library in one step. Top cards go on in the
+// order given, the first topmost; bottom cards go under the rest, the
+// last one lowest.
+export interface PutFromHandAction {
+  type: 'putFromHand';
+  playerId: PlayerId;
+  top: InstanceId[];
+  bottom: InstanceId[];
+}
+
 // Shows the whole hand, the top count library cards, or one hand card.
 export type RevealAction = {
   type: 'reveal';
@@ -365,6 +377,7 @@ export type LibraryAction =
   | MillAction
   | ArrangeTopAction
   | SearchLibraryAction
+  | PutFromHandAction
   | RevealAction
   | HideRevealAction
   | NextTurnAction

@@ -140,6 +140,21 @@ const searchPicks = (fields: Fields, key: string): SearchPick[] => {
   });
 };
 
+// Each card goes back exactly once, and at least one goes back.
+const parsePutFromHand = (input: Fields): PlayerAction => {
+  const top = strings(input, 'top', MAX_COUNT);
+  const bottom = strings(input, 'bottom', MAX_COUNT);
+  const ids = [...top, ...bottom];
+  if (ids.length === 0) return fail('top or bottom must name a card');
+  if (new Set(ids).size !== ids.length) return fail('cards must be distinct');
+  return {
+    type: 'putFromHand',
+    playerId: string(input, 'playerId'),
+    top,
+    bottom,
+  };
+};
+
 const parseReveal = (input: Fields): PlayerAction => {
   const playerId = string(input, 'playerId');
   switch (input.source) {
@@ -178,11 +193,12 @@ export const parsePlayerAction = (input: unknown): PlayerAction => {
         playerId: string(input, 'playerId'),
         count: integer(input, 'count', 1, MAX_COUNT),
       };
-    case 'moveCard':
+    case 'moveCard': {
+      const to = zone(input, 'to');
       return {
         type: 'moveCard',
         instanceId: string(input, 'instanceId'),
-        to: zone(input, 'to'),
+        to,
         ...(input.index !== undefined && {
           index: integer(input, 'index', 0, Number.MAX_SAFE_INTEGER),
         }),
@@ -195,7 +211,9 @@ export const parsePlayerAction = (input: unknown): PlayerAction => {
         ...(input.faceIndex !== undefined && {
           faceIndex: integer(input, 'faceIndex', 0, 3),
         }),
+        ...(flag(input, 'tapped') && to === 'battlefield' && { tapped: true }),
       };
+    }
     case 'setPosition':
       return {
         type: 'setPosition',
@@ -324,6 +342,8 @@ export const parsePlayerAction = (input: unknown): PlayerAction => {
         picks: searchPicks(input, 'picks'),
         shuffle: bool(input, 'shuffle'),
       };
+    case 'putFromHand':
+      return parsePutFromHand(input);
     case 'reveal':
       return parseReveal(input);
     case 'hideReveal':

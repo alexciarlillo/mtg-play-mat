@@ -124,6 +124,12 @@ const steps: Record<PlayerAction['type'], (s: GameState) => PlayerAction> = {
     dummyId: 'dummy-1',
   }),
   mill: () => ({ type: 'mill', playerId: P1, count: 2 }),
+  putFromHand: (s) => ({
+    type: 'putFromHand',
+    playerId: P1,
+    top: [hand(s)[1], hand(s)[0]],
+    bottom: [hand(s)[2]],
+  }),
   arrangeTop: (s) => {
     const [a, b, c] = lib(s);
     return {
@@ -186,6 +192,7 @@ const order: PlayerAction['type'][] = [
   'mill',
   'arrangeTop',
   'searchLibrary',
+  'putFromHand',
   'reveal',
   'hideReveal',
   'nextTurn',

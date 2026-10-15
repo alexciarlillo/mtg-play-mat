@@ -48,6 +48,7 @@ const BattlefieldCard = ({
   offsetX = 0,
   onAddCounter,
   onAttach,
+  onPutInLibrary,
   giveTo,
   ownerName,
   owner = null,
@@ -112,6 +113,7 @@ const BattlefieldCard = ({
   const menu = battlefieldMenu(card, {
     onAddCounter,
     onAttach,
+    onPutInLibrary,
     giveTo,
     ownerName,
   });

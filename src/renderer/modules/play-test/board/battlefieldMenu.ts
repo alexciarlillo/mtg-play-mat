@@ -22,6 +22,7 @@ export const adjustCounter = (card: CardView, counter: string, delta: number) =>
 export interface BattlefieldMenuOptions {
   onAddCounter?(card: CardView): void;
   onAttach?(card: CardView): void;
+  onPutInLibrary?(card: CardView): void;
   // Players this permanent may be handed to.
   giveTo?: ControlTarget[];
   // Set for a borrowed permanent: who it goes back to.
@@ -64,6 +65,7 @@ export const battlefieldMenu = (
   {
     onAddCounter,
     onAttach,
+    onPutInLibrary,
     giveTo = [],
     ownerName,
   }: BattlefieldMenuOptions = {}
@@ -131,6 +133,14 @@ export const battlefieldMenu = (
         ]
       : []),
     ...controlMenu(card, giveTo, ownerName),
-    ...moveMenu(card),
+    // The prompt counts this player's library, not a lender's.
+    ...moveMenu(
+      card,
+      {},
+      {
+        onPutInLibrary:
+          card.owner === card.controller ? onPutInLibrary : undefined,
+      }
+    ),
   ];
 };

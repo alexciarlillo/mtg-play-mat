@@ -222,6 +222,7 @@ export interface MoveOptions {
   position?: Position;
   faceDown?: boolean;
   faceIndex?: number;
+  tapped?: boolean;
 }
 
 export const moveCard = (
@@ -247,6 +248,7 @@ export const moveCard = (
         ...moved,
         faceDown: options.faceDown ?? moved.faceDown,
         faceIndex: validFace(moved, options.faceIndex),
+        ...(options.tapped && { tapped: true }),
       };
     }
     moved = rules.onZoneChange({ ...moved, attachedTo: null }, from, to);
@@ -372,6 +374,7 @@ export const reduceCore = (
         position: action.position,
         faceDown: action.faceDown,
         faceIndex: action.faceIndex,
+        tapped: action.tapped,
       });
 
     case 'setPosition': {

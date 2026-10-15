@@ -280,6 +280,85 @@ describe('describeAction privacy', () => {
     expect(text).toBe(`played ${nameOf(state, played)}`);
   });
 
+  it('says when a card is played tapped', () => {
+    const state = opening();
+    const [played] = ids(state, 'hand');
+    const { text } = step(state, {
+      type: 'moveCard',
+      instanceId: played,
+      to: 'battlefield',
+      tapped: true,
+    });
+    expect(text).toBe(`played ${nameOf(state, played)} tapped`);
+  });
+
+  it('says face down before tapped', () => {
+    const state = opening();
+    const [card] = ids(state, 'hand');
+    const binned = reduce(state, {
+      type: 'moveCard',
+      instanceId: card,
+      to: 'graveyard',
+    });
+    const { text } = step(binned, {
+      type: 'moveCard',
+      instanceId: card,
+      to: 'battlefield',
+      faceDown: true,
+      tapped: true,
+    });
+    expect(text).toBe(
+      'put a card from their graveyard onto the battlefield face down tapped'
+    );
+  });
+
+  it('says how far down the library a card went', () => {
+    const state = opening();
+    const [card] = ids(state, 'hand');
+    const third = step(state, {
+      type: 'moveCard',
+      instanceId: card,
+      to: 'library',
+      index: 2,
+    });
+    expect(third.text).toBe(
+      'put a card from their hand into their library 3rd from the top'
+    );
+    const past = step(state, {
+      type: 'moveCard',
+      instanceId: card,
+      to: 'library',
+      index: 500,
+    });
+    expect(past.text).toBe(
+      'put a card from their hand on the bottom of their library'
+    );
+  });
+
+  it('counts the cards put back from the hand, never naming them', () => {
+    const state = opening();
+    const [a, b, c] = ids(state, 'hand');
+    const top = step(state, {
+      type: 'putFromHand',
+      playerId: P1,
+      top: [b, a],
+      bottom: [],
+    });
+    expect(top.text).toBe(
+      'put 2 cards on top of their library from their hand'
+    );
+    const both = step(state, {
+      type: 'putFromHand',
+      playerId: P1,
+      top: [a],
+      bottom: [b, c],
+    });
+    expect(both.text).toBe(
+      'put a card on top and 2 cards on the bottom of their library from ' +
+        'their hand'
+    );
+  });
+
   it('never names a face-down card until it is turned face up', () => {
     const state = opening();
     const [morph] = ids(state, 'hand');
@@ -473,7 +552,14 @@ describe('describeAction privacy under random play', () => {
           instanceId: card,
           to: zones[pick(zones.length)],
           faceDown: pick(3) === 0,
-          index: pick(2) === 0 ? 0 : undefined,
+          index: pick(2) === 0 ? pick(3) : undefined,
+          tapped: pick(2) === 0,
+        },
+        {
+          type: 'putFromHand',
+          playerId: P1,
+          top: hand.slice(0, pick(3)),
+          bottom: hand.slice(3, 3 + pick(2)),
         },
         { type: 'toggleTap', instanceId: card },
         { type: 'setFaceDown', instanceId: card, faceDown: pick(2) === 0 },

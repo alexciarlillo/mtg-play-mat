@@ -17,6 +17,7 @@ import type {
   Phase,
   PlayerId,
   PlayerState,
+  PutFromHandAction,
   Reveal,
   RevealAction,
   SearchLibraryAction,
@@ -114,16 +115,31 @@ const searchLibrary = (
       return moveCard(next, rules, instanceId, 'library', { index: top++ });
     }
     if (to === 'bottom') return moveCard(next, rules, instanceId, 'library');
-    const moved = moveCard(next, rules, instanceId, to);
-    const card = moved.cards[instanceId];
-    if (to !== 'battlefield' || !tapped || card?.zone !== 'battlefield') {
-      return moved;
-    }
-    return {
-      ...moved,
-      cards: { ...moved.cards, [instanceId]: { ...card, tapped: true } },
-    };
+    return moveCard(next, rules, instanceId, to, { tapped });
   }, shuffled);
+};
+
+// Refused unless every card is a distinct card in the hand, so a stale
+// pick (the hand changed meanwhile) puts nothing back.
+const putFromHand = (
+  state: GameState,
+  rules: Rules,
+  player: PlayerState,
+  action: PutFromHandAction
+): GameState => {
+  const ids = [...action.top, ...action.bottom];
+  const hand = new Set(player.zones.hand);
+  if (ids.length === 0 || !distinct(ids) || !ids.every((id) => hand.has(id))) {
+    return state;
+  }
+  const onTop = action.top.reduce(
+    (next, id, i) => moveCard(next, rules, id, 'library', { index: i }),
+    state
+  );
+  return action.bottom.reduce(
+    (next, id) => moveCard(next, rules, id, 'library'),
+    onTop
+  );
 };
 
 const revealedIds = (
@@ -203,6 +219,8 @@ export const reduceLibrary = (
       return arrangeTop(state, rules, player, action);
     case 'searchLibrary':
       return searchLibrary(state, rules, player, action);
+    case 'putFromHand':
+      return putFromHand(state, rules, player, action);
     case 'reveal':
       return reveal(state, player, action);
     case 'hideReveal':
