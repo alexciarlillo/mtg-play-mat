@@ -403,6 +403,13 @@ const controlChange = (value: unknown, from: PlayerId): ControlChange => {
   }
 };
 
+// A saved game replays the control changes it logged, so it checks them
+// the way a peer's message is checked.
+export const parseControlChange = (
+  value: unknown,
+  from: PlayerId
+): ControlChange => controlChange(value, from);
+
 const features = (value: unknown): string[] | undefined => {
   if (value === undefined) return undefined;
   return list(value, 'features', MAX_FEATURES)

@@ -24,6 +24,7 @@ describe('ipc contract', () => {
       'onShownToYou',
       'onPrivateLog',
       'onSeenList',
+      'onSavedGame',
       'onSeenByYou',
       'onNavigate',
       'onDebugLog',

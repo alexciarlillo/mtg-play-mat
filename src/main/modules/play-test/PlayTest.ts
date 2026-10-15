@@ -51,10 +51,14 @@ import {
   undoLast,
   type UndoState,
 } from '@shared/game';
-import type { RevealChange } from '@shared/net/protocol';
+import { cleanLogText, type RevealChange } from '@shared/net/protocol';
 import type { RevealTarget } from '@shared/net/revealTargets';
 import type { DeckBoard, DeckFormat } from '@shared/types/decks';
-import { isHandCommand, type PlayTestStatus } from '@shared/types/playTest';
+import {
+  isHandCommand,
+  type PlayTestStatus,
+  type SavedGameOffer,
+} from '@shared/types/playTest';
 import type { EventPayload } from '@shared/ipc/contract';
 import { app, BrowserWindow, screen, type WebContents } from 'electron';
 
@@ -64,9 +68,21 @@ import type CardDB from '../../shared/db/CardDB';
 import type DeckDB from '../../shared/db/DeckDB';
 import { createWindow, whenLoaded } from '../../windows';
 import { toCardRef } from './cardRef';
+import {
+  buildSave,
+  deckSaveKey,
+  fitsSave,
+  MAX_SAVED_LINES,
+  type RestoredGame,
+  restoreSave,
+  sampleSaveKey,
+  SaveError,
+  type SavedLine,
+} from './gameSave';
 import LibraryActivityTracker from './LibraryActivityTracker';
 import { mayReadHand, mayReadLibrary } from './privateAccess';
 import buildSampleDeck, { buildSampleSideboard } from './sampleDeck';
+import type { Saves } from './SaveStore';
 
 export interface LoadedDeck {
   library: CardRef[];
@@ -84,6 +100,9 @@ interface Deps {
   playerName(): string;
   // Read when a play test opens: put the hand in the board window.
   handInBoard(): boolean;
+  // Where games are saved as they are played; nowhere when left out.
+  saves?: Saves;
+  appVersion?: string;
 }
 
 type PublicListener = (view: PublicView | null) => void;
@@ -91,6 +110,16 @@ type PublicListener = (view: PublicView | null) => void;
 type StatusListener = (status: PlayTestStatus) => void;
 
 type LogListener = (text: string) => void;
+
+type HistoryListener = (lines: SavedLine[]) => void;
+
+const noSaves: Saves = {
+  read: () => null,
+  schedule: () => {},
+  flush: () => {},
+  remove: () => {},
+  setAside: () => null,
+};
 
 // How the play test reaches the other games at the table.
 export interface ControlLink {
@@ -142,6 +171,9 @@ type PlayTestHandlers = Pick<
   | 'getPrivateLog'
   | 'getSeenList'
   | 'getSeenByYou'
+  | 'getSavedGame'
+  | 'restoreSavedGame'
+  | 'dismissSavedGame'
 >;
 
 const badActivity = (message: string): never => {
@@ -233,12 +265,43 @@ export default class PlayTest {
   // ever shown where the hand is.
   private known: KnownLedger = NO_KNOWLEDGE;
 
-  constructor({ cardDb, deckDb, playerId, playerName, handInBoard }: Deps) {
+  private readonly saves: Saves;
+
+  private readonly appVersion: string;
+
+  // The file the open game is saved to, one per deck.
+  private saveKey: string | null = null;
+
+  // A save found when the game opened. Until the player restores it,
+  // dismisses it or plays on, nothing is written over it.
+  private restorable: RestoredGame | null = null;
+
+  private savedOffer: SavedGameOffer | null = null;
+
+  // The player's own table log lines this game, saved along with it.
+  private lines: SavedLine[] = [];
+
+  private readonly historyListeners = new Set<HistoryListener>();
+
+  // Told once per game, when it grows past what a save can hold.
+  private tooLongToSave = false;
+
+  constructor({
+    cardDb,
+    deckDb,
+    playerId,
+    playerName,
+    handInBoard,
+    saves = noSaves,
+    appVersion = '0.0.0',
+  }: Deps) {
     this.cardDb = cardDb;
     this.deckDb = deckDb;
     this.playerId = playerId;
     this.playerName = playerName;
     this.handInBoardSetting = handInBoard;
+    this.saves = saves;
+    this.appVersion = appVersion;
   }
 
   get gameState(): GameState {
@@ -328,6 +391,34 @@ export default class PlayTest {
     if (!this.isOpen) return;
     this.libraryActivity.lineLogged(text);
     this.logListeners.forEach((listener) => listener(text));
+    // Kept as the table shows it, which also bounds a long mill line.
+    const line = cleanLogText(text);
+    if (line) {
+      this.lines = [...this.lines, { text: line, at: Date.now() }].slice(
+        -MAX_SAVED_LINES
+      );
+    }
+    this.scheduleSave();
+  };
+
+  // Lines from a restored game, for the local table log only: the table
+  // heard them when they were first played.
+  onLogRestored = (listener: HistoryListener) => {
+    this.historyListeners.add(listener);
+    return () => {
+      this.historyListeners.delete(listener);
+    };
+  };
+
+  // Writes anything waiting, e.g. as the app quits.
+  flushSaves = () => this.saves.flush();
+
+  // The deck is gone, so its open game is no longer saved anywhere.
+  forgetSave = (key: string) => {
+    if (this.saveKey !== key) return;
+    this.saveKey = null;
+    this.restorable = null;
+    this.setSavedOffer(null);
   };
 
   private notifyPublic = () => {
@@ -337,10 +428,15 @@ export default class PlayTest {
 
   readonly handlers: PlayTestHandlers = {
     startPlayTest: (deckId) =>
-      this.start(this.loadDeck(deckId), undefined, {
-        id: deckId,
-        name: this.deckDb.getDeck(deckId)?.name ?? 'Unknown deck',
-      }),
+      this.start(
+        this.loadDeck(deckId),
+        undefined,
+        {
+          id: deckId,
+          name: this.deckDb.getDeck(deckId)?.name ?? 'Unknown deck',
+        },
+        deckSaveKey(deckId)
+      ),
     restartPlayTest: () => this.restart(),
     getPlayTestStatus: () => this.status(),
     startSamplePlayTest: () => {
@@ -407,6 +503,9 @@ export default class PlayTest {
     getPrivateLog: () => this.privateLog,
     getSeenList: () => this.seen.everyone,
     getSeenByYou: () => this.seen.you,
+    getSavedGame: () => this.savedOffer,
+    restoreSavedGame: () => this.restoreSaved(),
+    dismissSavedGame: () => this.dismissSaved(),
     getLookAtTop: () => this.lookAtTop,
     setLookAtTop: (on: unknown) => {
       if (!this.isOpen) return;
@@ -458,6 +557,9 @@ export default class PlayTest {
     getPrivateLog: (sender) => mayReadLibrary(this.senders(), sender),
     getSeenList: (sender) => this.isPlayTestSender(sender),
     getSeenByYou: (sender) => mayReadLibrary(this.senders(), sender),
+    getSavedGame: (sender) => this.isPlayTestSender(sender),
+    restoreSavedGame: (sender) => this.isPlayTestSender(sender),
+    dismissSavedGame: (sender) => this.isPlayTestSender(sender),
   };
 
   // A fixed seed is only passed by end-to-end tests, which may also ask
@@ -469,7 +571,8 @@ export default class PlayTest {
     const label = { id: null, name: 'Sample deck' };
     const sideboard = buildSampleSideboard();
     const deck = { library, command, format, sideboard };
-    return this.start(deck, seed, label).catch((err) => {
+    const key = sampleSaveKey(format);
+    return this.start(deck, seed, label, key).catch((err) => {
       console.error('[PlayTest] failed to open sample deck', err);
     });
   };
@@ -504,6 +607,8 @@ export default class PlayTest {
       this.learnUnchangedLook(action);
       return;
     }
+    // Playing on means keeping the new game.
+    if (this.restorable) this.dismissSaved();
     if (!keepShowing) this.endShowing(false);
     const left = departures(this.state, action, next);
     if (left.length > 0) {
@@ -923,6 +1028,11 @@ export default class PlayTest {
         state: permanentState(card),
       });
     });
+    if (borrowed.length > 0 || lent.length > 0) {
+      this.undoFloor = this.state.log.length;
+      this.redoStack = [];
+      this.scheduleSave();
+    }
   };
 
   // Built from public views of the two states, never the states.
@@ -942,6 +1052,7 @@ export default class PlayTest {
     );
     this.updateCommanderPrompts(before);
     this.pushViews();
+    this.scheduleSave();
   };
 
   private undo = () => {
@@ -968,6 +1079,7 @@ export default class PlayTest {
     } else {
       this.redoStack = [];
       this.pushUndoState();
+      this.scheduleSave();
     }
   };
 
@@ -1060,6 +1172,10 @@ export default class PlayTest {
     this.libraryActivity.reset();
     this.setLookAtTop(false);
     this.endShowing(false);
+    this.lines = [];
+    this.restorable = null;
+    this.tooLongToSave = false;
+    this.setSavedOffer(null);
     sendEvent(this.board, 'commanderPrompts', []);
     sendEvent(this.board, 'gameStarted', null);
     sendEvent(this.hand, 'gameStarted', null);
@@ -1070,6 +1186,117 @@ export default class PlayTest {
     this.newGame(this.deck);
     this.pushViews();
     this.addLogEntry('restarted the game');
+  };
+
+  // Eager, since the game may change before the write: the state is
+  // never mutated, so holding it is cheap.
+  private scheduleSave = () => {
+    if (!this.saveKey || this.restorable || this.state.log.length === 0) {
+      return;
+    }
+    if (!fitsSave(this.state)) {
+      if (!this.tooLongToSave) {
+        this.tooLongToSave = true;
+        this.addPrivateLine(
+          'This game is too long to save, so autosave is off until the ' +
+            'next game. The last save is kept.',
+          true
+        );
+      }
+      return;
+    }
+    this.saves.schedule(
+      this.saveKey,
+      buildSave({
+        appVersion: this.appVersion,
+        deckName: this.deckLabel?.name ?? 'Unknown deck',
+        state: this.state,
+        undoFloor: this.undoFloor,
+        redo: this.redoStack,
+        lines: this.lines,
+      })
+    );
+  };
+
+  private setSavedOffer = (offer: SavedGameOffer | null) => {
+    if (offer === this.savedOffer) return;
+    this.savedOffer = offer;
+    sendEvent(this.board, 'savedGame', offer);
+  };
+
+  // Anything wrong with the file means a new game and a message, never
+  // part of the old one.
+  private offerSave = (key: string) => {
+    try {
+      const raw = this.saves.read(key);
+      if (raw === null) return;
+      const saved = restoreSave(raw, {
+        playerId: this.playerId,
+        playerName: this.playerName(),
+      });
+      this.restorable = saved;
+      this.setSavedOffer({
+        kind: 'restore',
+        deckName: saved.deckName,
+        savedAt: saved.savedAt,
+      });
+    } catch (err) {
+      console.warn('[PlayTest] saved game not restored', err);
+      const reason =
+        err instanceof SaveError && err.version
+          ? err.message
+          : `the save file is damaged: ${err instanceof Error ? err.message : String(err)}`;
+      // Kept out of the new game's way, for a newer app or a person.
+      const aside = this.saves.setAside(key);
+      this.setSavedOffer({
+        kind: 'failed',
+        message:
+          `Your saved game couldn't be restored, as ${reason}. ` +
+          'A new game was started instead.' +
+          (aside ? ` The old save was kept as ${aside}.` : ''),
+      });
+    }
+  };
+
+  // Replaces only this player's game. A permanent that changed hands
+  // lives in two games, so restoring would leave the other one wrong.
+  private restoreSaved = () => {
+    const saved = this.restorable;
+    const offer = this.savedOffer;
+    if (!saved || offer?.kind !== 'restore' || !this.isOpen) return;
+    if (borrowedFrom(this.state).length > 0 || lentTo(this.state).length > 0) {
+      this.setSavedOffer({
+        ...offer,
+        refused:
+          'Give back the permanents you control and get yours back ' +
+          'first: restoring replaces only your own game.',
+      });
+      return;
+    }
+    this.restorable = null;
+    this.tooLongToSave = false;
+    this.setSavedOffer(null);
+    this.endShowing(false);
+    this.libraryActivity.reset();
+    this.commanderPrompts = [];
+    sendEvent(this.board, 'commanderPrompts', []);
+    this.state = { ...saved.state, seq: this.state.seq + 1 };
+    this.undoFloor = saved.undoFloor;
+    this.redoStack = [...saved.redo];
+    this.known = this.lookedAtTop(saved.known);
+    this.lines = [...saved.lines];
+    this.historyListeners.forEach((listener) => listener(saved.lines));
+    sendEvent(this.board, 'gameStarted', null);
+    sendEvent(this.hand, 'gameStarted', null);
+    this.pushViews();
+    this.addLogEntry('restored a saved game');
+  };
+
+  // The save stays on disk until the new game changes, so closing
+  // straight away still leaves it to restore next time.
+  private dismissSaved = () => {
+    this.restorable = null;
+    this.setSavedOffer(null);
   };
 
   private status = (): PlayTestStatus => {
@@ -1094,14 +1321,21 @@ export default class PlayTest {
   private start = async (
     deck: LoadedDeck,
     seed: number | undefined,
-    label: PlayTestStatus['deck']
+    label: PlayTestStatus['deck'],
+    saveKey: string
   ) => {
     const handInBoard = this.handInBoardSetting();
     if (this.isOpen && handInBoard !== this.handInBoard) {
       this.closeForModeChange();
     }
+    // The game being replaced is saved as it ends, before the new one
+    // reads its own deck's save (which may be that same file).
+    this.settleControl();
+    this.saves.flush();
+    this.saveKey = saveKey;
     this.newGame(deck, seed);
     this.deckLabel = label;
+    this.offerSave(saveKey);
 
     const { board, hand } = this.ensureWindows(handInBoard);
     this.pushStatus();
@@ -1166,6 +1400,7 @@ export default class PlayTest {
         if (this.board !== board) return;
         this.board = null;
         this.settleControl();
+        this.saves.flush();
         this.libraryActivity.reset();
         this.forgetReveals();
         this.hand?.close();
@@ -1181,6 +1416,7 @@ export default class PlayTest {
         if (this.hand !== hand) return;
         this.hand = null;
         this.settleControl();
+        this.saves.flush();
         this.libraryActivity.reset();
         this.forgetReveals();
         this.board?.close();

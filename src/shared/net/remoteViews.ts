@@ -169,6 +169,31 @@ export class RemoteViews {
     });
   };
 
+  // Lines from a game played earlier, put where their times fall, so the
+  // log still reads in the order things happened.
+  addPastActions = (
+    playerId: PlayerId,
+    playerName: string,
+    lines: readonly { text: string; at: number }[]
+  ) => {
+    if (lines.length === 0) return;
+    const past: TableEntry[] = lines.map(({ text, at }) => ({
+      kind: 'action',
+      id: this.nextId(),
+      at,
+      playerId,
+      playerName,
+      text,
+    }));
+    // Stable, so entries with the same time keep their order.
+    this.log = [...this.log, ...past]
+      .map((entry, i) => ({ entry, i }))
+      .sort((a, b) => a.entry.at - b.entry.at || a.i - b.i)
+      .map(({ entry }) => entry)
+      .slice(-MAX_LOG);
+    this.changed();
+  };
+
   // The log is the table's history, so it outlasts the players: leaving
   // or starting a new session keeps it.
   clear = (): boolean => {

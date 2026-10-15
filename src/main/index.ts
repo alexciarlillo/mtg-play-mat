@@ -37,6 +37,8 @@ import { relaySettings } from './modules/netplay/relayConfig';
 import { setupNetplay } from './modules/netplay/setupNetplay';
 import PlayTest from './modules/play-test/PlayTest';
 import createCardFactsHandlers from './modules/play-test/cardFactsHandlers';
+import { deckSaveKey } from './modules/play-test/gameSave';
+import SaveStore from './modules/play-test/SaveStore';
 import createTokenHandlers from './modules/play-test/tokenHandlers';
 import createSettingsHandlers from './modules/settings/settingsHandlers';
 import SettingsStore from './modules/settings/SettingsStore';
@@ -48,6 +50,7 @@ import {
   getDbDir,
   imageCacheDir,
   matsDir,
+  savesDir,
 } from './shared/db/paths';
 import { createWindow, whenLoaded } from './windows';
 
@@ -207,13 +210,18 @@ const start = (onDeepLink: ReturnType<typeof watchDeepLinks>) => {
   });
   const mats = new MatStore({ dir: matsDir(), encoder: nativeImage });
   const profile = new ProfileStore(settings);
+  const saves = new SaveStore(savesDir());
   const playTest = new PlayTest({
     cardDb,
     deckDb,
     playerId: profile.playerId,
     playerName: () => profile.name,
     handInBoard: () => settings.settings.handInBoard,
+    saves,
+    appVersion,
   });
+  // The board closing saves too, but a quit may not wait for it.
+  app.on('will-quit', playTest.flushSaves);
   playTest.onStatusChange(() => menu?.refresh());
   const online = setupNetplay({
     profile,
@@ -254,7 +262,14 @@ const start = (onDeepLink: ReturnType<typeof watchDeepLinks>) => {
 
   registerRequestHandlers(
     {
-      ...createDeckHandlers({ cardDb, deckDb }),
+      ...createDeckHandlers({
+        cardDb,
+        deckDb,
+        deckDeleted: (deckId) => {
+          playTest.forgetSave(deckSaveKey(deckId));
+          saves.remove(deckSaveKey(deckId));
+        },
+      }),
       ...createCollectionHandlers({ cardDb }),
       ...createCardDataHandlers({ cardData }),
       ...playTest.handlers,
@@ -312,6 +327,7 @@ const start = (onDeepLink: ReturnType<typeof watchDeepLinks>) => {
         openSampleCommanderPlayTest: (seed?: number) =>
           playTest.openSampleDeck(seed, 'commander'),
         gameState: () => playTest.gameState,
+        undoState: () => playTest.handlers.getUndoState(),
         profile: () => profile.profile,
         settings: () => settings.settings,
         chooseMatFile: (file: string) => {

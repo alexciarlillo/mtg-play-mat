@@ -12,3 +12,7 @@ export const imageCacheDir = () =>
   path.join(app.getPath('userData'), 'image-cache');
 
 export const matsDir = () => path.join(app.getPath('userData'), 'mats');
+
+// Saved games hold the hidden library order, so they stay in the
+// profile's own folder like everything else here.
+export const savesDir = () => path.join(app.getPath('userData'), 'saves');

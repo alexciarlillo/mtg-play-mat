@@ -25,6 +25,7 @@ import type {
   BoardMenuCommand,
   HandCommand,
   PlayTestStatus,
+  SavedGameOffer,
 } from '../types/playTest';
 import type {
   CurrentSetListReturn,
@@ -123,6 +124,12 @@ export const requests = {
   // which only the window that shows the hand may ask for.
   getSeenList: request<[], SeenEntry[]>(),
   getSeenByYou: request<[], SeenEntry[]>(),
+  // A saved game for the deck just opened; also pushed as savedGame.
+  // Restoring replaces the local game; dismissing keeps the new one.
+  // Board or hand only.
+  getSavedGame: request<[], SavedGameOffer | null>(),
+  restoreSavedGame: request<[]>(),
+  dismissSavedGame: request<[]>(),
   getCardDataStatus: request<[], CardDataStatus>(),
   // Starts a check-and-download; progress arrives as cardDataStatus.
   updateCardData: request<[], CardDataStatus>(),
@@ -200,6 +207,7 @@ export const events = {
   privateLog: event<PrivateLogEntry[]>(),
   // To the board only.
   seenList: event<SeenEntry[]>(),
+  savedGame: event<SavedGameOffer | null>(),
   // Only to the window that shows the hand, never a shared board.
   seenByYou: event<SeenEntry[]>(),
   // To the app window.

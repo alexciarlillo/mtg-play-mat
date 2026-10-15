@@ -36,6 +36,9 @@ Everything lives in `<userData>`:
 - `image-cache/`: card images. Pages load images as
   `card://<scryfallId>/<face>/<size>`. The main process serves those from this cache,
   fetching from Scryfall's CDN only on a miss, so an image seen once works offline.
+- `saves/`: the game in progress for each deck (`deck-<id>.json`, or
+  `sample-<format>.json` for the sample deck). A save holds your hidden library order
+  and hand, so keep this folder out of anything synced or shared.
 
 SQLite is Node's built-in `node:sqlite`, so there's no native module to rebuild.
 
@@ -150,6 +153,17 @@ Right-click any card for "Move to…" (hand, battlefield, graveyard, exile, libr
 top/bottom) or "Shuffle into library". Click the graveyard or exile to browse it.
 Drag a battlefield card onto a pile to move it there. Hovering a card shows a large
 preview in that window only.
+
+**Autosave:** the game is saved as you play, a moment after each change, and again when
+the board closes or the app quits. Opening the same deck again offers **Restore** or
+**New game** on the board. Restoring replays the saved actions, so the board, the log and
+undo/redo come back exactly as they were (the sample deck has one save per format). Playing
+on, or choosing New game, keeps the new game, which replaces the save once it changes. A
+save that is damaged or was written in another save format is never half-restored: you
+get a new game and a message saying why. Deleting a deck deletes its save. Online, a
+restore replaces only your own game, and is refused while you control another player's
+permanent or they control yours. Cards shown to one player, library activity and the
+"seen" lists are not saved.
 
 **Play area background:** pick a PNG or JPEG under **Settings → Play area** and it is drawn
 under your battlefield, shaped like a real 24x14 playmat. It is an object on the table

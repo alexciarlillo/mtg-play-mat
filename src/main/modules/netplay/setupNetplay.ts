@@ -190,6 +190,7 @@ export const setupNetplay = ({
   });
 
   playTest.onLogEntry(netplay.localLogEntry);
+  playTest.onLogRestored(netplay.restoreLogEntries);
 
   playTest.linkControl({
     send: netplay.sendControl,

@@ -269,3 +269,31 @@ describe('RemoteViews', () => {
     ]);
   });
 });
+
+describe('RemoteViews past actions', () => {
+  it('puts lines from a restored game where their times fall', () => {
+    let now = 1000;
+    const remote = new RemoteViews(
+      () => 'alice',
+      () => now
+    );
+    remote.addAction('alice', 'Alice', 'started a new game');
+    now = 2000;
+    remote.addPastActions('alice', 'Alice', [
+      { text: 'drew a card', at: 100 },
+      { text: 'played a land', at: 100 },
+      { text: 'tapped it', at: 1500 },
+    ]);
+    remote.addAction('alice', 'Alice', 'restored a saved game');
+    const lines = remote
+      .snapshot()
+      .log.map((entry) => (entry.kind === 'action' ? entry.text : ''));
+    expect(lines).toEqual([
+      'drew a card',
+      'played a land',
+      'started a new game',
+      'tapped it',
+      'restored a saved game',
+    ]);
+  });
+});

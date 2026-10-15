@@ -355,6 +355,10 @@ test('a new game closes an open search', async () => {
   await expect(board.getByLabel('Search the library')).toBeVisible();
   await openSample(7);
   await expect(board.getByLabel('Search the library')).toHaveCount(0);
+  // The game just replaced was saved, so reopening the deck offers it.
+  const saved = board.getByRole('dialog', { name: 'Restore saved game?' });
+  await saved.getByRole('button', { name: 'New game' }).click();
+  await expect(saved).toHaveCount(0);
   await expect(pile('library-activity')).toHaveCount(0);
   await expect(handCards()).toHaveCount(7);
   await expect(tray().getByTestId('mulligan-bar')).toBeVisible();

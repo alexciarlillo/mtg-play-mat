@@ -686,3 +686,318 @@ describe('PlayTest sideboard and companion', () => {
     expect(names(playTest, 'hand')).toHaveLength(7);
   });
 });
+
+describe('PlayTest saved games', () => {
+  // Like the file store: writes wait for a flush, which a test calls
+  // where the debounce would have fired.
+  const memorySaves = () => {
+    const files = new Map<string, string>();
+    const pending = new Map<string, unknown>();
+    return {
+      files,
+      pending,
+      read: (key: string): unknown => {
+        const file = files.get(key);
+        return file === undefined ? null : JSON.parse(file);
+      },
+      schedule: (key: string, data: unknown) => {
+        pending.set(key, data);
+      },
+      flush: () => {
+        pending.forEach((data, key) => files.set(key, JSON.stringify(data)));
+        pending.clear();
+      },
+      remove: (key: string) => {
+        pending.delete(key);
+        files.delete(key);
+      },
+      setAside: (key: string) => {
+        const file = files.get(key);
+        if (file === undefined) return null;
+        files.delete(key);
+        files.set(`${key}.unreadable`, file);
+        return `/saves/${key}.unreadable.json`;
+      },
+    };
+  };
+
+  const launch = async (saves: ReturnType<typeof memorySaves>, seed = 7) => {
+    const playTest = new PlayTest({
+      cardDb: {} as never,
+      deckDb: {} as never,
+      playerId: 'p1',
+      playerName: () => 'Alice',
+      handInBoard: () => false,
+      saves,
+      appVersion: '9.9.9',
+    });
+    const send = vi.fn();
+    playTest.linkControl({ send, peerName: () => 'Bob' });
+    const log: string[] = [];
+    playTest.onLogEntry((text) => log.push(text));
+    const restoredLines: string[] = [];
+    playTest.onLogRestored((lines) =>
+      restoredLines.push(...lines.map((line) => line.text))
+    );
+    await playTest.openSampleDeck(seed);
+    return { playTest, log, restoredLines, ...windowsOf(false) };
+  };
+
+  const withoutSeq = ({ seq: _seq, ...rest }: { seq: number }) => rest;
+
+  const playSome = (playTest: InstanceType<typeof PlayTest>) => {
+    const [a, b, c] = playTest.gameState.players[0].zones.hand;
+    playTest.handlers.dispatch({
+      type: 'moveCard',
+      instanceId: a,
+      to: 'battlefield',
+    });
+    playTest.handlers.dispatch({ type: 'tap', instanceId: a });
+    playTest.handlers.dispatch({
+      type: 'moveCards',
+      playerId: 'p1',
+      instanceIds: [b, c],
+      to: 'graveyard',
+    });
+    playTest.handlers.undo();
+  };
+
+  it('saves as the game goes, and restores board, log and undo history', async () => {
+    const saves = memorySaves();
+    const first = await launch(saves);
+    expect(first.playTest.handlers.getSavedGame()).toBeNull();
+    playSome(first.playTest);
+    const before = first.playTest.gameState;
+    const undoBefore = first.playTest.handlers.getUndoState();
+    expect(undoBefore).toEqual({ canUndo: true, canRedo: true });
+    saves.flush();
+    expect(saves.files.has('sample-constructed')).toBe(true);
+
+    // A relaunch: a fresh play test opening the same deck.
+    const second = await launch(saves, 99);
+    expect(second.playTest.handlers.getSavedGame()).toEqual({
+      kind: 'restore',
+      deckName: 'Sample deck',
+      savedAt: expect.any(Number) as number,
+    });
+    // New windows ask for it as they load; the hand never hears of it.
+    expect(sentOn(second.hand, 'savedGame')).toHaveLength(0);
+    const fresh = second.playTest.gameState;
+    const started = sentOn(second.hand, 'gameStarted').length;
+
+    second.playTest.handlers.restoreSavedGame();
+    const after = second.playTest.gameState;
+    expect(withoutSeq(after)).toEqual(withoutSeq(before));
+    expect(after.seq).toBeGreaterThan(fresh.seq);
+    expect(second.playTest.handlers.getUndoState()).toEqual(undoBefore);
+    expect(second.playTest.handlers.getSavedGame()).toBeNull();
+    expect(second.restoredLines).toEqual(first.log);
+    expect(second.log.at(-1)).toBe('restored a saved game');
+    // Dialogs open on the replaced game close.
+    expect(sentOn(second.hand, 'gameStarted')).toHaveLength(started + 1);
+
+    // The redo stack came back too.
+    second.playTest.handlers.redo();
+    const [, b] = before.players[0].zones.hand;
+    expect(second.playTest.gameState.cards[b].zone).toBe('graveyard');
+  });
+
+  it('keeps the new game once the player plays on', async () => {
+    const saves = memorySaves();
+    const first = await launch(saves);
+    playSome(first.playTest);
+    saves.flush();
+    const saved = saves.files.get('sample-constructed');
+
+    const second = await launch(saves, 99);
+    // Nothing is written over the save while it is on offer.
+    expect(saves.files.get('sample-constructed')).toBe(saved);
+    second.playTest.handlers.dispatch({ type: 'untapAll', playerId: 'p1' });
+    second.playTest.handlers.dispatch({
+      type: 'draw',
+      playerId: 'p1',
+      count: 1,
+    });
+    expect(second.playTest.handlers.getSavedGame()).toBeNull();
+    saves.flush();
+    expect(saves.files.get('sample-constructed')).not.toBe(saved);
+    second.playTest.handlers.restoreSavedGame();
+    expect(second.playTest.gameState.players[0].zones.hand).toHaveLength(8);
+  });
+
+  it('keeps the save on disk when dismissed, until the new game changes', async () => {
+    const saves = memorySaves();
+    playSome((await launch(saves)).playTest);
+    saves.flush();
+    const saved = saves.files.get('sample-constructed');
+
+    const second = await launch(saves, 99);
+    second.playTest.handlers.dismissSavedGame();
+    expect(second.playTest.handlers.getSavedGame()).toBeNull();
+    expect(saves.files.get('sample-constructed')).toBe(saved);
+    second.playTest.handlers.dispatch({
+      type: 'draw',
+      playerId: 'p1',
+      count: 1,
+    });
+    saves.flush();
+    expect(saves.files.get('sample-constructed')).not.toBe(saved);
+  });
+
+  it('starts a new game with a message when the save is damaged or too new', async () => {
+    const saves = memorySaves();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    saves.files.set('sample-constructed', '{"kind":"mtg-play-mat/game"}');
+    const damaged = await launch(saves);
+    expect(damaged.playTest.handlers.getSavedGame()).toEqual({
+      kind: 'failed',
+      message: expect.stringMatching(
+        /damaged.*new game was started.*kept as \/saves\/sample-constructed\.unreadable\.json/
+      ) as string,
+    });
+    // Moved aside, so the new game doesn't write over it.
+    expect(saves.files.get('sample-constructed.unreadable')).toBe(
+      '{"kind":"mtg-play-mat/game"}'
+    );
+    expect(damaged.playTest.gameState.players[0].zones.hand).toHaveLength(7);
+    damaged.playTest.handlers.dismissSavedGame();
+    expect(damaged.playTest.handlers.getSavedGame()).toBeNull();
+
+    // The new game's own save would otherwise land first.
+    saves.pending.clear();
+    saves.files.set(
+      'sample-constructed',
+      JSON.stringify({
+        kind: 'mtg-play-mat/game',
+        version: 0,
+        appVersion: '0.1.0',
+      })
+    );
+    const old = await launch(saves);
+    expect(old.playTest.handlers.getSavedGame()).toEqual({
+      kind: 'failed',
+      message: expect.stringMatching(/version 0\.1\.0/) as string,
+    });
+    warn.mockRestore();
+  });
+
+  it('refuses to restore while a permanent is borrowed', async () => {
+    const saves = memorySaves();
+    playSome((await launch(saves)).playTest);
+    const second = await launch(saves, 99);
+    second.playTest.receiveControl('bob', 'Bob', {
+      op: 'give',
+      card: borrowed,
+    });
+    const before = second.playTest.gameState;
+
+    second.playTest.handlers.restoreSavedGame();
+    expect(second.playTest.gameState).toBe(before);
+    expect(second.playTest.handlers.getSavedGame()).toEqual(
+      expect.objectContaining({
+        kind: 'restore',
+        refused: expect.stringMatching(/only your own game/) as string,
+      })
+    );
+  });
+});
+
+describe('PlayTest saved games, keeping the file right', () => {
+  const store = () => {
+    const files = new Map<string, unknown>();
+    const pending = new Map<string, unknown>();
+    const flushes: string[][] = [];
+    return {
+      files,
+      pending,
+      flushes,
+      read: (key: string): unknown => files.get(key) ?? null,
+      schedule: (key: string, data: unknown) => {
+        pending.set(key, JSON.parse(JSON.stringify(data)));
+      },
+      flush: () => {
+        flushes.push([...pending.keys()]);
+        pending.forEach((data, key) => files.set(key, data));
+        pending.clear();
+      },
+      remove: (key: string) => {
+        pending.delete(key);
+        files.delete(key);
+      },
+      setAside: () => null,
+    };
+  };
+
+  const open = async (saves: ReturnType<typeof store>) => {
+    const playTest = new PlayTest({
+      cardDb: {} as never,
+      deckDb: {} as never,
+      playerId: 'p1',
+      playerName: () => 'Alice',
+      handInBoard: () => false,
+      saves,
+    });
+    await playTest.openSampleDeck(7);
+    return playTest;
+  };
+
+  const logOf = (data: unknown) => (data as { log: unknown[] }).log;
+
+  it('saves the last game before switching to another deck', async () => {
+    const saves = store();
+    const playTest = await open(saves);
+    playTest.handlers.dispatch({ type: 'draw', playerId: 'p1', count: 1 });
+    expect(saves.files.has('sample-constructed')).toBe(false);
+
+    await playTest.openSampleDeck(8, 'commander');
+    expect(saves.flushes.at(-1)).toContain('sample-constructed');
+    expect(logOf(saves.files.get('sample-constructed'))).toHaveLength(4);
+  });
+
+  it('writes a restarted game over the offered save', async () => {
+    const saves = store();
+    const first = await open(saves);
+    first.handlers.dispatch({ type: 'draw', playerId: 'p1', count: 1 });
+    const second = await open(saves);
+    expect(second.handlers.getSavedGame()).not.toBeNull();
+    expect(logOf(saves.files.get('sample-constructed'))).toHaveLength(4);
+
+    second.handlers.restartPlayTest();
+    saves.flush();
+    expect(second.handlers.getSavedGame()).toBeNull();
+    expect(logOf(saves.files.get('sample-constructed'))).toHaveLength(3);
+  });
+
+  it('stops saving a game whose deck was deleted', async () => {
+    const saves = store();
+    const playTest = await open(saves);
+    saves.flush();
+    playTest.forgetSave('sample-constructed');
+    saves.remove('sample-constructed');
+    playTest.handlers.dispatch({ type: 'draw', playerId: 'p1', count: 1 });
+    playTest.flushSaves();
+    expect(saves.files.has('sample-constructed')).toBe(false);
+    // Another deck's key leaves this game alone.
+    const other = await open(saves);
+    other.forgetSave('deck-3');
+    other.handlers.dispatch({ type: 'draw', playerId: 'p1', count: 1 });
+    other.flushSaves();
+    expect(saves.files.has('sample-constructed')).toBe(true);
+  });
+
+  it('keeps a very long log line short, and the save restorable', async () => {
+    const saves = store();
+    const first = await open(saves);
+    first.addLogEntry(`milled 60 cards: ${'Forest, '.repeat(300)}`);
+    first.flushSaves();
+    const { lines } = saves.files.get('sample-constructed') as {
+      lines: { text: string }[];
+    };
+    expect(lines.at(-1)?.text.length).toBeLessThanOrEqual(300);
+
+    const second = await open(saves);
+    expect(second.handlers.getSavedGame()).toEqual(
+      expect.objectContaining({ kind: 'restore' })
+    );
+  });
+});

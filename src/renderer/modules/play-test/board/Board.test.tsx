@@ -125,6 +125,8 @@ const renderBoard = (
       },
       getCommanderPrompts: never,
       onCommanderPrompts: () => () => {},
+      getSavedGame: never,
+      onSavedGame: () => () => {},
       onGameStarted: (listener: () => void) => {
         pushGameStarted = listener;
         return () => {};

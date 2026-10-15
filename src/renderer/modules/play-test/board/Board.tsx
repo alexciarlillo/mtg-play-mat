@@ -64,6 +64,7 @@ import {
 import PlayerCounters from './PlayerCounters';
 import RevealPanel from './RevealPanel';
 import RevealTopDialog from './RevealTopDialog';
+import SavedGamePrompt from './SavedGamePrompt';
 import ShowingBadge from './ShowingBadge';
 import ScaledField from './ScaledField';
 import { SelectionContext, SelectionStore } from './selection';
@@ -71,6 +72,7 @@ import TableLog from './TableLog';
 import TokenDialog from './TokenDialog';
 import TurnPanel from './TurnPanel';
 import { useMarquee } from './useMarquee';
+import useSavedGame from './useSavedGame';
 import ZoneBrowser from './ZoneBrowser';
 import ZonePile from './ZonePile';
 
@@ -208,6 +210,7 @@ const Board = ({ store, opponent, hand }: Props) => {
   }, [selection]);
 
   const prompts = useCommanderPrompts();
+  const savedGame = useSavedGame();
   const {
     settings,
     loaded: settingsLoaded,
@@ -223,6 +226,7 @@ const Board = ({ store, opponent, hand }: Props) => {
       dialog === null &&
       cardDialog === null &&
       prompts.length === 0 &&
+      savedGame === null &&
       !handBusy,
     onHelp: toggleHelp,
     onRestart: () => setDialog('restart'),
@@ -692,6 +696,7 @@ const Board = ({ store, opponent, hand }: Props) => {
         {prompts[0] && (
           <CommanderPrompt key={prompts[0].instanceId} prompt={prompts[0]} />
         )}
+        {savedGame && <SavedGamePrompt offer={savedGame} />}
         {view && dialog === 'token' && (
           <TokenDialog playerId={view.playerId} onClose={close} />
         )}

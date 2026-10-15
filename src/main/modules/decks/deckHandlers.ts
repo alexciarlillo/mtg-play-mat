@@ -23,6 +23,8 @@ import { type DeckMetaRow, MAX_QTY } from '../../shared/db/DeckDB';
 interface Deps {
   cardDb: CardDB;
   deckDb: DeckDB;
+  // Anything kept for the deck outside the database, e.g. a saved game.
+  deckDeleted?(deckId: number): void;
 }
 
 type DeckHandlers = Pick<
@@ -139,7 +141,11 @@ const parseEdit = (v: unknown): DeckCardEdit => {
   }
 };
 
-const createDeckHandlers = ({ cardDb, deckDb }: Deps): DeckHandlers => {
+const createDeckHandlers = ({
+  cardDb,
+  deckDb,
+  deckDeleted,
+}: Deps): DeckHandlers => {
   const toSummaryRow = (row: DeckMetaRow): DeckSummary => ({
     id: row.id,
     name: row.name,
@@ -187,7 +193,9 @@ const createDeckHandlers = ({ cardDb, deckDb }: Deps): DeckHandlers => {
       return getDeck(deckId);
     },
     deleteDeck: (deckId) => {
-      deckDb.deleteDeck(id(deckId));
+      const deleted = id(deckId);
+      deckDb.deleteDeck(deleted);
+      deckDeleted?.(deleted);
       return listDecks();
     },
     searchCardNames: (query) => {

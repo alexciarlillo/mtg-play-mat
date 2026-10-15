@@ -9,6 +9,18 @@ export interface PlayTestStatus {
   handInBoard: boolean;
 }
 
+// What the board offers when a play test opens on a deck with a saved
+// game, or tells the player when that save couldn't be used.
+export type SavedGameOffer =
+  | {
+      kind: 'restore';
+      deckName: string;
+      savedAt: number;
+      // Why the last try was refused, e.g. a permanent is lent out.
+      refused?: string;
+    }
+  | { kind: 'failed'; message: string };
+
 // Game menu items the board window carries out, mostly by opening one of
 // its dialogs; the rest of the Game menu acts in main directly.
 export type BoardMenuCommand =

@@ -420,6 +420,19 @@ export default class Netplay {
     this.send({ kind: 'log', text });
   };
 
+  // Lines from a game restored from disk, onto the local table log only:
+  // the table heard them when they were first played.
+  restoreLogEntries = (lines: readonly { text: string; at: number }[]) => {
+    const { playerId, displayName } = this.deps.profile();
+    const kept = lines.flatMap(({ text, at }) => {
+      const line = cleanLogText(text);
+      return line ? [{ text: line, at }] : [];
+    });
+    if (kept.length === 0) return;
+    this.remote.addPastActions(playerId, displayName, kept);
+    this.pushOpponent();
+  };
+
   // Who may be handed a permanent: a player with a game open, on a build
   // that knows how to hold it.
   canTakeControl = (playerId: PlayerId): boolean => {
