@@ -63,6 +63,44 @@ const library: CardView[] = [
   libraryCard(23, 'Island', 'Basic Land — Island'),
 ];
 const getLibrary = vi.fn(() => Promise.resolve(library));
+// Island (id-23) has no facts, like a printing the database doesn't know.
+const getCardFacts = vi.fn(() =>
+  Promise.resolve({
+    'id-20': {
+      mv: 2,
+      colors: ['G'],
+      colorIdentity: ['G'],
+      keywords: [],
+      faces: [{ name: 'Grizzly Bears', typeLine: 'Creature — Bear' }],
+    },
+    'id-21': {
+      mv: 0,
+      colors: [],
+      colorIdentity: ['G'],
+      keywords: [],
+      faces: [
+        {
+          name: 'Forest',
+          typeLine: 'Basic Land — Forest',
+          oracleText: '({T}: Add {G}.)',
+        },
+      ],
+    },
+    'id-22': {
+      mv: 1,
+      colors: ['G'],
+      colorIdentity: ['G'],
+      keywords: [],
+      faces: [
+        {
+          name: 'Giant Growth',
+          typeLine: 'Instant',
+          oracleText: 'Target creature gets +3/+3 until end of turn.',
+        },
+      ],
+    },
+  })
+);
 const setLibraryActivity = vi.fn(() => Promise.resolve());
 let pushGameStarted: () => void;
 
@@ -71,6 +109,7 @@ beforeEach(() => {
     api: {
       dispatch,
       getLibrary,
+      getCardFacts,
       setLibraryActivity,
       onGameStarted: (listener: () => void) => {
         pushGameStarted = listener;
@@ -356,7 +395,7 @@ describe('Hand', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Search library…' }));
     expect(await screen.findAllByTestId('search-card')).toHaveLength(4);
 
-    fireEvent.change(screen.getByLabelText('Filter by name or type'), {
+    fireEvent.change(screen.getByLabelText('Search the library'), {
       target: { value: 'land isl' },
     });
     const [island] = screen.getAllByTestId('search-card');
@@ -374,5 +413,43 @@ describe('Hand', () => {
       shuffle: true,
     });
     expect(setLibraryActivity).toHaveBeenLastCalledWith(null);
+  });
+
+  it('searches rules text and advanced syntax once facts arrive', async () => {
+    renderHand(viewOf({ keptHand: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Search library…' }));
+    expect(await screen.findAllByTestId('search-card')).toHaveLength(4);
+    const search = (value: string) =>
+      fireEvent.change(screen.getByLabelText('Search the library'), {
+        target: { value },
+      });
+    const names = () =>
+      screen
+        .queryAllByTestId('search-card')
+        .map((el) => within(el).getByTestId('card').dataset.cardName);
+
+    search('"end of turn"');
+    expect(await screen.findAllByTestId('search-card')).toHaveLength(1);
+    expect(names()).toEqual(['Giant Growth']);
+    search('t:basic');
+    expect(names()).toEqual(['Forest', 'Island']);
+    search('t:basic c:c id:g');
+    expect(names()).toEqual(['Forest']);
+    search('-t:land mv<=1 or t:creature');
+    expect(names()).toEqual(['Giant Growth', 'Grizzly Bears']);
+    expect(screen.queryByTestId('query-error')).toBeNull();
+  });
+
+  it('shows parse errors inline and keeps the valid terms', async () => {
+    renderHand(viewOf({ keptHand: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Search library…' }));
+    await screen.findAllByTestId('search-card');
+    fireEvent.change(screen.getByLabelText('Search the library'), {
+      target: { value: 't:creature foo:bar' },
+    });
+    expect(screen.getByTestId('query-error')).toHaveTextContent(
+      "Unknown keyword 'foo'"
+    );
+    expect(screen.getAllByTestId('search-card')).toHaveLength(1);
   });
 });

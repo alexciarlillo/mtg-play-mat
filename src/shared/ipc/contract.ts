@@ -1,3 +1,4 @@
+import type { CardFacts } from '../cardQuery';
 import type { DebugInput, DebugSnapshot } from '../debug';
 import type { MatChoice } from '../mat';
 import type {
@@ -118,6 +119,9 @@ export const requests = {
   // or gives a borrowed one back to its owner.
   giveControl: request<[instanceId: string, to: string]>(),
   returnControl: request<[instanceId: string]>(),
+  // Search data (rules text, colours, mana value) by printing id. Ids the
+  // card database doesn't know are left out.
+  getCardFacts: request<[ids: string[]], Record<string, CardFacts>>(),
   // Token printings by name, for creating tokens in a play test.
   searchTokens: request<[query: string], TokenSearchResult[]>(),
   // App preferences. Main drops invalid keys and values from a patch, and

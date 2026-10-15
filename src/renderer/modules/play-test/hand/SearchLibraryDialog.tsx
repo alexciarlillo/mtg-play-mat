@@ -1,8 +1,16 @@
+import {
+  type CardFacts,
+  matchesQuery,
+  parseQuery,
+  type QueryNode,
+  toSearchable,
+} from '@shared/cardQuery';
 import type { CardView, PlayerId, SearchDestination } from '@shared/game';
 import classNames from 'classnames';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import Card from '../../../ui/Card';
+import { useCardFacts } from '../common/cardFacts';
 import { Modal } from '../common/Dialogs';
 import { useLibraryActivity } from '../common/useLibraryActivity';
 import { dispatch } from '../viewStore';
@@ -16,16 +24,16 @@ const destinations: { value: SearchDestination; label: string }[] = [
   { value: 'library', label: 'Top of library' },
 ];
 
-const matches = (card: CardView, query: string) => {
-  const ref = card.ref;
-  if (!ref || query === '') return true;
-  const text = [ref.name, ref.typeLine, ...ref.faces.map((f) => f.name)]
-    .join(' ')
-    .toLowerCase();
-  return query
-    .toLowerCase()
-    .split(/\s+/)
-    .every((word) => text.includes(word));
+const matches = (
+  card: CardView,
+  node: QueryNode | null,
+  facts: (id: string) => CardFacts | undefined
+) => {
+  if (node === null) return true;
+  return (
+    card.ref !== null &&
+    matchesQuery(node, toSearchable(card.ref, facts(card.ref.id)))
+  );
 };
 
 // Sorted by name so the search itself shows nothing of the library order.
@@ -49,10 +57,15 @@ const SearchLibraryDialog = ({ playerId, seq, onClose }: Props) => {
   const [to, setTo] = useState<SearchDestination>('hand');
   const [shuffle, setShuffle] = useState(true);
 
+  const facts = useCardFacts(
+    library?.flatMap((card) => (card.ref ? [card.ref.id] : [])) ?? []
+  );
+  const parsed = useMemo(() => parseQuery(query), [query]);
+
   const inLibrary = new Set(library?.map((card) => card.instanceId));
   const chosen = picked.filter((id) => inLibrary.has(id));
   const shown = (library ?? [])
-    .filter((card) => matches(card, query.trim()))
+    .filter((card) => matches(card, parsed.node, facts))
     .sort(byName);
 
   const toggle = (card: CardView) =>
@@ -86,8 +99,8 @@ const SearchLibraryDialog = ({ playerId, seq, onClose }: Props) => {
         <input
           type="search"
           autoFocus
-          aria-label="Filter by name or type"
-          placeholder="Filter by name or type"
+          aria-label="Search the library"
+          placeholder="Name, type or text, or t:creature mv<=3"
           className="min-w-40 flex-1 rounded px-2 py-1 ring-1 ring-slate-400"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -123,6 +136,15 @@ const SearchLibraryDialog = ({ playerId, seq, onClose }: Props) => {
           {confirmLabel}
         </button>
       </div>
+      {parsed.errors.length > 0 && (
+        <p
+          role="alert"
+          data-testid="query-error"
+          className="mb-2 text-sm text-red-700"
+        >
+          {parsed.errors.map((error) => error.message).join('. ')}
+        </p>
+      )}
       <div
         data-testid="library-search"
         className="flex flex-wrap gap-2 text-center"

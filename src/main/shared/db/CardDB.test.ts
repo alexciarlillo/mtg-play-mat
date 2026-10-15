@@ -93,3 +93,29 @@ describe('CardDB.searchTokens', () => {
     db.close();
   });
 });
+
+describe('CardDB.printingsByIds', () => {
+  it('returns known printings and skips unknown ids', () => {
+    const raw = new DatabaseSync(dbPath);
+    migrate(raw, cardMigrations);
+    raw
+      .prepare(
+        `INSERT INTO printings (id, oracle_id, name, lang, set_code, set_name,
+           collector_number, layout, type_line, cmc, colors, color_identity,
+           keywords, oracle_text, digital, faces)
+         VALUES ('p-1', 'o', 'Shock', 'en', 'm19', 'Set', '1', 'normal',
+           'Instant', 1, '["R"]', '["R"]', '[]', 'Shock deals 2 damage.', 0,
+           json_array(json_object('name', 'Shock', 'typeLine', 'Instant')))`
+      )
+      .run();
+    raw.close();
+
+    const db = new CardDB(dbPath);
+    const found = db.printingsByIds(['nope', 'p-1']);
+    expect(found.map((p) => [p.id, p.cmc, p.colors])).toEqual([
+      ['p-1', 1, ['R']],
+    ]);
+    expect(db.printingsByIds([])).toEqual([]);
+    db.close();
+  });
+});

@@ -191,6 +191,7 @@ test('window.api is a narrow typed bridge', async () => {
       'giveControl',
       'returnControl',
       'searchTokens',
+      'getCardFacts',
       'onNetState',
       'onNetCommand',
       'onOpponentView',

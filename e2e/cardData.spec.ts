@@ -119,6 +119,26 @@ test('card search works on the new data', async () => {
 
   const sets = await page.evaluate(() => window.api.listSets());
   expect(sets.map((s) => s.code)).toContain('m21');
+
+  // Search facts come from the database; Delver's colours come from its
+  // front face, as Scryfall gives none for the whole card.
+  const delver = '11bf83bb-c95b-4b4f-9a56-ce7a1816307a';
+  const facts = await page.evaluate(
+    (ids) => window.api.getCardFacts(ids),
+    [delver, 'not-a-printing']
+  );
+  expect(Object.keys(facts)).toEqual([delver]);
+  expect(facts[delver]).toMatchObject({
+    mv: 1,
+    colors: ['U'],
+    colorIdentity: ['U'],
+    keywords: ['Flying', 'Transform'],
+  });
+  expect(facts[delver].faces.map((f) => f.name)).toEqual([
+    'Delver of Secrets',
+    'Insectile Aberration',
+  ]);
+  expect(facts[delver].faces[0].oracleText).toMatch(/upkeep/);
 });
 
 test('an imported deck resolves printings and plays', async () => {

@@ -301,6 +301,16 @@ export default class CardDB {
       .map(toCandidate);
   };
 
+  // Full printings of the given ids, skipping unknown ones.
+  printingsByIds = (ids: string[]): Printing[] => {
+    if (!this.db || ids.length === 0) return [];
+    const stmt = this.db.prepare('SELECT * FROM printings WHERE id = ?');
+    return ids
+      .map((id) => stmt.get(id) as PrintingRow | undefined)
+      .filter((row) => row !== undefined)
+      .map(toPrinting);
+  };
+
   // All printings of one card, newest first.
   printingsOf = (printingId: string): PrintingCandidate[] => {
     if (!this.db) return [];

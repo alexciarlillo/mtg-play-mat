@@ -248,7 +248,7 @@ test('search the library for a land from the tray', async () => {
   await board.keyboard.press('d');
   await expect(pile('library')).toHaveAttribute('data-count', libraryCount!);
 
-  await board.getByLabel('Filter by name or type').fill('land');
+  await board.getByLabel('Search the library').fill('t:land');
   const found = board.getByTestId('search-card');
   await found.first().getByTestId('card').click();
   await board.getByRole('button', { name: 'Move 1 and shuffle' }).click();
@@ -281,9 +281,9 @@ test('look at the top two and keep them in order', async () => {
 
 test('a new game closes an open search', async () => {
   await tray().getByRole('button', { name: 'Search library…' }).click();
-  await expect(board.getByLabel('Filter by name or type')).toBeVisible();
+  await expect(board.getByLabel('Search the library')).toBeVisible();
   await openSample(7);
-  await expect(board.getByLabel('Filter by name or type')).toHaveCount(0);
+  await expect(board.getByLabel('Search the library')).toHaveCount(0);
   await expect(pile('library-activity')).toHaveCount(0);
   await expect(handCards()).toHaveCount(7);
   await expect(tray().getByTestId('mulligan-bar')).toBeVisible();

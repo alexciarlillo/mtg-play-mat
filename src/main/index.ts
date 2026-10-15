@@ -36,6 +36,7 @@ import ProfileStore from './modules/netplay/ProfileStore';
 import { relaySettings } from './modules/netplay/relayConfig';
 import { setupNetplay } from './modules/netplay/setupNetplay';
 import PlayTest from './modules/play-test/PlayTest';
+import createCardFactsHandlers from './modules/play-test/cardFactsHandlers';
 import createTokenHandlers from './modules/play-test/tokenHandlers';
 import createSettingsHandlers from './modules/settings/settingsHandlers';
 import SettingsStore from './modules/settings/SettingsStore';
@@ -255,6 +256,7 @@ const start = (onDeepLink: ReturnType<typeof watchDeepLinks>) => {
       ...createCardDataHandlers({ cardData }),
       ...playTest.handlers,
       ...createTokenHandlers({ cardDb }),
+      ...createCardFactsHandlers({ cardDb }),
       ...online.handlers,
       ...createSettingsHandlers({ settings }),
       ...createDebugHandlers({ log }),

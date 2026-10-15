@@ -178,7 +178,7 @@ test('search for a land to hand, then shuffle', async () => {
   const libraryBefore = me(await gameState()).zones.library;
 
   await hand.getByRole('button', { name: 'Search library…' }).click();
-  await hand.getByLabel('Filter by name or type').fill('land');
+  await hand.getByLabel('Search the library').fill('t:land');
   const found = hand.getByTestId('search-card');
   await expect(found.first()).toBeVisible();
   const names = await found
@@ -200,6 +200,61 @@ test('search for a land to hand, then shuffle', async () => {
   const libraryAfter = me(await gameState()).zones.library;
   expect(libraryAfter).toHaveLength(libraryBefore.length - 1);
   expect(libraryAfter).not.toEqual(libraryBefore.filter((id) => id !== picked));
+});
+
+test('query syntax narrows the library search', async () => {
+  const state = await gameState();
+  const libraryNames = me(state).zones.library.map(
+    (id) => state.cards[id].ref.name
+  );
+  const countOf = (names: string[]) =>
+    libraryNames.filter((name) => names.includes(name)).length;
+  const query = hand.getByLabel('Search the library');
+  const found = hand.getByTestId('search-card');
+  const shownNames = async () =>
+    new Set(
+      await found
+        .getByTestId('card')
+        .evaluateAll((els) => els.map((el) => el.dataset.cardName))
+    );
+
+  await hand.getByRole('button', { name: 'Search library…' }).click();
+  await expect(found).toHaveCount(libraryNames.length);
+
+  const expectShown = async (text: string, names: string[]) => {
+    await query.fill(text);
+    const expected = countOf(names);
+    expect(expected).toBeGreaterThan(0);
+    await expect(found).toHaveCount(expected);
+    expect(names).toEqual(expect.arrayContaining([...(await shownNames())]));
+  };
+
+  await expectShown('t:basic', ['Forest']);
+  const cheapCreatures = [
+    'Llanowar Elves',
+    'Grizzly Bears',
+    'Delver of Secrets // Insectile Aberration',
+  ];
+  await expectShown('t:creature mv<=3', cheapCreatures);
+  // No sample card draws, so rules text is tried on one that tutors.
+  await expectShown('o:"basic land"', ['Rampant Growth']);
+  await expectShown('trample', ['Colossal Dreadmaw']);
+  await expectShown('-t:land -t:creature', ['Rampant Growth']);
+  await expectShown('t:land or c:u', [
+    'Forest',
+    'Delver of Secrets // Insectile Aberration',
+  ]);
+
+  await query.fill('t:creature foo:bar');
+  await expect(hand.getByTestId('query-error')).toHaveText(
+    "Unknown keyword 'foo'"
+  );
+  await expect(found).toHaveCount(
+    countOf([...cheapCreatures, 'Colossal Dreadmaw'])
+  );
+  await hand.keyboard.press('Escape');
+  await expect(found).toHaveCount(0);
+  expect((await gameState()).seq).toBe(state.seq);
 });
 
 test('a revealed hand card shows on the board until the next action', async () => {
@@ -296,7 +351,7 @@ test('Cmd/Ctrl+Z untaps a tapped card and Shift redoes it', async () => {
 
 test('a text field keeps its own undo', async () => {
   await hand.getByRole('button', { name: 'Search library…' }).click();
-  const filter = hand.getByLabel('Filter by name or type');
+  const filter = hand.getByLabel('Search the library');
   const before = (await gameState()).seq;
   await filter.fill('forest');
   await filter.press('ControlOrMeta+z');
