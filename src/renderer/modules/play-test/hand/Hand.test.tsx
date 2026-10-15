@@ -1,5 +1,6 @@
 import type { CardView, PrivateView } from '@shared/game';
 import { defaultSettings } from '@shared/settings';
+import type { HandCommand } from '@shared/types/playTest';
 import {
   act,
   fireEvent,
@@ -10,6 +11,7 @@ import {
 } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { CardPreviewProvider } from '../../../ui/CardPreview';
 import { ContextMenuProvider } from '../../../ui/ContextMenuProvider';
 import type { ViewStore } from '../viewStore';
 import Hand from './Hand';
@@ -111,7 +113,7 @@ const getCardFacts = vi.fn(() =>
 );
 const setLibraryActivity = vi.fn(() => Promise.resolve());
 let pushGameStarted: () => void;
-let pushHandCommand: (command: 'viewBottom') => void;
+let pushHandCommand: (command: HandCommand) => void;
 
 beforeEach(() => {
   Object.assign(window, {
@@ -147,7 +149,9 @@ afterEach(() => {
 const renderHand = (view: PrivateView) =>
   render(
     <ContextMenuProvider>
-      <Hand store={storeOf(view)} />
+      <CardPreviewProvider>
+        <Hand store={storeOf(view)} />
+      </CardPreviewProvider>
     </ContextMenuProvider>
   );
 
@@ -492,7 +496,9 @@ describe('Hand', () => {
     });
     rerender(
       <ContextMenuProvider>
-        <Hand store={storeOf(shown)} />
+        <CardPreviewProvider>
+          <Hand store={storeOf(shown)} />
+        </CardPreviewProvider>
       </ContextMenuProvider>
     );
     expect(screen.getByTestId('hand-reveal-banner')).toHaveTextContent(
@@ -816,7 +822,9 @@ describe('Hand', () => {
     const again = (seq: number) =>
       rerender(
         <ContextMenuProvider>
-          <Hand store={storeOf(viewOf({ keptHand: true, seq }))} />
+          <CardPreviewProvider>
+            <Hand store={storeOf(viewOf({ keptHand: true, seq }))} />
+          </CardPreviewProvider>
         </ContextMenuProvider>
       );
     fireEvent.click(screen.getByRole('button', { name: 'Search library…' }));
@@ -879,5 +887,72 @@ describe('Hand', () => {
       "Unknown keyword 'foo'"
     );
     expect(screen.getAllByTestId('search-card')).toHaveLength(1);
+  });
+
+  it('opens search and look from the board, or from V and Shift+V', async () => {
+    renderHand(viewOf({ keptHand: true }));
+    const dialog = (name: string) => screen.queryByRole('dialog', { name });
+    act(() => pushHandCommand('search'));
+    expect(dialog('Search your library')).toBeInTheDocument();
+    // Never over the dialog already open.
+    act(() => pushHandCommand('look'));
+    expect(dialog('Look at the top of your library')).toBeNull();
+    fireEvent.keyDown(window, { key: 'Escape' });
+
+    fireEvent.keyDown(window, { key: 'V', shiftKey: true });
+    expect(dialog('Look at the top of your library')).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    fireEvent.keyDown(window, { key: 'v' });
+    expect(dialog('Search your library')).toBeInTheDocument();
+    await waitFor(() => expect(getLibrary).toHaveBeenCalled());
+  });
+
+  it('opens nothing from the board over a "Put Xth from top" prompt', () => {
+    renderHand(viewOf({ keptHand: true }));
+    fireEvent.contextMenu(cards()[1]);
+    fireEvent.click(
+      screen.getByRole('menuitem', { name: 'Put Xth from top…' })
+    );
+    for (const command of ['search', 'look', 'viewBottom'] as const) {
+      act(() => pushHandCommand(command));
+    }
+    expect(screen.getAllByRole('dialog')).toHaveLength(1);
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('asks before restarting on R', () => {
+    renderHand(viewOf({ keptHand: true }));
+    fireEvent.keyDown(window, { key: 'r' });
+    expect(
+      screen.getByRole('dialog', { name: 'Restart game?' })
+    ).toBeInTheDocument();
+  });
+
+  it('moves the hovered hand card with its key', () => {
+    renderHand(viewOf({ keptHand: true }));
+    fireEvent.mouseEnter(cards()[2]);
+    fireEvent.keyDown(window, { key: 'b' });
+    expect(dispatch).toHaveBeenLastCalledWith({
+      type: 'moveCard',
+      instanceId: 'p1:2',
+      to: 'battlefield',
+    });
+    fireEvent.keyDown(window, { key: 'L', shiftKey: true });
+    expect(dispatch).toHaveBeenLastCalledWith({
+      type: 'moveCard',
+      instanceId: 'p1:2',
+      to: 'library',
+    });
+    fireEvent.keyDown(window, { key: 't' });
+    expect(dispatch).toHaveBeenCalledTimes(2);
+  });
+
+  it('ignores hover keys while picking cards', () => {
+    renderHand(viewOf({ keptHand: false, mulligans: 1 }));
+    fireEvent.click(screen.getByRole('button', { name: 'Keep' }));
+    fireEvent.mouseEnter(cards()[0]);
+    fireEvent.keyDown(window, { key: 'g' });
+    expect(dispatch).not.toHaveBeenCalled();
   });
 });

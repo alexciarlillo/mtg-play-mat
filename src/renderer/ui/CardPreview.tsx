@@ -2,21 +2,38 @@ import type { CardView } from '@shared/game';
 import {
   createContext,
   type ReactNode,
+  type RefObject,
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 
 import CardArt from './CardArt';
+import type { HoverKey, HoverKeyHandler } from './hoverKeys';
+
+// Read when a key is pressed, so it always holds the card's latest view.
+export type HoverKeysRef = RefObject<HoverKeyHandler | undefined>;
 
 interface Preview {
   // reveal lets the owner preview their own face-down card.
   show(card: CardView, clientX: number, reveal?: boolean): void;
   hide(instanceId: string): void;
+  // Tracks the hovered card even when it shows no preview (face down).
+  hover(keys: HoverKeysRef): void;
+  unhover(keys: HoverKeysRef): void;
+  // Hands a key to the hovered card; false when no card took it.
+  pressHoverKey(key: HoverKey): boolean;
 }
 
-const noop: Preview = { show: () => {}, hide: () => {} };
+const noop: Preview = {
+  show: () => {},
+  hide: () => {},
+  hover: () => {},
+  unhover: () => {},
+  pressHoverKey: () => false,
+};
 
 const PreviewContext = createContext<Preview>(noop);
 
@@ -39,6 +56,8 @@ export const CardPreviewProvider = ({
 }) => {
   const [shown, setShown] = useState<Shown | null>(null);
   const [pressed, setPressed] = useState(false);
+  // Keys don't re-render anything, so the hovered card isn't state.
+  const hovered = useRef<HoverKeysRef | null>(null);
 
   useEffect(() => {
     const down = () => setPressed(true);
@@ -64,6 +83,18 @@ export const CardPreviewProvider = ({
         setShown((current) =>
           current?.card.instanceId === instanceId ? null : current
         ),
+      hover: (keys) => {
+        hovered.current = keys;
+      },
+      unhover: (keys) => {
+        if (hovered.current === keys) hovered.current = null;
+      },
+      pressHoverKey: (key) => {
+        const handler = hovered.current?.current;
+        if (!handler) return false;
+        handler(key);
+        return true;
+      },
     }),
     [reserveRight]
   );
@@ -88,3 +119,22 @@ export const CardPreviewProvider = ({
 };
 
 export const useCardPreview = () => useContext(PreviewContext);
+
+// Hover keys for whatever element takes the returned mouse handlers. An
+// element without a handler never takes the hover from one that has one,
+// such as a card inside a wrapper that also covers its badges.
+export const useHoverKeys = (handler: HoverKeyHandler | undefined) => {
+  const preview = useCardPreview();
+  const keys = useRef(handler);
+  useEffect(() => {
+    keys.current = handler;
+  });
+  // An element removed while hovered never gets mouseleave.
+  useEffect(() => () => preview.unhover(keys), [preview]);
+  return {
+    onMouseEnter: () => {
+      if (keys.current) preview.hover(keys);
+    },
+    onMouseLeave: () => preview.unhover(keys),
+  };
+};

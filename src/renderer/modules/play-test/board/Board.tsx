@@ -21,10 +21,13 @@ import { CardBackProvider } from '../../../ui/CardBackProvider';
 import { cardWidths } from '../../../ui/cardSizes';
 import { useContextMenu } from '../../../ui/ContextMenuProvider';
 import FloatingPanel from '../../../ui/FloatingPanel';
-import { ConfirmDialog, NumberPrompt } from '../common/Dialogs';
+import { NumberPrompt, RestartDialog } from '../common/Dialogs';
 import LibraryPositionPrompt from '../common/LibraryPositionPrompt';
 import ShortcutHelp from '../common/ShortcutHelp';
-import { useGameShortcuts } from '../common/useGameShortcuts';
+import {
+  type LibraryDialog,
+  useGameShortcuts,
+} from '../common/useGameShortcuts';
 import { useUndoState } from '../common/useUndoState';
 import { dispatch, redo, undo, useView, type ViewStore } from '../viewStore';
 import AttachDialog from './AttachDialog';
@@ -99,6 +102,14 @@ interface Props {
   hand?: ViewStore<PrivateView>;
 }
 
+// Only a window that holds the hand may show the library, so the hand
+// window opens these, or the tray when docked.
+const openLibraryDialog = (dialog: LibraryDialog) => {
+  window.api.openHandDialog(dialog).catch((err: unknown) => {
+    console.error('[play-test] failed to open a library dialog', err);
+  });
+};
+
 const Board = ({ store, opponent, hand }: Props) => {
   const view = useView(store);
   const remote = useView(opponent ?? noOpponent);
@@ -142,6 +153,9 @@ const Board = ({ store, opponent, hand }: Props) => {
       prompts.length === 0 &&
       !handBusy,
     onHelp: toggleHelp,
+    onRestart: () => setDialog('restart'),
+    onLibraryDialog: openLibraryDialog,
+    turnTracking,
   });
 
   const playerId = view?.playerId;
@@ -503,19 +517,7 @@ const Board = ({ store, opponent, hand }: Props) => {
             onClose={close}
           />
         )}
-        {dialog === 'restart' && (
-          <ConfirmDialog
-            title="Restart game?"
-            message="Starts a new game with the same deck: everything is shuffled back and you draw a new opening hand."
-            confirmLabel="Restart"
-            onConfirm={() => {
-              window.api.restartPlayTest().catch((err: unknown) => {
-                console.error('[play-test] restart failed', err);
-              });
-            }}
-            onClose={close}
-          />
-        )}
+        {dialog === 'restart' && <RestartDialog onClose={close} />}
         {dialog === 'help' && <ShortcutHelp onClose={close} />}
         {dialog === 'rollDie' && (
           <NumberPrompt

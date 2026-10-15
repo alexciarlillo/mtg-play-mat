@@ -176,3 +176,18 @@ export const ConfirmDialog = ({
     </div>
   </Modal>
 );
+
+// Each window that can restart asks the same thing first.
+export const RestartDialog = ({ onClose }: { onClose(): void }) => (
+  <ConfirmDialog
+    title="Restart game?"
+    message="Starts a new game with the same deck: everything is shuffled back and you draw a new opening hand."
+    confirmLabel="Restart"
+    onConfirm={() => {
+      window.api.restartPlayTest().catch((err: unknown) => {
+        console.error('[play-test] restart failed', err);
+      });
+    }}
+    onClose={onClose}
+  />
+);

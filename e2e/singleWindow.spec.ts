@@ -385,6 +385,49 @@ test('the Game menu drives the single board', async () => {
   await expect(handCards()).toHaveCount(7);
 });
 
+test('hover keys work once each on the tray and the field, docked', async () => {
+  const before = await gameState();
+  const id = me(before).zones.hand[0];
+  const card = (scope: ReturnType<Page['locator']>) =>
+    scope.and(board.locator(`[data-instance-id="${id}"]`));
+
+  // One action per key: the docked hand must not answer it too.
+  await card(handCards()).hover();
+  await board.keyboard.press('b');
+  await expect
+    .poll(async () => (await gameState()).log.length)
+    .toBe(before.log.length + 1);
+  // Give a second listener time to act, then count again.
+  await board.evaluate(
+    () => new Promise((resolve) => requestAnimationFrame(resolve))
+  );
+  await board.waitForTimeout(150);
+  const played = await gameState();
+  expect(played.log).toHaveLength(before.log.length + 1);
+  expect(played.cards[id].zone).toBe('battlefield');
+
+  await card(fieldCards()).hover();
+  await board.keyboard.press('t');
+  await expect
+    .poll(async () => (await gameState()).log.length)
+    .toBe(before.log.length + 2);
+  const tapped = await gameState();
+  expect(tapped.log.at(-1)?.type).toBe('toggleTap');
+  expect(tapped.cards[id].tapped).toBe(true);
+
+  await board.keyboard.press('h');
+  await expect(card(handCards())).toBeVisible();
+  expect((await gameState()).log).toHaveLength(before.log.length + 3);
+
+  // V opens the search in the tray, through main and back.
+  await board.mouse.move(5, 5);
+  await board.keyboard.press('v');
+  const search = board.getByRole('dialog', { name: 'Search your library' });
+  await expect(search).toBeVisible();
+  await board.keyboard.press('Escape');
+  await expect(search).toHaveCount(0);
+});
+
 test('turning the setting off brings back the hand window next game', async () => {
   await appPage.evaluate(() =>
     window.api.updateSettings({ handInBoard: false })

@@ -4,10 +4,11 @@ import { type MouseEvent, useEffect } from 'react';
 
 import CardArt from './CardArt';
 import CardBadges from './CardBadges';
-import { useCardPreview } from './CardPreview';
+import { useCardPreview, useHoverKeys } from './CardPreview';
 import { type CardSize, cardWidths } from './cardSizes';
 import { useContextMenu } from './ContextMenuProvider';
 import type { ContextMenuSpec } from './ContextMenuStore';
+import type { HoverKeyHandler } from './hoverKeys';
 
 interface Props {
   card: CardView;
@@ -19,6 +20,8 @@ interface Props {
   reveal?: boolean;
   // Whose it is, when that is not whoever controls it.
   owner?: string | null;
+  // Keyboard shortcuts for this card while the pointer is over it.
+  onHoverKey?: HoverKeyHandler;
 }
 
 // A card face that renders whatever view main sent. Any change goes back
@@ -31,12 +34,15 @@ const Card = ({
   className,
   reveal = false,
   owner = null,
+  onHoverKey,
 }: Props) => {
   const contextMenu = useContextMenu();
   const preview = useCardPreview();
   const interactive = Boolean(onClick) || menu.length > 0;
   const { instanceId } = card;
   const hidden = card.faceDown && !reveal;
+
+  const hoverKeys = useHoverKeys(onHoverKey);
 
   // A card that leaves the window while hovered never gets mouseleave.
   useEffect(() => () => preview.hide(instanceId), [preview, instanceId]);
@@ -79,8 +85,14 @@ const Card = ({
       )}
       onClick={onClick && (() => onClick(card))}
       onContextMenu={handleContextMenu}
-      onMouseEnter={(e) => preview.show(card, e.clientX, reveal)}
-      onMouseLeave={() => preview.hide(instanceId)}
+      onMouseEnter={(e) => {
+        preview.show(card, e.clientX, reveal);
+        hoverKeys.onMouseEnter();
+      }}
+      onMouseLeave={() => {
+        preview.hide(instanceId);
+        hoverKeys.onMouseLeave();
+      }}
     >
       <CardArt
         owner={card.owner}

@@ -4,6 +4,7 @@ import {
   type PrivateView,
   type RevealView,
 } from '@shared/game';
+import type { HandCommand } from '@shared/types/playTest';
 import classNames from 'classnames';
 import {
   type ReactNode,
@@ -13,13 +14,20 @@ import {
   useState,
 } from 'react';
 
+import useSettings from '../../../hooks/useSettings';
 import Card from '../../../ui/Card';
 import type { ContextMenuSpec } from '../../../ui/ContextMenuStore';
+import type { HoverKey } from '../../../ui/hoverKeys';
 import { moveMenu, moveTo } from '../common/cardMenus';
+import { RestartDialog } from '../common/Dialogs';
+import { handHoverAction } from '../common/hoverActions';
 import LibraryPositionPrompt from '../common/LibraryPositionPrompt';
 import ShortcutHelp from '../common/ShortcutHelp';
 import UndoButtons from '../common/UndoButtons';
-import { useGameShortcuts } from '../common/useGameShortcuts';
+import {
+  type LibraryDialog,
+  useGameShortcuts,
+} from '../common/useGameShortcuts';
 import { dispatch, useView, type ViewStore } from '../viewStore';
 import BottomCardDialog from './BottomCardDialog';
 import LookAtTopDialog from './LookAtTopDialog';
@@ -27,6 +35,11 @@ import LookPrompt, { type LookChoice } from './LookPrompt';
 import SearchLibraryDialog from './SearchLibraryDialog';
 
 const play = (card: CardView) => moveTo(card, 'battlefield');
+
+const onHandKey = (card: CardView, key: HoverKey) => {
+  const action = handHoverAction(card, key);
+  if (action) dispatch(action);
+};
 
 const playAs = (
   card: CardView,
@@ -120,7 +133,17 @@ const revealTitles = {
   card: 'a card from your hand',
 };
 
-type Dialog = 'help' | 'lookCount' | 'look' | 'search' | 'bottom';
+type Dialog = 'help' | 'lookCount' | 'look' | 'search' | 'bottom' | 'restart';
+
+const libraryDialogOf: Record<LibraryDialog, Dialog> = {
+  search: 'search',
+  look: 'lookCount',
+};
+
+const commandDialogs: Record<HandCommand, Dialog> = {
+  viewBottom: 'bottom',
+  ...libraryDialogOf,
+};
 
 const libraryDialogs: (Dialog | null)[] = [
   'lookCount',
@@ -300,7 +323,10 @@ const Hand = ({ store, dock }: Props) => {
   // The card a "Put Xth from top" prompt is open for.
   const [placing, setPlacing] = useState<CardView | null>(null);
   const busy = dialog !== null || placing !== null;
+  // Read by the board's commands, which arrive outside any render.
+  const busyRef = useRef(false);
   useEffect(() => {
+    busyRef.current = busy;
     onBusyChange.current?.(busy);
   }, [busy]);
   useEffect(() => () => onBusyChange.current?.(false), []);
@@ -310,15 +336,20 @@ const Hand = ({ store, dock }: Props) => {
     take: 1,
   });
   const close = useCallback(() => setDialog(null), []);
-  // The board's library menu asks for the bottom card here, since only
-  // this window may see it.
+  // Opens a dialog unless one is already open, which may be mid-look.
+  const openDialog = useCallback(
+    (next: Dialog) => setDialog((open) => open ?? next),
+    []
+  );
+  // The board asks for library dialogs here, since only this window may
+  // see the library. Never over a prompt, which Escape would close too.
   useEffect(
     () =>
       window.api.onHandCommand((command) => {
-        // Never over a dialog already open, which may be mid-look.
-        if (command === 'viewBottom') setDialog((open) => open ?? 'bottom');
+        const next = commandDialogs[command] as Dialog | undefined;
+        if (next && !busyRef.current) openDialog(next);
       }),
-    []
+    [openDialog]
   );
   // Choosing which cards pay for mulligans, or go back into the library,
   // is a local, uncommitted pick; main only hears about it as one action.
@@ -364,10 +395,14 @@ const Hand = ({ store, dock }: Props) => {
       }),
     []
   );
+  const { turnTracking } = useSettings().settings;
   // Docked, the board window's own shortcuts already cover the keys.
   useGameShortcuts(view, {
     enabled: !busy,
     onHelp: toggleHelp,
+    onRestart: () => openDialog('restart'),
+    onLibraryDialog: (kind) => openDialog(libraryDialogOf[kind]),
+    turnTracking,
     listen: !docked,
   });
 
@@ -538,6 +573,9 @@ const Hand = ({ store, dock }: Props) => {
                 size="md"
                 onClick={selecting ? togglePick : play}
                 menu={selecting ? [] : handMenu(card, menuOptions)}
+                onHoverKey={
+                  selecting ? undefined : (key) => onHandKey(card, key)
+                }
               />
             );
             return (
@@ -567,6 +605,7 @@ const Hand = ({ store, dock }: Props) => {
         </div>
       )}
       {dialog === 'help' && <ShortcutHelp onClose={close} />}
+      {dialog === 'restart' && <RestartDialog onClose={close} />}
       {view && placing && (
         <LibraryPositionPrompt
           card={placing}

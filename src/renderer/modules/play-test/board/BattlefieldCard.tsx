@@ -8,8 +8,10 @@ import Draggable, {
 
 import Card from '../../../ui/Card';
 import CardArt from '../../../ui/CardArt';
+import { useHoverKeys } from '../../../ui/CardPreview';
 import { cardWidths } from '../../../ui/cardSizes';
 import { moveTo } from '../common/cardMenus';
+import { battlefieldHoverAction } from '../common/hoverActions';
 import { dispatch } from '../viewStore';
 import {
   battlefieldMenu,
@@ -110,6 +112,12 @@ const BattlefieldCard = ({
     });
   };
 
+  // On the wrapper, so pointing at the counter badges still counts.
+  const hoverKeys = useHoverKeys((key) => {
+    const action = battlefieldHoverAction(card, key);
+    if (action) dispatch(action);
+  });
+
   const menu = battlefieldMenu(card, {
     onAddCounter,
     onAttach,
@@ -152,6 +160,7 @@ const BattlefieldCard = ({
           ref={nodeRef}
           data-testid="battlefield-card"
           data-attached-to={card.attachedTo ?? undefined}
+          {...hoverKeys}
           className={classNames('group absolute left-0 top-0', {
             'z-20': dragging,
           })}

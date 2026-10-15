@@ -15,7 +15,11 @@ export type BoardMenuCommand =
   'drawMany' | 'mill' | 'token' | 'restart' | 'help' | 'addDummy';
 
 // Private dialogs the board may ask the hand to open, wherever it is.
-export type HandCommand = 'viewBottom';
+export const handCommands = ['viewBottom', 'search', 'look'] as const;
+export type HandCommand = (typeof handCommands)[number];
+
+export const isHandCommand = (value: unknown): value is HandCommand =>
+  handCommands.includes(value as HandCommand);
 
 // App window pages main may ask it to show.
 export type AppRoute = 'settings';

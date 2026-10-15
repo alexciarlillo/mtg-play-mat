@@ -35,7 +35,7 @@ import {
   type UndoState,
 } from '@shared/game';
 import type { DeckFormat } from '@shared/types/decks';
-import type { PlayTestStatus } from '@shared/types/playTest';
+import { isHandCommand, type PlayTestStatus } from '@shared/types/playTest';
 import { app, BrowserWindow, screen, type WebContents } from 'electron';
 
 import { type GameMenuCommand, runGameMenuCommand } from '../../gameMenu';
@@ -285,7 +285,7 @@ export default class PlayTest {
     },
     openHandDialog: (command: unknown) => {
       if (!this.isOpen) return;
-      if (command !== 'viewBottom') {
+      if (!isHandCommand(command)) {
         throw new Error('[play-test] unknown hand dialog');
       }
       const target = this.handInBoard ? this.board : this.hand;

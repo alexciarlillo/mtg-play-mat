@@ -73,6 +73,7 @@ const renderBoard = (
     undo: vi.fn(async () => {}),
     redo: vi.fn(async () => {}),
     restartPlayTest: vi.fn(async () => {}),
+    openHandDialog: vi.fn(async () => {}),
   };
   Object.assign(window, {
     api: {
@@ -282,6 +283,39 @@ describe('Board tools', () => {
     expect(api.restartPlayTest).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: 'Restart' }));
     expect(api.restartPlayTest).toHaveBeenCalledTimes(1);
+  });
+
+  it('restarts from R only after confirming', async () => {
+    const user = userEvent.setup();
+    renderBoard(defaultSettings);
+    await act(async () => {});
+    fireEvent.keyDown(window, { key: 'r' });
+    expect(api.restartPlayTest).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Restart' }));
+    expect(api.restartPlayTest).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks the hand to search or look from V and Shift+V', async () => {
+    renderBoard(defaultSettings);
+    await act(async () => {});
+    fireEvent.keyDown(window, { key: 'v' });
+    fireEvent.keyDown(window, { key: 'V', shiftKey: true });
+    expect(api.openHandDialog.mock.calls).toEqual([['search'], ['look']]);
+  });
+
+  it('moves the turn on from N only with turn tracking on', async () => {
+    renderBoard(defaultSettings);
+    await act(async () => {});
+    fireEvent.keyDown(window, { key: 'n' });
+    expect(api.dispatch).not.toHaveBeenCalled();
+    act(() => pushSettings({ ...defaultSettings, turnTracking: true }));
+    fireEvent.keyDown(window, { key: 'n' });
+    expect(api.dispatch).toHaveBeenCalledWith({
+      type: 'nextTurn',
+      playerId: 'p1',
+      untap: true,
+      draw: true,
+    });
   });
 
   it('adds a placeholder opponent from the menu', async () => {

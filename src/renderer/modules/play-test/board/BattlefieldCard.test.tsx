@@ -2,7 +2,9 @@ import type { CardView } from '@shared/game';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { CardPreviewProvider } from '../../../ui/CardPreview';
 import { ContextMenuProvider } from '../../../ui/ContextMenuProvider';
+import { useGameShortcuts } from '../common/useGameShortcuts';
 import BattlefieldCard from './BattlefieldCard';
 
 const card: CardView = {
@@ -238,5 +240,53 @@ describe('BattlefieldCard', () => {
     });
     expect(screen.getByTestId('pt-badge')).toHaveTextContent('4/4');
     expect(screen.getByTestId('counter-chip')).toHaveTextContent('+1/+1 ×2');
+  });
+
+  it('keeps taking hover keys while the pointer is on its counters', () => {
+    const Keys = () => {
+      useGameShortcuts(
+        {
+          seq: 1,
+          playerId: 'p1',
+          name: 'You',
+          life: 20,
+          counters: {},
+          mulligans: 0,
+          keptHand: true,
+          zones: { battlefield: [], graveyard: [], exile: [], command: [] },
+          handCount: 0,
+          libraryCount: 0,
+          commanderDamage: [],
+          dummies: [],
+        },
+        {
+          enabled: true,
+          onHelp: () => {},
+          onRestart: () => {},
+          onLibraryDialog: () => {},
+          turnTracking: false,
+        }
+      );
+      return null;
+    };
+    const keyed = { ...card, counters: { charge: 2 } };
+    render(
+      <ContextMenuProvider>
+        <CardPreviewProvider>
+          <Keys />
+          <BattlefieldCard card={keyed} />
+        </CardPreviewProvider>
+      </ContextMenuProvider>
+    );
+    const face = screen.getByTestId('card');
+    const counters = screen.getByTestId('counter-controls');
+    fireEvent.mouseOver(face);
+    fireEvent.mouseOut(face, { relatedTarget: counters });
+    fireEvent.mouseOver(counters, { relatedTarget: face });
+    fireEvent.keyDown(window, { key: 't' });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: 'toggleTap',
+      instanceId: 'p1:7',
+    });
   });
 });
