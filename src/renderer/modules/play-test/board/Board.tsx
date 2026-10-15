@@ -48,6 +48,7 @@ import HandTray from './HandTray';
 import Library from './Library';
 import { fieldBounds, FULL_PANEL_WIDTH, stackOrder } from './layout';
 import LifeCounter from './LifeCounter';
+import MarqueeBox from './MarqueeBox';
 import OpponentsRow from './OpponentsRow';
 import PlayMat, { MatBackdrop } from './PlayMat';
 import {
@@ -61,9 +62,11 @@ import {
 import PlayerCounters from './PlayerCounters';
 import RevealPanel from './RevealPanel';
 import ScaledField from './ScaledField';
+import { SelectionContext, SelectionStore } from './selection';
 import TableLog from './TableLog';
 import TokenDialog from './TokenDialog';
 import TurnPanel from './TurnPanel';
+import { useMarquee } from './useMarquee';
 import ZoneBrowser from './ZoneBrowser';
 import ZonePile from './ZonePile';
 
@@ -166,6 +169,38 @@ const Board = ({ store, opponent, hand }: Props) => {
     () => setDialog((open) => (open === 'help' ? null : 'help')),
     []
   );
+
+  const [selection] = useState(() => new SelectionStore());
+  const marquee = useMarquee(selection);
+  // Every view the store accepts, not just the ones React renders, so a
+  // card that leaves and comes back in between is still dropped.
+  useEffect(() => {
+    const sync = () => {
+      const current = store.getSnapshot();
+      selection.sync(current ? current.zones.battlefield : []);
+    };
+    sync();
+    return store.subscribe(sync);
+  }, [store, selection]);
+
+  // Instance ids repeat from game to game, and a game may start with
+  // permanents already out.
+  useEffect(
+    () => window.api.onGameStarted(() => selection.clear()),
+    [selection]
+  );
+
+  // Esc closes a dialog or menu first, and clears the selection after.
+  // Whatever else took the key, such as a put-back pick, keeps it.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      if (document.querySelector('[role="dialog"], [role="menu"]')) return;
+      selection.clear();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selection]);
 
   const prompts = useCommanderPrompts();
   const {
@@ -318,10 +353,12 @@ const Board = ({ store, opponent, hand }: Props) => {
             onContextMenu={handleContextMenu}
           >
             <div
+              data-testid="battlefield-area"
               className={classNames(
                 'relative flex-1 h-full px-8',
                 duel ? 'py-3' : 'py-6'
               )}
+              {...marquee.handlers}
             >
               {view && (
                 <RevealPanel
@@ -362,24 +399,27 @@ const Board = ({ store, opponent, hand }: Props) => {
                   <>
                     {/* First, so every card is drawn over it. */}
                     <PlayMat id={settings.matImage} />
-                    {view &&
-                      stackOrder(view.zones.battlefield).map((card) => (
-                        <BattlefieldCard
-                          key={card.instanceId}
-                          card={card}
-                          scale={scale}
-                          offsetX={bounds.offsetX}
-                          onAddCounter={onAddCounter}
-                          onAttach={onAttach}
-                          onPutInLibrary={onPutInLibrary}
-                          giveTo={giveTo}
-                          ownerName={ownerNameOf(card)}
-                          owner={ownerLabel(card, view.playerId, owners)}
-                        />
-                      ))}
+                    <SelectionContext value={selection}>
+                      {view &&
+                        stackOrder(view.zones.battlefield).map((card) => (
+                          <BattlefieldCard
+                            key={card.instanceId}
+                            card={card}
+                            scale={scale}
+                            offsetX={bounds.offsetX}
+                            onAddCounter={onAddCounter}
+                            onAttach={onAttach}
+                            onPutInLibrary={onPutInLibrary}
+                            giveTo={giveTo}
+                            ownerName={ownerNameOf(card)}
+                            owner={ownerLabel(card, view.playerId, owners)}
+                          />
+                        ))}
+                    </SelectionContext>
                   </>
                 )}
               </ScaledField>
+              <MarqueeBox store={marquee.box} />
             </div>
 
             <aside

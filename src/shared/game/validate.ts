@@ -149,6 +149,28 @@ const cardIds = (fields: Fields, key: string): string[] => {
   return ids;
 };
 
+// Each card at most once, and at least one card.
+const positions = (
+  fields: Fields,
+  key: string
+): { instanceId: string; position: Position }[] => {
+  const value = fields[key];
+  if (!Array.isArray(value) || value.length === 0 || value.length > MAX_COUNT) {
+    return fail(`${key} must be an array of 1 to ${MAX_COUNT} entries`);
+  }
+  const entries = value.map((entry: unknown) =>
+    isObject(entry)
+      ? {
+          instanceId: string(entry, 'instanceId'),
+          position: position(entry, 'position'),
+        }
+      : fail(`${key} entries must be objects`)
+  );
+  const ids = entries.map(({ instanceId }) => instanceId);
+  if (new Set(ids).size !== ids.length) return fail(`${key} must be distinct`);
+  return entries;
+};
+
 const MAX_TYPES = 10;
 const MAX_TYPE_NAME = 30;
 
@@ -293,6 +315,12 @@ export const parsePlayerAction = (input: unknown): PlayerAction => {
         playerId: string(input, 'playerId'),
         instanceIds: cardIds(input, 'instanceIds'),
         tapped: bool(input, 'tapped'),
+      };
+    case 'setPositions':
+      return {
+        type: 'setPositions',
+        playerId: string(input, 'playerId'),
+        positions: positions(input, 'positions'),
       };
     case 'setPosition':
       return {

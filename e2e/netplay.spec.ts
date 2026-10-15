@@ -877,6 +877,38 @@ test('library activity shows on both boards and always clears', async () => {
   await expect(theirs).toHaveCount(0);
 });
 
+test('a selection on the board survives the other player’s updates', async () => {
+  const [hostBoard, hostHand, guestBoard] = await Promise.all([
+    page(host, 'board.html'),
+    page(host, 'hand.html'),
+    page(guest, 'board.html'),
+  ]);
+  await hostHand.getByRole('button', { name: 'Keep' }).click();
+  await handCards(hostHand).first().click();
+  await handCards(hostHand).first().click();
+  await expect(ownField(hostBoard)).toHaveCount(2);
+  await expect(opponentField(guestBoard)).toHaveCount(2);
+
+  await hostBoard.keyboard.down('Shift');
+  for (const card of await ownField(hostBoard).all()) {
+    await card.click({ position: { x: 8, y: 8 } });
+  }
+  await hostBoard.keyboard.up('Shift');
+  const selected = hostBoard.locator(
+    '[data-testid="battlefield-card"][data-selected]'
+  );
+  await expect(selected).toHaveCount(2);
+
+  const life = Number(await guestBoard.getByTestId('life').textContent());
+  await guestBoard.getByRole('button', { name: 'Lose 1 life' }).click();
+  await expect(hostBoard.getByTestId('opponent-life')).toHaveText(
+    String(life - 1)
+  );
+  await expect(selected).toHaveCount(2);
+  // Only the selecting board shows it; the other side sees plain cards.
+  await expect(guestBoard.locator('[data-selected]')).toHaveCount(0);
+});
+
 test('no renderer console errors in either instance', () => {
   expect([...host.errors, ...guest.errors]).toEqual([]);
 });

@@ -59,18 +59,29 @@ const ContextMenu = () => {
         left: Math.max(MARGIN, contextMenu.posX + offset.x),
       }}
     >
-      {contextMenu.specs.map((spec) => (
-        <button
-          type="button"
-          role="menuitem"
-          className="text-gray-700 block px-3 py-0.5 text-sm text-left whitespace-nowrap hover:bg-stone-300 disabled:text-gray-400 disabled:hover:bg-transparent w-full"
-          disabled={!spec.action}
-          onClick={spec.action ?? undefined}
-          key={spec.title}
-        >
-          {spec.title}
-        </button>
-      ))}
+      {contextMenu.specs.map((spec) =>
+        spec.heading ? (
+          <div
+            role="presentation"
+            data-testid="menu-heading"
+            className="mt-1 border-t border-stone-300 px-3 pt-1 text-xs font-semibold uppercase tracking-wide text-gray-500 first:mt-0 first:border-t-0"
+            key={spec.title}
+          >
+            {spec.title}
+          </div>
+        ) : (
+          <button
+            type="button"
+            role="menuitem"
+            className="text-gray-700 block px-3 py-0.5 text-sm text-left whitespace-nowrap hover:bg-stone-300 disabled:text-gray-400 disabled:hover:bg-transparent w-full"
+            disabled={!spec.action}
+            onClick={spec.action ?? undefined}
+            key={spec.title}
+          >
+            {spec.title}
+          </button>
+        )
+      )}
     </div>
   );
 };

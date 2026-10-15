@@ -1,4 +1,4 @@
-import type { PublicView } from '@shared/game';
+import type { CardView, PublicView } from '@shared/game';
 import type { OpponentState } from '@shared/net/remoteViews';
 import {
   defaultSettings,
@@ -12,6 +12,7 @@ import {
   fireEvent,
   render,
   screen,
+  within,
 } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -60,13 +61,32 @@ const storeOf = <V,>(value: V): ViewStore<V> => ({
 const never = () => new Promise(() => {});
 let pushSettings: (next: Settings) => void;
 let pushMenuCommand: (command: BoardMenuCommand) => void;
+let pushGameStarted: () => void;
 let pushUndoState: (next: { canUndo: boolean; canRedo: boolean }) => void;
 let api: Record<string, ReturnType<typeof vi.fn>>;
 
+// A store whose view can be replaced, as main and peers push new ones.
+const pushable = <V,>(initial: V) => {
+  let value = initial;
+  const listeners = new Set<() => void>();
+  const store: ViewStore<V> = {
+    subscribe: (listener) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    getSnapshot: () => value,
+  };
+  const push = (next: V) => {
+    value = next;
+    act(() => listeners.forEach((listener) => listener()));
+  };
+  return { store, push };
+};
+
 const renderBoard = (
   initial: Settings,
-  own: PublicView = view,
-  others: OpponentState = opponent
+  own: PublicView | ViewStore<PublicView> = view,
+  others: OpponentState | ViewStore<OpponentState> = opponent
 ) => {
   api = {
     dispatch: vi.fn(async () => {}),
@@ -90,6 +110,10 @@ const renderBoard = (
       },
       getCommanderPrompts: never,
       onCommanderPrompts: () => () => {},
+      onGameStarted: (listener: () => void) => {
+        pushGameStarted = listener;
+        return () => {};
+      },
       onBoardMenuCommand: (listener: typeof pushMenuCommand) => {
         pushMenuCommand = listener;
         return () => {};
@@ -98,7 +122,10 @@ const renderBoard = (
   });
   render(
     <ContextMenuProvider>
-      <Board store={storeOf(own)} opponent={storeOf(others)} />
+      <Board
+        store={'getSnapshot' in own ? own : storeOf(own)}
+        opponent={'getSnapshot' in others ? others : storeOf(others)}
+      />
     </ContextMenuProvider>
   );
 };
@@ -468,5 +495,172 @@ describe('Board table panel', () => {
       })
     );
     expect(screen.getByTestId('table-log')).toBeInTheDocument();
+  });
+});
+
+describe('Board multi-select', () => {
+  const permanent = (n: number, x: number): CardView => ({
+    instanceId: `p1:${n}`,
+    ref: {
+      id: `id-${n}`,
+      name: `Bear ${n}`,
+      typeLine: 'Creature — Bear',
+      faces: [{ name: `Bear ${n}`, typeLine: 'Creature — Bear' }],
+    },
+    owner: 'p1',
+    controller: 'p1',
+    zone: 'battlefield',
+    position: { x, y: 0 },
+    tapped: false,
+    faceDown: false,
+    faceIndex: 0,
+    counters: {},
+    isToken: false,
+    attachedTo: null,
+  });
+  const field = [permanent(1, 0), permanent(2, 200), permanent(3, 400)];
+  const withField = (battlefield: CardView[], seq = 2): PublicView => ({
+    ...view,
+    seq,
+    zones: { ...view.zones, battlefield },
+  });
+
+  // jsdom lays nothing out, so each card claims a box from its x.
+  let rects: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    rects = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockImplementation(function (this: HTMLElement) {
+        const n = Number(this.dataset.instanceId?.split(':')[1] ?? NaN);
+        const left = Number.isNaN(n) ? -1000 : (n - 1) * 200;
+        return {
+          left,
+          right: left + 100,
+          top: 0,
+          bottom: 140,
+          width: 100,
+          height: 140,
+          x: left,
+          y: 0,
+        } as DOMRect;
+      });
+    return () => rects.mockRestore();
+  });
+
+  const selected = () =>
+    screen
+      .queryAllByTestId('battlefield-card')
+      .filter((el) => el.dataset.selected)
+      .map((el) => within(el).getByTestId('card').dataset.instanceId);
+
+  const box = (from: [number, number], to: [number, number], shift = false) => {
+    const area = screen.getByTestId('battlefield');
+    const at = (x: number, y: number) => ({
+      pointerId: 1,
+      button: 0,
+      clientX: x,
+      clientY: y,
+      shiftKey: shift,
+    });
+    fireEvent.pointerDown(area, at(...from));
+    fireEvent.pointerMove(area, at(...to));
+    fireEvent.pointerUp(area, at(...to));
+  };
+
+  it('selects the cards a box touches, and clears on a click or Esc', async () => {
+    renderBoard(defaultSettings, withField(field));
+    await act(async () => {});
+    box([-50, 50], [250, 60]);
+    expect(selected()).toEqual(['p1:1', 'p1:2']);
+    box([350, 50], [450, 60], true);
+    expect(selected()).toEqual(['p1:1', 'p1:2', 'p1:3']);
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(selected()).toEqual([]);
+
+    box([-50, 50], [450, 60]);
+    expect(selected()).toHaveLength(3);
+    const area = screen.getByTestId('battlefield');
+    fireEvent.pointerDown(area, { pointerId: 2, button: 0 });
+    fireEvent.pointerUp(area, { pointerId: 2, button: 0 });
+    expect(selected()).toEqual([]);
+  });
+
+  it('leaves the right-click menu and the table panel alone', async () => {
+    renderBoard(defaultSettings, withField(field));
+    await act(async () => {});
+    box([-50, 50], [450, 60]);
+    const area = screen.getByTestId('battlefield');
+    fireEvent.pointerDown(area, { pointerId: 3, button: 2 });
+    fireEvent.pointerUp(area, { pointerId: 3, button: 2 });
+    fireEvent.contextMenu(area);
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+    // Dismissing the menu by clicking the field keeps the selection.
+    fireEvent.pointerDown(area, { pointerId: 4, button: 0 });
+    fireEvent.pointerUp(area, { pointerId: 4, button: 0 });
+    expect(selected()).toHaveLength(3);
+    fireEvent.click(document.body);
+
+    const panel = screen.getByTestId('table-panel');
+    fireEvent.pointerDown(panel, { pointerId: 5, button: 0 });
+    fireEvent.pointerUp(panel, { pointerId: 5, button: 0 });
+    expect(selected()).toHaveLength(3);
+  });
+
+  it('keeps the selection through peer updates, pruning cards that leave', async () => {
+    const own = pushable(withField(field));
+    const peers = pushable(opponent);
+    renderBoard(defaultSettings, own.store, peers.store);
+    await act(async () => {});
+    box([-50, 50], [450, 60]);
+    expect(selected()).toHaveLength(3);
+
+    peers.push({ ...opponent, seq: 2, log: [] });
+    expect(selected()).toHaveLength(3);
+
+    // Gone to the graveyard, or handed to another player.
+    own.push(withField([field[0], field[2]], 3));
+    expect(selected()).toEqual(['p1:1', 'p1:3']);
+    // Coming back doesn't select it again.
+    own.push(withField(field, 4));
+    expect(selected()).toEqual(['p1:1', 'p1:3']);
+
+    // A new game starts with an empty battlefield.
+    own.push(withField([], 5));
+    own.push(withField(field, 6));
+    expect(selected()).toEqual([]);
+  });
+
+  it('clears when a game starts, even with permanents already out', async () => {
+    renderBoard(defaultSettings, withField(field));
+    await act(async () => {});
+    box([-50, 50], [450, 60]);
+    expect(selected()).toHaveLength(3);
+    act(() => pushGameStarted());
+    expect(selected()).toEqual([]);
+  });
+
+  it('leaves an Escape something else took, and ends on lost capture', async () => {
+    renderBoard(defaultSettings, withField(field));
+    await act(async () => {});
+    box([-50, 50], [450, 60]);
+    const taken = (e: KeyboardEvent) => e.preventDefault();
+    window.addEventListener('keydown', taken, true);
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    window.removeEventListener('keydown', taken, true);
+    expect(selected()).toHaveLength(3);
+
+    const area = screen.getByTestId('battlefield');
+    fireEvent.pointerDown(area, { pointerId: 7, button: 0, clientX: -50 });
+    fireEvent.pointerMove(area, { pointerId: 7, clientX: 50, clientY: 60 });
+    expect(screen.getByTestId('selection-box')).toBeInTheDocument();
+    fireEvent(
+      area,
+      Object.assign(new Event('lostpointercapture', { bubbles: true }), {
+        pointerId: 7,
+      })
+    );
+    expect(screen.queryByTestId('selection-box')).toBeNull();
+    expect(selected()).toEqual(['p1:1']);
   });
 });

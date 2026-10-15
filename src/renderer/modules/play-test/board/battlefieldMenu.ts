@@ -3,6 +3,7 @@ import {
   type CardView,
   counterNames,
   currentFace,
+  type ZoneId,
 } from '@shared/game';
 
 import { isPlaneswalker } from '../../../ui/cardStats';
@@ -56,6 +57,61 @@ const controlMenu = (
       window.api.giveControl(instanceId, playerId).catch(logControlError);
     },
   }));
+};
+
+const cardCount = (n: number) => `${n} card${n === 1 ? '' : 's'}`;
+
+const groupMoves: { title: string; to: ZoneId; index?: number }[] = [
+  { title: 'to hand', to: 'hand' },
+  { title: 'to graveyard', to: 'graveyard' },
+  { title: 'to exile', to: 'exile' },
+  { title: 'to library top', to: 'library', index: 0 },
+  { title: 'to library bottom', to: 'library' },
+];
+
+// What a selection of several permanents can do together, each item one
+// action. Only a group of commanders may go to the command zone.
+export const selectionMenu = (
+  cards: CardView[],
+  onClear: () => void
+): ContextMenuSpec[] => {
+  const n = cards.length;
+  const playerId = cards[0]?.controller ?? '';
+  const instanceIds = cards.map((card) => card.instanceId);
+  const setTapped = (tapped: boolean) =>
+    dispatch({ type: 'setTapped', playerId, instanceIds, tapped });
+  const moves = cards.every((card) => card.isCommander)
+    ? [{ title: 'to command zone', to: 'command' as const }, ...groupMoves]
+    : groupMoves;
+  // Counts only the cards that would change.
+  const untapped = cards.filter((card) => !card.tapped).length;
+  const tapped = n - untapped;
+  return [
+    { title: `${n} selected`, action: null, heading: true },
+    ...(untapped > 0
+      ? [{ title: `Tap ${cardCount(untapped)}`, action: () => setTapped(true) }]
+      : []),
+    ...(tapped > 0
+      ? [
+          {
+            title: `Untap ${cardCount(tapped)}`,
+            action: () => setTapped(false),
+          },
+        ]
+      : []),
+    ...moves.map(({ title, to, index }) => ({
+      title: `Move ${n} ${title}`,
+      action: () =>
+        dispatch({
+          type: 'moveCards',
+          playerId,
+          instanceIds,
+          to,
+          ...(index !== undefined && { index }),
+        }),
+    })),
+    { title: 'Clear selection', action: onClear },
+  ];
 };
 
 // Everything the owner can do to one of their permanents. card.ref is the

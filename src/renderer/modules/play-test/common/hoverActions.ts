@@ -59,6 +59,38 @@ export const battlefieldHoverAction = (
   }
 };
 
+// Keys over a card in a selection of several act on all of them, each as
+// one action. Flipping and copying stay with the card under the pointer.
+export const selectionHoverAction = (
+  cards: CardView[],
+  hovered: CardView,
+  key: HoverKey
+): PlayerAction | null => {
+  const playerId = hovered.controller;
+  const instanceIds = cards.map((card) => card.instanceId);
+  if (key === 't') {
+    return {
+      type: 'setTapped',
+      playerId,
+      instanceIds,
+      tapped: !hovered.tapped,
+    };
+  }
+  if (key === 'f' || key === 'x') return battlefieldHoverAction(hovered, key);
+  const move = moves[key];
+  if (!move || move.to === 'battlefield') return null;
+  if (move.to === 'command' && !cards.every((card) => card.isCommander)) {
+    return null;
+  }
+  return {
+    type: 'moveCards',
+    playerId,
+    instanceIds,
+    to: move.to,
+    ...(move.index !== undefined && { index: move.index }),
+  };
+};
+
 // Tapping, flipping and copying only mean something on the battlefield.
 export const handHoverAction = (
   card: CardView,

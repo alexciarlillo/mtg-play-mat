@@ -294,7 +294,7 @@ const validFace = (card: CardInstance, faceIndex?: number) =>
 
 // Moving a permanent carries its attachments along by the same distance.
 // Moving an attachment on its own takes it off its host.
-const setPosition = (
+export const setPosition = (
   state: GameState,
   rules: Rules,
   card: CardInstance,

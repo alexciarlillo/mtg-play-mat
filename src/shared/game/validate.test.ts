@@ -236,6 +236,23 @@ describe('parsePlayerAction', () => {
       tapped: false,
     });
     expect(
+      parsePlayerAction({
+        type: 'setPositions',
+        playerId: 'p1',
+        positions: [
+          { instanceId: 'a', position: { x: 1, y: 2 }, extra: true },
+          { instanceId: 'b', position: { x: 3, y: 4 } },
+        ],
+      })
+    ).toEqual({
+      type: 'setPositions',
+      playerId: 'p1',
+      positions: [
+        { instanceId: 'a', position: { x: 1, y: 2 } },
+        { instanceId: 'b', position: { x: 3, y: 4 } },
+      ],
+    });
+    expect(
       parsePlayerAction({ type: 'mill', playerId: 'p1', count: 2, to: 'exile' })
     ).toEqual({ type: 'mill', playerId: 'p1', count: 2, to: 'exile' });
     expect(
@@ -361,6 +378,26 @@ describe('parsePlayerAction', () => {
     [
       'a card moved twice',
       { type: 'moveCards', playerId: 'p', instanceIds: ['a', 'a'], to: 'hand' },
+    ],
+    ['no positions', { type: 'setPositions', playerId: 'p', positions: [] }],
+    [
+      'a card placed twice',
+      {
+        type: 'setPositions',
+        playerId: 'p',
+        positions: [
+          { instanceId: 'a', position: { x: 0, y: 0 } },
+          { instanceId: 'a', position: { x: 1, y: 1 } },
+        ],
+      },
+    ],
+    [
+      'a position that is not a point',
+      {
+        type: 'setPositions',
+        playerId: 'p',
+        positions: [{ instanceId: 'a', position: { x: 'far', y: 0 } }],
+      },
     ],
     [
       'a missing tapped',

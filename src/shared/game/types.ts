@@ -235,7 +235,16 @@ export interface SetTappedAction {
   tapped: boolean;
 }
 
-export type BatchAction = MoveCardsAction | MoveAllAction | SetTappedAction;
+// Moves several of a player's permanents on the battlefield in one step,
+// as a group drag does. A card whose host is in the group follows it.
+export interface SetPositionsAction {
+  type: 'setPositions';
+  playerId: PlayerId;
+  positions: { instanceId: InstanceId; position: Position }[];
+}
+
+export type BatchAction =
+  MoveCardsAction | MoveAllAction | SetTappedAction | SetPositionsAction;
 
 export type CoreAction =
   | NewGameAction

@@ -455,6 +455,7 @@ export const describeAction = (
     case 'moveCard':
       return describeMove(before, after, action);
     case 'setPosition':
+    case 'setPositions':
       return null;
     case 'moveCards':
     case 'moveAll':

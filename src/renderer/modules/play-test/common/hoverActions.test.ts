@@ -2,7 +2,11 @@ import type { CardView } from '@shared/game';
 import { describe, expect, it } from 'vitest';
 
 import type { HoverKey } from '../../../ui/hoverKeys';
-import { battlefieldHoverAction, handHoverAction } from './hoverActions';
+import {
+  battlefieldHoverAction,
+  handHoverAction,
+  selectionHoverAction,
+} from './hoverActions';
 
 const bears: CardView = {
   instanceId: 'p1:7',
@@ -101,5 +105,61 @@ describe('handHoverAction', () => {
     expect(handHoverAction({ ...inHand, isCommander: true }, 'c')).toEqual(
       move('command')
     );
+  });
+});
+
+describe('selectionHoverAction', () => {
+  const a = bears;
+  const b = { ...bears, instanceId: 'p1:8', tapped: true };
+  const c = { ...bears, instanceId: 'p1:9', owner: 'p2' };
+  const group = [a, b, c];
+  const ids = ['p1:7', 'p1:8', 'p1:9'];
+
+  it('taps or untaps all as the hovered card goes', () => {
+    expect(selectionHoverAction(group, a, 't')).toEqual({
+      type: 'setTapped',
+      playerId: 'p1',
+      instanceIds: ids,
+      tapped: true,
+    });
+    expect(selectionHoverAction(group, b, 't')).toMatchObject({
+      tapped: false,
+    });
+  });
+
+  it.each<[HoverKey, object]>([
+    ['g', { to: 'graveyard' }],
+    ['e', { to: 'exile' }],
+    ['h', { to: 'hand' }],
+    ['l', { to: 'library', index: 0 }],
+    ['L', { to: 'library' }],
+  ])('%s moves all in one action', (key, move) => {
+    expect(selectionHoverAction(group, a, key)).toEqual({
+      type: 'moveCards',
+      playerId: 'p1',
+      instanceIds: ids,
+      ...move,
+    });
+  });
+
+  it('sends a group to the command zone only if all are commanders', () => {
+    const cmdr = { ...a, isCommander: true };
+    expect(selectionHoverAction([cmdr, b], cmdr, 'c')).toBeNull();
+    expect(
+      selectionHoverAction([cmdr, { ...b, isCommander: true }], cmdr, 'c')
+    ).toMatchObject({ type: 'moveCards', to: 'command' });
+  });
+
+  it('flips and copies only the hovered card, and ignores B', () => {
+    expect(selectionHoverAction(group, a, 'x')).toEqual({
+      type: 'copyCard',
+      instanceId: 'p1:7',
+    });
+    expect(selectionHoverAction(group, a, 'f')).toEqual({
+      type: 'setFaceDown',
+      instanceId: 'p1:7',
+      faceDown: true,
+    });
+    expect(selectionHoverAction(group, a, 'b')).toBeNull();
   });
 });

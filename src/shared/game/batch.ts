@@ -1,5 +1,5 @@
 import { currentFace } from './cardRefs';
-import { getPlayer, moveCard, type Rules } from './core';
+import { getPlayer, moveCard, type Rules, setPosition } from './core';
 import type {
   BatchAction,
   CardInstance,
@@ -9,6 +9,7 @@ import type {
   GameState,
   InstanceId,
   PlayerState,
+  Position,
   ZoneId,
 } from './types';
 
@@ -16,6 +17,7 @@ const batchActionTypes: ReadonlySet<string> = new Set<BatchAction['type']>([
   'moveCards',
   'moveAll',
   'setTapped',
+  'setPositions',
 ]);
 
 export const isBatchAction = (action: GameAction): action is BatchAction =>
@@ -119,6 +121,48 @@ const setTapped = (
   return { ...state, cards };
 };
 
+// A card attached, at any depth, to another card in the group moves with
+// its host instead of on its own, so it stays attached.
+const followsHost = (
+  state: GameState,
+  id: InstanceId,
+  group: ReadonlySet<InstanceId>
+): boolean => {
+  const seen = new Set<InstanceId>();
+  let host = state.cards[id].attachedTo;
+  while (host !== null && !seen.has(host)) {
+    if (group.has(host)) return true;
+    seen.add(host);
+    host = state.cards[host]?.attachedTo ?? null;
+  }
+  return false;
+};
+
+const setPositions = (
+  state: GameState,
+  rules: Rules,
+  player: PlayerState,
+  positions: { instanceId: InstanceId; position: Position }[]
+): GameState => {
+  const ids = positions.map(({ instanceId }) => instanceId);
+  const battlefield = new Set(player.zones.battlefield);
+  if (
+    ids.length === 0 ||
+    !distinct(ids) ||
+    !ids.every((id) => battlefield.has(id))
+  ) {
+    return state;
+  }
+  const group = new Set(ids);
+  return positions
+    .filter(({ instanceId }) => !followsHost(state, instanceId, group))
+    .reduce(
+      (next, { instanceId, position }) =>
+        setPosition(next, rules, next.cards[instanceId], position),
+      state
+    );
+};
+
 export const reduceBatch = (
   state: GameState,
   action: BatchAction,
@@ -142,5 +186,7 @@ export const reduceBatch = (
     }
     case 'setTapped':
       return setTapped(state, player, action.instanceIds, action.tapped);
+    case 'setPositions':
+      return setPositions(state, rules, player, action.positions);
   }
 };

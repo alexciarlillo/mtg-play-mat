@@ -3,6 +3,8 @@ import { makeAutoObservable } from 'mobx';
 export interface ContextMenuSpec {
   title: string;
   action: (() => void) | null;
+  // A label over the items after it, not something to click.
+  heading?: boolean;
 }
 
 interface OpenOptions {

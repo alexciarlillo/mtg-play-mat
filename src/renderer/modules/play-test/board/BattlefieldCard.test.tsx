@@ -1,11 +1,12 @@
 import type { CardView } from '@shared/game';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CardPreviewProvider } from '../../../ui/CardPreview';
 import { ContextMenuProvider } from '../../../ui/ContextMenuProvider';
 import { useGameShortcuts } from '../common/useGameShortcuts';
 import BattlefieldCard from './BattlefieldCard';
+import { SelectionContext, SelectionStore } from './selection';
 
 const card: CardView = {
   instanceId: 'p1:7',
@@ -288,5 +289,283 @@ describe('BattlefieldCard', () => {
       type: 'toggleTap',
       instanceId: 'p1:7',
     });
+  });
+});
+
+describe('BattlefieldCard in a selection', () => {
+  const cards: CardView[] = [
+    card,
+    { ...card, instanceId: 'p1:8', position: { x: 200, y: 30 } },
+    { ...card, instanceId: 'p1:9', position: { x: 360, y: 60 }, tapped: true },
+  ];
+  const ids = cards.map((each) => each.instanceId);
+
+  const renderGroup = (selected: string[] = ids) => {
+    const selection = new SelectionStore();
+    selection.sync(cards);
+    selection.set(selected);
+    const { rerender } = render(
+      <ContextMenuProvider>
+        <CardPreviewProvider>
+          <SelectionContext value={selection}>
+            {cards.map((each) => (
+              <BattlefieldCard key={each.instanceId} card={each} />
+            ))}
+          </SelectionContext>
+        </CardPreviewProvider>
+      </ContextMenuProvider>
+    );
+    // Main sends fresh objects for every card in each view.
+    const freshView = () => {
+      const fresh = cards.map((each) => ({ ...each }));
+      selection.sync(fresh);
+      rerender(
+        <ContextMenuProvider>
+          <CardPreviewProvider>
+            <SelectionContext value={selection}>
+              {fresh.map((each) => (
+                <BattlefieldCard key={each.instanceId} card={each} />
+              ))}
+            </SelectionContext>
+          </CardPreviewProvider>
+        </ContextMenuProvider>
+      );
+    };
+    return Object.assign(selection, { freshView });
+  };
+
+  const wrapperOf = (id: string) =>
+    faceOf(id).closest<HTMLElement>('[data-testid="battlefield-card"]')!;
+
+  const faceOf = (id: string) =>
+    screen.getAllByTestId('card').find((el) => el.dataset.instanceId === id)!;
+
+  it('toggles a card in and out with Shift-click, without tapping', () => {
+    const selection = renderGroup([]);
+    const face = faceOf('p1:8');
+    fireEvent.mouseDown(face, { clientX: 10, clientY: 10, shiftKey: true });
+    fireEvent.mouseUp(face, { clientX: 10, clientY: 10, shiftKey: true });
+    expect([...selection.ids]).toEqual(['p1:8']);
+    expect(face.closest('[data-selected]')).not.toBeNull();
+    expect(face).toHaveClass('ring-4');
+
+    fireEvent.mouseDown(face, { clientX: 10, clientY: 10, shiftKey: true });
+    fireEvent.mouseUp(face, { clientX: 10, clientY: 10, shiftKey: true });
+    expect(selection.ids.size).toBe(0);
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it('taps only the clicked card, even in a group', () => {
+    renderGroup();
+    const face = faceOf('p1:7');
+    fireEvent.mouseDown(face, { clientX: 10, clientY: 10 });
+    fireEvent.mouseUp(face, { clientX: 10, clientY: 10 });
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect(dispatch).toHaveBeenCalledWith({
+      type: 'toggleTap',
+      instanceId: 'p1:7',
+    });
+  });
+
+  it('taps only an unselected card', () => {
+    renderGroup(['p1:7', 'p1:8']);
+    const face = faceOf('p1:9');
+    fireEvent.mouseDown(face, { clientX: 10, clientY: 10 });
+    fireEvent.mouseUp(face, { clientX: 10, clientY: 10 });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: 'toggleTap',
+      instanceId: 'p1:9',
+    });
+  });
+
+  it('offers the group items first in a selected card menu', () => {
+    const selection = renderGroup();
+    fireEvent.contextMenu(faceOf('p1:8'));
+    const names = screen.getAllByRole('menuitem').map((i) => i.textContent);
+    // Counts only the cards each would change.
+    expect(names.slice(0, 3)).toEqual([
+      'Tap 2 cards',
+      'Untap 1 card',
+      'Move 3 to hand',
+    ]);
+    expect(
+      screen.getAllByTestId('menu-heading').map((h) => h.textContent)
+    ).toEqual(['3 selected', 'This card']);
+    expect(names).toContain('Tap');
+    fireEvent.click(
+      screen.getByRole('menuitem', { name: 'Move 3 to graveyard' })
+    );
+    expect(dispatch).toHaveBeenCalledWith({
+      type: 'moveCards',
+      playerId: 'p1',
+      instanceIds: ids,
+      to: 'graveyard',
+    });
+
+    fireEvent.contextMenu(faceOf('p1:8'));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Clear selection' }));
+    expect(selection.ids.size).toBe(0);
+  });
+
+  it('rebuilds every selected card menu when one is toggled off', () => {
+    renderGroup();
+    const face = faceOf('p1:9');
+    fireEvent.mouseDown(face, { clientX: 10, clientY: 10, shiftKey: true });
+    fireEvent.mouseUp(face, { clientX: 10, clientY: 10, shiftKey: true });
+
+    fireEvent.contextMenu(faceOf('p1:7'));
+    fireEvent.click(
+      screen.getByRole('menuitem', { name: 'Move 2 to graveyard' })
+    );
+    expect(dispatch).toHaveBeenCalledWith({
+      type: 'moveCards',
+      playerId: 'p1',
+      instanceIds: ['p1:7', 'p1:8'],
+      to: 'graveyard',
+    });
+  });
+
+  it('leaves the others in place after a jittery Shift-click', () => {
+    renderGroup();
+    const face = faceOf('p1:8');
+    fireEvent.mouseDown(face, { clientX: 10, clientY: 10, shiftKey: true });
+    fireEvent.mouseMove(document, { clientX: 11, clientY: 10 });
+    fireEvent.mouseUp(document, { clientX: 11, clientY: 10, shiftKey: true });
+    expect(wrapperOf('p1:7')).not.toHaveClass('z-20');
+    expect(wrapperOf('p1:7').style.transform).toBe('translate(40px,30px)');
+  });
+
+  it('keeps the others following through a fresh view mid-drag', () => {
+    const selection = renderGroup();
+    const face = faceOf('p1:8');
+    fireEvent.mouseDown(face, { clientX: 10, clientY: 10 });
+    fireEvent.mouseMove(document, { clientX: 30, clientY: 50 });
+    act(() => selection.freshView());
+    expect(wrapperOf('p1:7').style.transform).toBe('translate(60px,70px)');
+    fireEvent.mouseUp(document, { clientX: 30, clientY: 50 });
+  });
+
+  it('runs hover keys on the whole group', () => {
+    const Keys = () => {
+      useGameShortcuts(
+        {
+          seq: 1,
+          playerId: 'p1',
+          name: 'You',
+          life: 20,
+          counters: {},
+          mulligans: 0,
+          keptHand: true,
+          zones: { battlefield: [], graveyard: [], exile: [], command: [] },
+          handCount: 0,
+          libraryCount: 0,
+          commanderDamage: [],
+          dummies: [],
+        },
+        {
+          enabled: true,
+          onHelp: () => {},
+          onRestart: () => {},
+          onLibraryDialog: () => {},
+          turnTracking: false,
+        }
+      );
+      return null;
+    };
+    const selection = new SelectionStore();
+    selection.sync(cards);
+    selection.set(ids);
+    render(
+      <ContextMenuProvider>
+        <CardPreviewProvider>
+          <Keys />
+          <SelectionContext value={selection}>
+            {cards.map((each) => (
+              <BattlefieldCard key={each.instanceId} card={each} />
+            ))}
+          </SelectionContext>
+        </CardPreviewProvider>
+      </ContextMenuProvider>
+    );
+    fireEvent.mouseOver(faceOf('p1:7'));
+    fireEvent.keyDown(window, { key: 't' });
+    fireEvent.keyDown(window, { key: 'e' });
+    expect(dispatch.mock.calls).toEqual([
+      [{ type: 'setTapped', playerId: 'p1', instanceIds: ids, tapped: true }],
+      [{ type: 'moveCards', playerId: 'p1', instanceIds: ids, to: 'exile' }],
+    ]);
+  });
+
+  it('drops the group on a pile as one move', () => {
+    const exile = document.createElement('div');
+    exile.dataset.dropZone = 'exile';
+    exile.getBoundingClientRect = () =>
+      ({ left: 400, right: 500, top: 200, bottom: 400 }) as DOMRect;
+    document.body.append(exile);
+
+    renderGroup();
+    const face = faceOf('p1:8');
+    fireEvent.mouseDown(face, { clientX: 10, clientY: 10 });
+    fireEvent.mouseMove(document, { clientX: 200, clientY: 100 });
+    fireEvent.mouseMove(document, { clientX: 450, clientY: 300 });
+    fireEvent.mouseUp(document, { clientX: 450, clientY: 300 });
+
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect(dispatch).toHaveBeenCalledWith({
+      type: 'moveCards',
+      playerId: 'p1',
+      instanceIds: ids,
+      to: 'exile',
+    });
+    exile.remove();
+  });
+
+  it('drags the others along and keeps their layout on the field', () => {
+    const size = (
+      name: 'clientWidth' | 'clientHeight' | 'offsetWidth' | 'offsetHeight',
+      value: number
+    ) => vi.spyOn(HTMLElement.prototype, name, 'get').mockReturnValue(value);
+    const spies = [
+      size('clientWidth', 1000),
+      size('clientHeight', 600),
+      size('offsetWidth', 100),
+      size('offsetHeight', 140),
+    ];
+    renderGroup();
+    const face = faceOf('p1:8');
+    const follower = faceOf('p1:7').closest<HTMLElement>(
+      '[data-testid="battlefield-card"]'
+    )!;
+    fireEvent.mouseDown(face, { clientX: 10, clientY: 10 });
+    fireEvent.mouseMove(document, { clientX: 30, clientY: 50 });
+    expect(follower.style.transform).toBe('translate(60px,70px)');
+    fireEvent.mouseUp(document, { clientX: 30, clientY: 50 });
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect(dispatch).toHaveBeenLastCalledWith({
+      type: 'setPositions',
+      playerId: 'p1',
+      positions: [
+        { instanceId: 'p1:7', position: { x: 60, y: 70 } },
+        { instanceId: 'p1:8', position: { x: 220, y: 70 } },
+        { instanceId: 'p1:9', position: { x: 380, y: 100 } },
+      ],
+    });
+
+    // Far to the right, the group stops where its last card fits.
+    const last = faceOf('p1:9');
+    fireEvent.mouseDown(last, { clientX: 10, clientY: 10 });
+    fireEvent.mouseMove(document, { clientX: 400, clientY: 10 });
+    fireEvent.mouseMove(document, { clientX: 2000, clientY: 10 });
+    fireEvent.mouseUp(document, { clientX: 2000, clientY: 10 });
+    expect(dispatch).toHaveBeenLastCalledWith({
+      type: 'setPositions',
+      playerId: 'p1',
+      positions: [
+        { instanceId: 'p1:7', position: { x: 580, y: 30 } },
+        { instanceId: 'p1:8', position: { x: 740, y: 30 } },
+        { instanceId: 'p1:9', position: { x: 900, y: 60 } },
+      ],
+    });
+    spies.forEach((spy) => spy.mockRestore());
   });
 });

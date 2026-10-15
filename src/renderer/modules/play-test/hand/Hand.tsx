@@ -377,14 +377,16 @@ const Hand = ({ store, dock }: Props) => {
   }
   useEffect(() => {
     if (!putBackEnd) return undefined;
-    // Docked, a board dialog or menu may own this Escape.
+    // Docked, a board dialog or menu may own this Escape. Capture runs
+    // before the board's own Escape, which then leaves the selection be.
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || e.defaultPrevented) return;
       if (document.querySelector('[role="dialog"], [role="menu"]')) return;
+      e.preventDefault();
       setPickMode(null);
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
   }, [putBackEnd]);
 
   const toggleHelp = useCallback(

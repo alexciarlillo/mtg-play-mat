@@ -166,6 +166,16 @@ const steps: Record<PlayerAction['type'], (s: GameState) => PlayerAction> = {
     instanceIds: field(s).slice(0, 2),
     tapped: true,
   }),
+  setPositions: (s) => ({
+    type: 'setPositions',
+    playerId: P1,
+    positions: field(s)
+      .slice(0, 2)
+      .map((instanceId, i) => ({
+        instanceId,
+        position: { x: 40 + i * 120, y: 300 },
+      })),
+  }),
   moveCards: (s) => ({
     type: 'moveCards',
     playerId: P1,
@@ -217,6 +227,7 @@ const order: PlayerAction['type'][] = [
   'nextTurn',
   'setPhase',
   'setTapped',
+  'setPositions',
   'moveCards',
   'moveAll',
 ];

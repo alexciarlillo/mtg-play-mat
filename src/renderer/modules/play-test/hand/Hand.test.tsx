@@ -381,7 +381,8 @@ describe('Hand', () => {
     fireEvent.click(
       screen.getByRole('menuitem', { name: 'Put cards on top…' })
     );
-    fireEvent.keyDown(window, { key: 'Escape' });
+    // Taken, so a docked board's Escape leaves its selection alone.
+    expect(fireEvent.keyDown(document.body, { key: 'Escape' })).toBe(false);
     expect(screen.queryByTestId('put-back-bar')).not.toBeInTheDocument();
     fireEvent.click(cards()[1]);
     expect(dispatch).toHaveBeenLastCalledWith({

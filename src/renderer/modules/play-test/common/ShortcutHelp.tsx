@@ -43,6 +43,12 @@ const ShortcutHelp = ({ onClose }: { onClose(): void }) => (
       press its key. Right-click the battlefield or use the Game menu for
       everything else.
     </p>
+    <p data-testid="selection-help" className="mt-2 text-sm text-slate-600">
+      Shift-click your permanents, or drag a box around them from an empty part
+      of the battlefield, to select several. Keys, menus and drags on a selected
+      card then act on all of them. Esc or a click on an empty part of the
+      battlefield clears the selection.
+    </p>
   </Modal>
 );
 

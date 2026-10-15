@@ -467,6 +467,88 @@ describe('setTapped', () => {
   });
 });
 
+describe('setPositions', () => {
+  const at = (x: number, y: number) => ({ x, y });
+
+  it('moves several permanents in one action, last on top', () => {
+    const state = board();
+    const [a, b, c] = zone(state, P1, 'battlefield');
+    const next = reduce(state, {
+      type: 'setPositions',
+      playerId: P1,
+      positions: [
+        { instanceId: b, position: at(300, 200) },
+        { instanceId: a, position: at(420, 200) },
+      ],
+    });
+    expect(next.cards[a].position).toEqual(at(420, 200));
+    expect(next.cards[b].position).toEqual(at(300, 200));
+    expect(next.cards[c].position).toEqual(state.cards[c].position);
+    expect(zone(next, P1, 'battlefield').slice(-2)).toEqual([b, a]);
+    expect(next.log).toHaveLength(state.log.length + 1);
+    expect(undoLast(next, P1, 1)?.state.cards[a].position).toEqual(
+      state.cards[a].position
+    );
+  });
+
+  it('keeps an attachment on a host that moves with it', () => {
+    let state = board();
+    const bear = find(state, 'Bear');
+    const aura = find(state, 'Aura');
+    const ring = find(state, 'Ring');
+    state = applyAll(state, [
+      { type: 'setPosition', instanceId: bear, position: at(100, 100) },
+      { type: 'attach', instanceId: aura, to: bear },
+      { type: 'attach', instanceId: ring, to: bear },
+    ]);
+    const auraAt = state.cards[aura].position!;
+    const next = reduce(state, {
+      type: 'setPositions',
+      playerId: P1,
+      positions: [
+        { instanceId: aura, position: at(999, 999) },
+        { instanceId: bear, position: at(150, 120) },
+      ],
+    });
+    expect(next.cards[aura].attachedTo).toBe(bear);
+    expect(next.cards[aura].position).toEqual(at(auraAt.x + 50, auraAt.y + 20));
+    // Not in the group, but attached, so it follows as in a single move.
+    expect(next.cards[ring].attachedTo).toBe(bear);
+  });
+
+  it('takes an attachment off a host left behind', () => {
+    let state = board();
+    const bear = find(state, 'Bear');
+    const aura = find(state, 'Aura');
+    state = reduce(state, { type: 'attach', instanceId: aura, to: bear });
+    const next = reduce(state, {
+      type: 'setPositions',
+      playerId: P1,
+      positions: [{ instanceId: aura, position: at(500, 50) }],
+    });
+    expect(next.cards[aura].attachedTo).toBeNull();
+    expect(next.cards[aura].position).toEqual(at(500, 50));
+  });
+
+  it('is refused whole unless every card is on the battlefield once', () => {
+    const state = deepFreeze(board());
+    const [a] = zone(state, P1, 'battlefield');
+    const [lib] = zone(state, P1, 'library');
+    const move = (ids: string[]) =>
+      reduce(state, {
+        type: 'setPositions',
+        playerId: P1,
+        positions: ids.map((instanceId) => ({
+          instanceId,
+          position: at(0, 0),
+        })),
+      });
+    expect(move([a, lib])).toBe(state);
+    expect(move([a, a])).toBe(state);
+    expect(move([])).toBe(state);
+  });
+});
+
 describe('mill', () => {
   it('can exile the top cards instead', () => {
     const state = board();
