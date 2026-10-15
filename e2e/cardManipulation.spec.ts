@@ -351,6 +351,6 @@ test('custom tokens, copies, and player counters', async () => {
 });
 
 test('no renderer console errors', () => {
-  // Card images come from the live Scryfall CDN through the cache.
+  // Card images go through the cache, from a placeholder under test.
   expect(errors).toEqual([]);
 });

@@ -11,6 +11,9 @@ export const deckDbPath = () => path.join(getDbDir(), 'Decks.sqlite');
 export const imageCacheDir = () =>
   path.join(app.getPath('userData'), 'image-cache');
 
+export const placeholderImageCacheDir = () =>
+  path.join(app.getPath('userData'), 'image-cache-test');
+
 export const matsDir = () => path.join(app.getPath('userData'), 'mats');
 
 // Saved games hold the hidden library order, so they stay in the

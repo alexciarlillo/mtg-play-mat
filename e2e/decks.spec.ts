@@ -281,7 +281,6 @@ test('the editor edits quantities, boards, name, and exports', async () => {
   await page.getByLabel('Deck name', { exact: true }).fill('Atraxa Renamed');
   await page.getByLabel('Deck name', { exact: true }).press('Enter');
 
-  await page.bringToFront();
   await page.getByRole('button', { name: 'Copy MTGA' }).click();
   await expect(page.getByRole('button', { name: 'Copied!' })).toBeVisible();
   const text = await app.evaluate(({ clipboard }) => clipboard.readText());
@@ -316,7 +315,6 @@ test('a play test uses the main board and puts the commander in command', async 
 
 test('a companion deck starts with its companion in command, and wishes work', async () => {
   const page = await appWindow();
-  await page.bringToFront();
   await page.getByRole('link', { name: 'Deck Builder' }).first().click();
   await page.getByRole('button', { name: 'New deck' }).click();
   await page.getByLabel('Name', { exact: true }).fill('Companion Test');

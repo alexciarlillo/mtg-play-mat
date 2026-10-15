@@ -66,7 +66,7 @@ import { type GameMenuCommand, runGameMenuCommand } from '../../gameMenu';
 import { type RequestHandlers, type SenderGuards, sendEvent } from '../../ipc';
 import type CardDB from '../../shared/db/CardDB';
 import type DeckDB from '../../shared/db/DeckDB';
-import { createWindow, whenLoaded } from '../../windows';
+import { createWindow, showWindow, whenLoaded } from '../../windows';
 import { toCardRef } from './cardRef';
 import {
   buildSave,
@@ -340,8 +340,7 @@ export default class PlayTest {
       redo: this.redo,
       toBoard: (boardCommand) => {
         if (!this.board) return;
-        this.board.show();
-        this.board.focus();
+        showWindow(this.board, true);
         sendEvent(this.board, 'boardMenuCommand', boardCommand);
       },
     });
@@ -476,8 +475,7 @@ export default class PlayTest {
       }
       const target = this.handInBoard ? this.board : this.hand;
       if (!target) return;
-      target.show();
-      target.focus();
+      showWindow(target, true);
       sendEvent(target, 'handCommand', command);
     },
     // The board may ask too (a face-down permanent, the top card): main
@@ -1357,9 +1355,8 @@ export default class PlayTest {
 
     // Windows also fetch their view on load; this covers reused windows.
     this.pushViews();
-    hand?.show();
-    board.show();
-    board.focus();
+    if (hand) showWindow(hand);
+    showWindow(board, true);
   };
 
   // A changed mode gets fresh windows. The old ones are forgotten first,

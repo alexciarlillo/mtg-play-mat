@@ -66,6 +66,14 @@ const expectInside = (inner: Box, outer: Box) => {
   expect(inner.y + inner.height).toBeLessThanOrEqual(outer.y + outer.height);
 };
 
+// Where a box sits in the room as fractions of the room it has to move
+// in, keeping the panel's 12px margin, like the saved placement.
+const MARGIN = 12;
+const placementOf = (box: Box, room: Box) => ({
+  x: (box.x - room.x - MARGIN) / (room.width - box.width - 2 * MARGIN),
+  y: (box.y - room.y - MARGIN) / (room.height - box.height - 2 * MARGIN),
+});
+
 const savedPanel = () =>
   (
     JSON.parse(readFileSync(settingsFile, 'utf8')) as {
@@ -161,10 +169,17 @@ test('dragging the handle moves the panel and it stays put', async () => {
   expect(saved?.y).toBeLessThan(1);
   expect(saved?.collapsed).toBe(false);
 
+  // Compared as a share of the room, so a window resized in between (say,
+  // by a tiling window manager) doesn't matter.
+  const placed = placementOf(after, await roomOf());
+  expect(placed.x).toBeCloseTo(saved?.x ?? -1, 2);
+  expect(placed.y).toBeCloseTo(saved?.y ?? -1, 2);
   await reloadBoard();
-  const reloaded = await boxOf(panel());
-  expect(reloaded.x).toBeCloseTo(after.x, 0);
-  expect(reloaded.y).toBeCloseTo(after.y, 0);
+  await expect(async () => {
+    const reloaded = placementOf(await boxOf(panel()), await roomOf());
+    expect(reloaded.x).toBeCloseTo(placed.x, 2);
+    expect(reloaded.y).toBeCloseTo(placed.y, 2);
+  }).toPass({ timeout: 2000 });
 });
 
 test('a drag past the edge stops at the field', async () => {

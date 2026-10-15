@@ -22,6 +22,7 @@ const fakeWindow = () => ({
 
 vi.mock('../../windows', () => ({
   createWindow: vi.fn(() => fakeWindow()),
+  showWindow: vi.fn(),
   whenLoaded: vi.fn(async () => true),
 }));
 

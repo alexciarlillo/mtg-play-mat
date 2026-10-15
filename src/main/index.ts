@@ -20,6 +20,7 @@ import {
   cardSchemePrivileges,
   createCardImageHandler,
 } from './imageCache/cardProtocol';
+import { placeholderImageFetch } from './imageCache/placeholderImage';
 import { registerDeepLinkScheme, watchDeepLinks } from './deepLink';
 import DebugLog from './debugLog';
 import { registerRequestHandlers, sendEvent } from './ipc';
@@ -49,10 +50,12 @@ import {
   deckDbPath,
   getDbDir,
   imageCacheDir,
+  placeholderImageCacheDir,
   matsDir,
   savesDir,
 } from './shared/db/paths';
-import { createWindow, whenLoaded } from './windows';
+import { testHooksEnabled } from './testHooks';
+import { createWindow, focusWindow, showWindow, whenLoaded } from './windows';
 
 protocol.registerSchemesAsPrivileged([
   cardSchemePrivileges,
@@ -96,7 +99,11 @@ process.on('unhandledRejection', (reason) => {
   else console.error(reason);
 });
 
-const testHooksEnabled = process.env.MTG_PLAY_MAT_TEST_HOOKS === '1';
+// Under test, an accessory app from the very start: tiling window managers
+// only manage regular apps, and decide that as the app finishes launching.
+if (testHooksEnabled && process.platform === 'darwin') {
+  app.setActivationPolicy('accessory');
+}
 
 // Tests point this at a local fixture server. Without one, tests skip the
 // launch check so they never pull the real ~80 MB bulk file.
@@ -113,7 +120,7 @@ const createAppWindow = (playTest: PlayTest) => {
   const window = createWindow({ html: 'app.html', width: 1500, height: 500 });
   appWindow = window;
 
-  window.once('ready-to-show', () => window.show());
+  window.once('ready-to-show', () => showWindow(window));
   window.on('closed', () => {
     appWindow = null;
     // The board and hand are secondary windows; without the app window
@@ -145,8 +152,7 @@ const createAppWindow = (playTest: PlayTest) => {
 const openSettings = (playTest: PlayTest) => {
   const window = appWindow ?? createAppWindow(playTest);
   if (window.isMinimized()) window.restore();
-  window.show();
-  window.focus();
+  showWindow(window, true);
   void whenLoaded(window).then((loaded) => {
     if (loaded) sendEvent(window, 'navigate', 'settings');
   });
@@ -251,12 +257,16 @@ const start = (onDeepLink: ReturnType<typeof watchDeepLinks>) => {
   protocol.handle(
     CARD_SCHEME,
     createCardImageHandler({
-      cacheDir: imageCacheDir(),
+      // Placeholders get their own folder, so they can never sit in a
+      // profile's real cache in place of card art.
+      cacheDir: testHooksEnabled ? placeholderImageCacheDir() : imageCacheDir(),
       lookupImage: cardDb.getFaceImage,
       // Node's fetch, not Electron's: net.fetch decodes response headers
       // as UTF-8, and Scryfall's content-disposition carries a raw star
       // for promo printings, which throws past our catch and kills main.
-      fetch: (url) => fetch(url, { headers: scryfallHeaders(appVersion) }),
+      fetch: testHooksEnabled
+        ? placeholderImageFetch
+        : (url) => fetch(url, { headers: scryfallHeaders(appVersion) }),
     })
   );
 
@@ -309,7 +319,7 @@ const start = (onDeepLink: ReturnType<typeof watchDeepLinks>) => {
     if (link) online.netplay.receiveLink(link);
     if (!appWindow) createAppWindow(playTest);
     if (appWindow?.isMinimized()) appWindow.restore();
-    appWindow?.focus();
+    if (appWindow) focusWindow(appWindow);
   });
 
   if (!testHooksEnabled || bulkDataUrlOverride) void cardData.check();

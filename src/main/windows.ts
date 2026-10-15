@@ -3,6 +3,7 @@ import path from 'node:path';
 import { BrowserWindow, type BrowserWindowConstructorOptions } from 'electron';
 
 import icon from '../../assets/icon.png?asset';
+import { testHooksEnabled } from './testHooks';
 import { isRendererUrl, rendererUrl } from './util';
 
 export interface CreateWindowOptions extends Omit<
@@ -45,6 +46,22 @@ export const createWindow = ({
   });
 
   return window;
+};
+
+// End-to-end runs open windows without activating the app, so a run never
+// takes the keyboard from whoever is using the machine, or prompts a
+// tiling window manager to move and resize the windows under test.
+export const showWindow = (window: BrowserWindow, focus = false) => {
+  if (testHooksEnabled) {
+    window.showInactive();
+    return;
+  }
+  window.show();
+  if (focus) window.focus();
+};
+
+export const focusWindow = (window: BrowserWindow) => {
+  if (!testHooksEnabled) window.focus();
 };
 
 // Resolves once the page has run its scripts, so pushed events have a

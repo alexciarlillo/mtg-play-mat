@@ -223,7 +223,7 @@ test('Shift+V opens the look prompt in the hand window', async () => {
     name: 'Look at the top of your library',
   });
   await expect(prompt).toBeVisible();
-  // Main focuses the hand window, whose game keys wait for the prompt.
+  // With the prompt open in the hand window, its game keys wait for it.
   const before = await gameState();
   for (const key of ['d', 'u', 'ArrowUp']) await hand.keyboard.press(key);
   await settle(hand);
