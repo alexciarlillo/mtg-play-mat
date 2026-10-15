@@ -197,6 +197,46 @@ export interface ShuffleIntoLibraryAction {
   instanceId: InstanceId;
 }
 
+// Moves several of a player's cards to one zone in one step, each as
+// moveCard would. Refused whole unless the player holds every card.
+export interface MoveCardsAction {
+  type: 'moveCards';
+  playerId: PlayerId;
+  instanceIds: InstanceId[];
+  to: ZoneId;
+  // As for moveCard; the cards go in from there in the order given, so
+  // index 0 of the library puts the first one topmost.
+  index?: number;
+  tapped?: boolean;
+}
+
+// Card types to match on a type line, such as Creature or Land, in any
+// case. A card matches if it has any of types and none of excludeTypes.
+export interface CardTypeFilter {
+  types?: string[];
+  excludeTypes?: string[];
+}
+
+// Moves every card in one of a player's zones, or those matching filter,
+// to another. The cards are picked when it applies, so undo replays it.
+export interface MoveAllAction {
+  type: 'moveAll';
+  playerId: PlayerId;
+  from: ZoneId;
+  to: ZoneId;
+  filter?: CardTypeFilter;
+}
+
+// Taps or untaps several of a player's permanents in one step.
+export interface SetTappedAction {
+  type: 'setTapped';
+  playerId: PlayerId;
+  instanceIds: InstanceId[];
+  tapped: boolean;
+}
+
+export type BatchAction = MoveCardsAction | MoveAllAction | SetTappedAction;
+
 export type CoreAction =
   | NewGameAction
   | ShuffleAction
@@ -290,11 +330,13 @@ export interface AttachAction {
   to: InstanceId | null;
 }
 
-// Puts the top count cards of the library into the graveyard.
+// Puts the top count cards of the library into the graveyard, or into
+// exile instead.
 export interface MillAction {
   type: 'mill';
   playerId: PlayerId;
   count: number;
+  to?: 'graveyard' | 'exile';
 }
 
 // Applies a look at the top of the library (scry, surveil, and the like)
@@ -505,7 +547,12 @@ export type ControlAction =
   | RegainControlAction;
 
 export type GameAction =
-  CoreAction | MtgAction | CommanderAction | LibraryAction | ControlAction;
+  | CoreAction
+  | BatchAction
+  | MtgAction
+  | CommanderAction
+  | LibraryAction
+  | ControlAction;
 
 // What a window may ask for. Starting a game is main's decision, and so
 // is every change of control, since each one crosses to another game.

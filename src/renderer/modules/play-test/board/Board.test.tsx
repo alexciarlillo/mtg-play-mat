@@ -329,6 +329,79 @@ describe('Board tools', () => {
     });
   });
 
+  it('exiles the top N from the menu as one mill to exile', async () => {
+    const user = userEvent.setup();
+    renderBoard(defaultSettings);
+    await act(async () => {});
+    act(() => pushMenuCommand('exileTop'));
+    const dialog = screen.getByRole('dialog', { name: 'Exile cards' });
+    const input = dialog.querySelector('input')!;
+    await user.clear(input);
+    await user.type(input, '5{Enter}');
+    expect(api.dispatch).toHaveBeenCalledWith({
+      type: 'mill',
+      playerId: 'p1',
+      count: 5,
+      to: 'exile',
+    });
+  });
+
+  it('moves the whole library only after confirming', async () => {
+    const user = userEvent.setup();
+    renderBoard(defaultSettings);
+    await act(async () => {});
+    fireEvent.contextMenu(screen.getByTestId('library'));
+    fireEvent.click(
+      screen.getByRole('menuitem', { name: 'Put library into graveyard…' })
+    );
+    expect(
+      screen.getByRole('dialog', { name: 'Mill your library?' })
+    ).toHaveTextContent(
+      'Puts all 53 cards of your library into your graveyard'
+    );
+    expect(api.dispatch).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Mill library' }));
+    expect(api.dispatch).toHaveBeenCalledWith({
+      type: 'moveAll',
+      playerId: 'p1',
+      from: 'library',
+      to: 'graveyard',
+    });
+
+    fireEvent.contextMenu(screen.getByTestId('library'));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Exile library…' }));
+    await user.click(screen.getByRole('button', { name: 'Exile library' }));
+    expect(api.dispatch).toHaveBeenLastCalledWith({
+      type: 'moveAll',
+      playerId: 'p1',
+      from: 'library',
+      to: 'exile',
+    });
+  });
+
+  it('asks about a one-card library without a plural', async () => {
+    renderBoard(defaultSettings, { ...view, libraryCount: 1 });
+    await act(async () => {});
+    fireEvent.contextMenu(screen.getByTestId('library'));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Exile library…' }));
+    expect(
+      screen.getByRole('dialog', { name: 'Exile your library?' })
+    ).toHaveTextContent('Puts the only card of your library into exile');
+  });
+
+  it('offers moving permanents only when there are some', async () => {
+    renderBoard(defaultSettings);
+    await act(async () => {});
+    fireEvent.contextMenu(screen.getByTestId('battlefield'));
+    expect(
+      screen.getByRole('menuitem', { name: 'Move permanents…' })
+    ).toBeDisabled();
+    act(() => pushMenuCommand('bulkMove'));
+    expect(
+      screen.getByRole('dialog', { name: 'Move permanents' })
+    ).toBeInTheDocument();
+  });
+
   it('reserves the turned-card overhang at the field left edge', async () => {
     renderBoard(defaultSettings);
     await act(async () => {});

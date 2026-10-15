@@ -1,3 +1,4 @@
+export { isBatchAction, matchesTypes } from './batch';
 export {
   COMMANDER_STARTING_LIFE,
   COMMANDER_TAX_PER_CAST,

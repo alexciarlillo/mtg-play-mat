@@ -167,6 +167,82 @@ describe('parsePlayerAction', () => {
     });
   });
 
+  it('accepts the batch actions and mill to exile', () => {
+    expect(
+      parsePlayerAction({
+        type: 'moveCards',
+        playerId: 'p1',
+        instanceIds: ['a', 'b'],
+        to: 'library',
+        index: 0,
+        tapped: true,
+      })
+    ).toEqual({
+      type: 'moveCards',
+      playerId: 'p1',
+      instanceIds: ['a', 'b'],
+      to: 'library',
+      index: 0,
+    });
+    expect(
+      parsePlayerAction({
+        type: 'moveCards',
+        playerId: 'p1',
+        instanceIds: ['a'],
+        to: 'battlefield',
+        tapped: true,
+      })
+    ).toMatchObject({ tapped: true });
+    expect(
+      parsePlayerAction({
+        type: 'moveAll',
+        playerId: 'p1',
+        from: 'battlefield',
+        to: 'graveyard',
+        filter: { types: ['Creature'], excludeTypes: [], extra: 1 },
+      })
+    ).toEqual({
+      type: 'moveAll',
+      playerId: 'p1',
+      from: 'battlefield',
+      to: 'graveyard',
+      filter: { types: ['Creature'] },
+    });
+    expect(
+      parsePlayerAction({
+        type: 'moveAll',
+        playerId: 'p1',
+        from: 'library',
+        to: 'exile',
+        filter: {},
+      })
+    ).toEqual({
+      type: 'moveAll',
+      playerId: 'p1',
+      from: 'library',
+      to: 'exile',
+    });
+    expect(
+      parsePlayerAction({
+        type: 'setTapped',
+        playerId: 'p1',
+        instanceIds: ['a'],
+        tapped: false,
+      })
+    ).toEqual({
+      type: 'setTapped',
+      playerId: 'p1',
+      instanceIds: ['a'],
+      tapped: false,
+    });
+    expect(
+      parsePlayerAction({ type: 'mill', playerId: 'p1', count: 2, to: 'exile' })
+    ).toEqual({ type: 'mill', playerId: 'p1', count: 2, to: 'exile' });
+    expect(
+      parsePlayerAction({ type: 'mill', playerId: 'p1', count: 2 })
+    ).toEqual({ type: 'mill', playerId: 'p1', count: 2 });
+  });
+
   it('caps huge draw and token counts', () => {
     expect(
       parsePlayerAction({ type: 'draw', playerId: 'p1', count: 1e9 })
@@ -276,6 +352,43 @@ describe('parsePlayerAction', () => {
         instanceId: 'a',
         to: 'battlefield',
         position: { x: 0, y: Infinity },
+      },
+    ],
+    [
+      'no cards to move',
+      { type: 'moveCards', playerId: 'p', instanceIds: [], to: 'hand' },
+    ],
+    [
+      'a card moved twice',
+      { type: 'moveCards', playerId: 'p', instanceIds: ['a', 'a'], to: 'hand' },
+    ],
+    [
+      'a missing tapped',
+      { type: 'setTapped', playerId: 'p', instanceIds: ['a'] },
+    ],
+    [
+      'a move from a zone to itself',
+      { type: 'moveAll', playerId: 'p', from: 'hand', to: 'hand' },
+    ],
+    [
+      'a type that is not a word',
+      {
+        type: 'moveAll',
+        playerId: 'p',
+        from: 'battlefield',
+        to: 'hand',
+        filter: { types: ['.*'] },
+      },
+    ],
+    ['mill to the hand', { type: 'mill', playerId: 'p', count: 1, to: 'hand' }],
+    [
+      'a filter on a hidden zone',
+      {
+        type: 'moveAll',
+        playerId: 'p',
+        from: 'hand',
+        to: 'graveyard',
+        filter: { types: ['Land'] },
       },
     ],
   ])('rejects %s', (_label, input) => {

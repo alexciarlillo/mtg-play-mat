@@ -12,7 +12,14 @@ export interface PlayTestStatus {
 // Game menu items the board window carries out, mostly by opening one of
 // its dialogs; the rest of the Game menu acts in main directly.
 export type BoardMenuCommand =
-  'drawMany' | 'mill' | 'token' | 'restart' | 'help' | 'addDummy';
+  | 'drawMany'
+  | 'mill'
+  | 'exileTop'
+  | 'bulkMove'
+  | 'token'
+  | 'restart'
+  | 'help'
+  | 'addDummy';
 
 // Private dialogs the board may ask the hand to open, wherever it is.
 export const handCommands = ['viewBottom', 'search', 'look'] as const;

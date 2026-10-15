@@ -1,6 +1,7 @@
 import { parseCardRef } from './cardRefs';
 import { isControlAction } from './control';
 import type {
+  CardTypeFilter,
   GameAction,
   GameState,
   NewGameAction,
@@ -140,6 +141,63 @@ const searchPicks = (fields: Fields, key: string): SearchPick[] => {
   });
 };
 
+// At least one card, each named once.
+const cardIds = (fields: Fields, key: string): string[] => {
+  const ids = strings(fields, key, MAX_COUNT);
+  if (ids.length === 0) return fail(`${key} must name a card`);
+  if (new Set(ids).size !== ids.length) return fail(`${key} must be distinct`);
+  return ids;
+};
+
+const MAX_TYPES = 10;
+const MAX_TYPE_NAME = 30;
+
+const typeNames = (fields: Fields, key: string): string[] | undefined => {
+  const value = fields[key];
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.length > MAX_TYPES) {
+    return fail(`${key} must be an array of at most ${MAX_TYPES} types`);
+  }
+  return value.map((type: unknown) =>
+    typeof type === 'string' &&
+    type.length <= MAX_TYPE_NAME &&
+    /^[A-Za-z]+$/.test(type)
+      ? type
+      : fail(`${key} must hold single words of 1-${MAX_TYPE_NAME} letters`)
+  );
+};
+
+const typeFilter = (input: Fields): CardTypeFilter | undefined => {
+  const value = input.filter;
+  if (value === undefined) return undefined;
+  if (!isObject(value)) return fail('filter must be an object');
+  const types = typeNames(value, 'types');
+  const excludeTypes = typeNames(value, 'excludeTypes');
+  return {
+    ...(types && types.length > 0 && { types }),
+    ...(excludeTypes && excludeTypes.length > 0 && { excludeTypes }),
+  };
+};
+
+const parseMoveAll = (input: Fields): PlayerAction => {
+  const from = zone(input, 'from');
+  const to = zone(input, 'to');
+  if (from === to) return fail('from and to must differ');
+  const parsed = typeFilter(input);
+  const filter = parsed && Object.keys(parsed).length > 0 ? parsed : undefined;
+  // Picking hidden cards by type would tell the table what they are.
+  if (filter && (from === 'hand' || from === 'library')) {
+    return fail('a filter needs a public zone to move from');
+  }
+  return {
+    type: 'moveAll',
+    playerId: string(input, 'playerId'),
+    from,
+    to,
+    ...(filter && { filter }),
+  };
+};
+
 // Each card goes back exactly once, and at least one goes back.
 const parsePutFromHand = (input: Fields): PlayerAction => {
   const top = strings(input, 'top', MAX_COUNT);
@@ -214,6 +272,28 @@ export const parsePlayerAction = (input: unknown): PlayerAction => {
         ...(flag(input, 'tapped') && to === 'battlefield' && { tapped: true }),
       };
     }
+    case 'moveCards': {
+      const to = zone(input, 'to');
+      return {
+        type: 'moveCards',
+        playerId: string(input, 'playerId'),
+        instanceIds: cardIds(input, 'instanceIds'),
+        to,
+        ...(input.index !== undefined && {
+          index: integer(input, 'index', 0, Number.MAX_SAFE_INTEGER),
+        }),
+        ...(flag(input, 'tapped') && to === 'battlefield' && { tapped: true }),
+      };
+    }
+    case 'moveAll':
+      return parseMoveAll(input);
+    case 'setTapped':
+      return {
+        type: 'setTapped',
+        playerId: string(input, 'playerId'),
+        instanceIds: cardIds(input, 'instanceIds'),
+        tapped: bool(input, 'tapped'),
+      };
     case 'setPosition':
       return {
         type: 'setPosition',
@@ -322,6 +402,9 @@ export const parsePlayerAction = (input: unknown): PlayerAction => {
         type: 'mill',
         playerId: string(input, 'playerId'),
         count: integer(input, 'count', 1, MAX_COUNT),
+        ...(input.to !== undefined && {
+          to: oneOf(input, 'to', ['graveyard', 'exile'] as const),
+        }),
       };
     case 'arrangeTop':
       return {

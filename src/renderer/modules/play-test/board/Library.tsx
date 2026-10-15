@@ -17,6 +17,8 @@ interface Props {
   activity?: LibraryActivity | null;
   onDrawMany(): void;
   onMill(): void;
+  onExileTop(): void;
+  onLibraryTo(to: 'graveyard' | 'exile'): void;
 }
 
 const Library = ({
@@ -26,6 +28,8 @@ const Library = ({
   activity = null,
   onDrawMany,
   onMill,
+  onExileTop,
+  onLibraryTo,
 }: Props) => {
   const menu = useContextMenu();
   const canDraw = playerId !== undefined && count > 0;
@@ -54,6 +58,15 @@ const Library = ({
           action: () => dispatch({ type: 'shuffle', playerId }),
         },
         { title: 'Mill N…', action: count > 0 ? onMill : null },
+        { title: 'Exile top N…', action: count > 0 ? onExileTop : null },
+        {
+          title: 'Put library into graveyard…',
+          action: count > 0 ? () => onLibraryTo('graveyard') : null,
+        },
+        {
+          title: 'Exile library…',
+          action: count > 0 ? () => onLibraryTo('exile') : null,
+        },
         // Opens where the hand is, never on the shared board.
         {
           title: 'View bottom card',

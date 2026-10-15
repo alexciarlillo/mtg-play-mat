@@ -21,7 +21,7 @@ import { CardBackProvider } from '../../../ui/CardBackProvider';
 import { cardWidths } from '../../../ui/cardSizes';
 import { useContextMenu } from '../../../ui/ContextMenuProvider';
 import FloatingPanel from '../../../ui/FloatingPanel';
-import { NumberPrompt, RestartDialog } from '../common/Dialogs';
+import { ConfirmDialog, NumberPrompt, RestartDialog } from '../common/Dialogs';
 import LibraryPositionPrompt from '../common/LibraryPositionPrompt';
 import ShortcutHelp from '../common/ShortcutHelp';
 import {
@@ -32,6 +32,7 @@ import { useUndoState } from '../common/useUndoState';
 import { dispatch, redo, undo, useView, type ViewStore } from '../viewStore';
 import AttachDialog from './AttachDialog';
 import BattlefieldCard from './BattlefieldCard';
+import BulkMoveDialog from './BulkMoveDialog';
 import CommanderPrompt from './CommanderPrompt';
 import {
   commanderSources,
@@ -75,6 +76,10 @@ type Dialog =
   | 'help'
   | 'drawMany'
   | 'mill'
+  | 'exileTop'
+  | 'bulkMove'
+  | 'libraryToGraveyard'
+  | 'libraryToExile'
   | 'setLife'
   | 'restart'
   | 'graveyard'
@@ -93,6 +98,33 @@ const dummyName = (view: PublicView) => {
   let n = 1;
   while (names.has(`Opponent ${n}`)) n += 1;
   return `Opponent ${n}`;
+};
+
+// Asked first, as it moves a whole library at once.
+const LibraryToDialog = ({
+  playerId,
+  count,
+  to,
+  onClose,
+}: {
+  playerId: string;
+  count: number;
+  to: 'graveyard' | 'exile';
+  onClose(): void;
+}) => {
+  const where = to === 'graveyard' ? 'into your graveyard' : 'into exile';
+  const cards = count === 1 ? 'the only card' : `all ${count} cards`;
+  return (
+    <ConfirmDialog
+      title={to === 'graveyard' ? 'Mill your library?' : 'Exile your library?'}
+      message={`Puts ${cards} of your library ${where}, in order.`}
+      confirmLabel={to === 'graveyard' ? 'Mill library' : 'Exile library'}
+      onConfirm={() =>
+        dispatch({ type: 'moveAll', playerId, from: 'library', to })
+      }
+      onClose={onClose}
+    />
+  );
 };
 
 interface Props {
@@ -199,6 +231,13 @@ const Board = ({ store, opponent, hand }: Props) => {
         },
         { title: 'Draw N…', action: () => setDialog('drawMany') },
         { title: 'Mill N…', action: () => setDialog('mill') },
+        {
+          title: 'Move permanents…',
+          action:
+            (view?.zones.battlefield.length ?? 0) > 0
+              ? () => setDialog('bulkMove')
+              : null,
+        },
         {
           title: 'Untap all',
           action: () => dispatch({ type: 'untapAll', playerId }),
@@ -389,6 +428,14 @@ const Board = ({ store, opponent, hand }: Props) => {
                         activity={view.libraryActivity}
                         onDrawMany={() => setDialog('drawMany')}
                         onMill={() => setDialog('mill')}
+                        onExileTop={() => setDialog('exileTop')}
+                        onLibraryTo={(to) =>
+                          setDialog(
+                            to === 'graveyard'
+                              ? 'libraryToGraveyard'
+                              : 'libraryToExile'
+                          )
+                        }
                       />
                       <div
                         data-testid="hand-count"
@@ -501,6 +548,40 @@ const Board = ({ store, opponent, hand }: Props) => {
             onSubmit={(count) =>
               dispatch({ type: 'mill', playerId: view.playerId, count })
             }
+            onClose={close}
+          />
+        )}
+        {view && dialog === 'exileTop' && (
+          <NumberPrompt
+            title="Exile cards"
+            label="How many from the top?"
+            initial={1}
+            min={1}
+            max={Math.max(1, view.libraryCount)}
+            onSubmit={(count) =>
+              dispatch({
+                type: 'mill',
+                playerId: view.playerId,
+                count,
+                to: 'exile',
+              })
+            }
+            onClose={close}
+          />
+        )}
+        {view &&
+          (dialog === 'libraryToGraveyard' || dialog === 'libraryToExile') && (
+            <LibraryToDialog
+              playerId={view.playerId}
+              count={view.libraryCount}
+              to={dialog === 'libraryToGraveyard' ? 'graveyard' : 'exile'}
+              onClose={close}
+            />
+          )}
+        {view && dialog === 'bulkMove' && (
+          <BulkMoveDialog
+            playerId={view.playerId}
+            battlefield={view.zones.battlefield}
             onClose={close}
           />
         )}

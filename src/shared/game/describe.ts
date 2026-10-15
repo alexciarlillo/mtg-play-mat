@@ -1,5 +1,6 @@
 import { currentFace } from './cardRefs';
 import type {
+  CardTypeFilter,
   GameAction,
   GameState,
   InstanceId,
@@ -51,6 +52,12 @@ const cards = (count: number) =>
 
 const listNames = (names: string[]) => names.join(', ');
 
+// "a, b and c"
+const joinParts = (parts: string[]) =>
+  parts.length < 2
+    ? parts.join('')
+    : `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}`;
+
 // Cards that are in a public zone after the action but weren't before.
 const arrived = (before: PublicView, after: PublicView, zone: PublicZoneId) => {
   const had = new Set(before.zones[zone].map((card) => card.instanceId));
@@ -86,7 +93,7 @@ const phaseNames: Record<Phase, string> = {
 };
 
 // 1st, 2nd, 3rd, 4th … 11th, 12th, 13th … 21st.
-const ordinal = (n: number) => {
+export const ordinal = (n: number) => {
   const teen = n % 100 >= 11 && n % 100 <= 13;
   const suffix = teen ? 'th' : (['th', 'st', 'nd', 'rd'][n % 10] ?? 'th');
   return `${n}${suffix}`;
@@ -99,11 +106,16 @@ const libraryPlace = (index: number | undefined, size: number) => {
   return `into their library ${ordinal(index + 1)} from the top`;
 };
 
-// Where a card that wasn't public came from, told by the hidden counts.
+// Hidden zones that lost cards, told by the hidden counts.
+const hiddenDrops = (before: PublicView, after: PublicView): ZoneId[] => [
+  ...(after.handCount < before.handCount ? (['hand'] as const) : []),
+  ...(after.libraryCount < before.libraryCount ? (['library'] as const) : []),
+];
+
+// Where a card that wasn't public came from, if only one place it could.
 const hiddenSource = (before: PublicView, after: PublicView): ZoneId | null => {
-  if (after.handCount < before.handCount) return 'hand';
-  if (after.libraryCount < before.libraryCount) return 'library';
-  return null;
+  const drops = hiddenDrops(before, after);
+  return drops.length === 1 ? drops[0] : null;
 };
 
 const describeMove = (
@@ -141,6 +153,166 @@ const describeMove = (
     return `put a card from ${from[source]} ${into.battlefield} face down${tapped}`;
   }
   return `put ${name} ${destination} from ${from[source]}`;
+};
+
+// A long list names the first few cards and counts the rest.
+const MAX_NAMED = 5;
+
+const someNames = (names: string[], unnamed: number) => {
+  const shown =
+    names.length > MAX_NAMED ? names.slice(0, MAX_NAMED - 1) : names;
+  const more = names.length - shown.length + unnamed;
+  if (shown.length === 0) return '';
+  return more === 0 ? joinParts(shown) : `${shown.join(', ')} and ${more} more`;
+};
+
+const pluralType = (type: string) =>
+  type.endsWith('y') ? `${type.slice(0, -1)}ies` : `${type}s`;
+
+// "3 creatures", "2 nonland permanents", "4 artifacts and enchantments".
+const bulkNoun = (
+  count: number,
+  from: ZoneId | null,
+  filter: CardTypeFilter | undefined
+) => {
+  const non = (filter?.excludeTypes ?? [])
+    .map((type) => `non${type.toLowerCase()} `)
+    .join('');
+  const types = (filter?.types ?? []).map((type) => type.toLowerCase());
+  if (types.length === 0) {
+    const base = from === 'battlefield' ? 'permanent' : 'card';
+    return plural(count, `${non}${base}`);
+  }
+  const listed =
+    count === 1 ? types.join(' or ') : joinParts(types.map(pluralType));
+  return `${count} ${non}${listed}`;
+};
+
+interface BulkMoved {
+  names: string[];
+  // Cards that were hidden before and after, so only counted.
+  hidden: number;
+  source: ZoneId | null;
+}
+
+// A borrowed permanent that left is told by main, which knows its owner.
+const departed = (view: PublicView, card: CardView, after: PublicView) =>
+  card.owner !== view.playerId && !findCard(after, card.instanceId);
+
+const movedCards = (
+  before: PublicView,
+  after: PublicView,
+  ids: InstanceId[]
+): BulkMoved => {
+  const names: string[] = [];
+  const sources = new Set<ZoneId>();
+  let hidden = 0;
+  ids.forEach((id) => {
+    const was = findCard(before, id);
+    const now = findCard(after, id);
+    if (was && now && was.zone === now.zone) return;
+    if (was && departed(before, was, after)) return;
+    if (!was && !now) {
+      hidden += 1;
+      return;
+    }
+    names.push(bestName(before, after, id));
+    if (was) sources.add(was.zone);
+    else hiddenDrops(before, after).forEach((zone) => sources.add(zone));
+  });
+  if (hidden > 0) {
+    hiddenDrops(before, after).forEach((zone) => sources.add(zone));
+  }
+  return {
+    names,
+    hidden,
+    source: sources.size === 1 ? [...sources][0] : null,
+  };
+};
+
+const movedFrom = (
+  before: PublicView,
+  after: PublicView,
+  from: ZoneId,
+  to: ZoneId
+): BulkMoved => {
+  if (from === 'hand' || from === 'library') {
+    const count = (view: PublicView) =>
+      from === 'hand' ? view.handCount : view.libraryCount;
+    const names =
+      to === 'hand' || to === 'library'
+        ? []
+        : arrived(before, after, to).map(nameOf);
+    const total = count(before) - count(after);
+    return { names, hidden: Math.max(0, total - names.length), source: from };
+  }
+  const still = new Set(after.zones[from].map((card) => card.instanceId));
+  const names = before.zones[from]
+    .filter((card) => !still.has(card.instanceId))
+    .filter((card) => !departed(before, card, after))
+    .map((card) => bestName(before, after, card.instanceId));
+  return { names, hidden: 0, source: from };
+};
+
+const describeBulkMove = (
+  before: PublicView,
+  after: PublicView,
+  action: Extract<GameAction, { type: 'moveCards' | 'moveAll' }>
+) => {
+  const moved =
+    action.type === 'moveAll'
+      ? movedFrom(before, after, action.from, action.to)
+      : movedCards(before, after, action.instanceIds);
+  const count = moved.names.length + moved.hidden;
+  if (count === 0) return null;
+  // A filter on cards nobody saw would tell their types, so hidden moves
+  // are only ever cards.
+  const filter =
+    action.type === 'moveAll' && moved.hidden === 0 ? action.filter : undefined;
+  const what = bulkNoun(count, moved.source, filter);
+  const source = moved.source ? ` from ${from[moved.source]}` : '';
+  const index = action.type === 'moveCards' ? action.index : undefined;
+  const tapped = action.type === 'moveCards' && action.tapped ? ' tapped' : '';
+  const destination =
+    action.to === 'library'
+      ? libraryPlace(index, after.libraryCount - count)
+      : `${into[action.to]}${tapped}`;
+  const names = someNames(moved.names, moved.hidden);
+  return `put ${what}${source} ${destination}${names ? `: ${names}` : ''}`;
+};
+
+const describeSetTapped = (
+  before: PublicView,
+  after: PublicView,
+  action: Extract<GameAction, { type: 'setTapped' }>
+) => {
+  const changed = action.instanceIds.flatMap((id) => {
+    const was = findCard(before, id);
+    const now = findCard(after, id);
+    return was && now && was.tapped !== now.tapped ? [now] : [];
+  });
+  if (changed.length === 0) return null;
+  const verb = action.tapped ? 'tapped' : 'untapped';
+  const names = changed.map(nameOf);
+  return changed.length === 1
+    ? `${verb} ${names[0]}`
+    : `${verb} ${changed.length} permanents: ${someNames(names, 0)}`;
+};
+
+const describeMill = (
+  before: PublicView,
+  after: PublicView,
+  action: Extract<GameAction, { type: 'mill' }>
+) => {
+  const to = action.to ?? 'graveyard';
+  const names = arrived(before, after, to).map(nameOf);
+  if (names.length === 0) return null;
+  if (to === 'graveyard') {
+    return `milled ${cards(names.length)}: ${listNames(names)}`;
+  }
+  const top =
+    names.length === 1 ? 'the top card' : `the top ${names.length} cards`;
+  return `exiled ${top} of their library: ${listNames(names)}`;
 };
 
 const lifeChange = (who: string, was: number, now: number) => {
@@ -190,12 +362,6 @@ const describeArrange = (
   if (!action.shuffleAfter) return line;
   return parts.length > 0 ? `${line}, then shuffled` : `${line} and shuffled`;
 };
-
-// "a, b and c"
-const joinParts = (parts: string[]) =>
-  parts.length < 2
-    ? parts.join('')
-    : `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}`;
 
 const describeSearch = (
   before: PublicView,
@@ -290,6 +456,11 @@ export const describeAction = (
       return describeMove(before, after, action);
     case 'setPosition':
       return null;
+    case 'moveCards':
+    case 'moveAll':
+      return describeBulkMove(before, after, action);
+    case 'setTapped':
+      return describeSetTapped(before, after, action);
     case 'shuffleIntoLibrary': {
       const was = findCard(before, action.instanceId);
       return was
@@ -354,12 +525,8 @@ export const describeAction = (
       return action.to
         ? `attached ${name(action.instanceId)} to ${name(action.to)}`
         : `unattached ${name(action.instanceId)}`;
-    case 'mill': {
-      const milled = arrived(before, after, 'graveyard').map(nameOf);
-      return milled.length > 0
-        ? `milled ${cards(milled.length)}: ${listNames(milled)}`
-        : null;
-    }
+    case 'mill':
+      return describeMill(before, after, action);
     case 'arrangeTop':
       return describeArrange(before, after, action);
     case 'searchLibrary':

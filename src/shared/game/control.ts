@@ -1,4 +1,5 @@
 import { currentFace } from './cardRefs';
+import { ordinal } from './describe';
 import {
   cascadePosition,
   detachFrom,
@@ -277,6 +278,7 @@ export interface Departure {
 }
 
 const destination = (
+  before: GameState,
   action: GameAction,
   instanceId: InstanceId
 ): Pick<Departure['change'], 'to' | 'index' | 'shuffle'> => {
@@ -285,6 +287,15 @@ const destination = (
       to: action.to,
       ...(action.index !== undefined && { index: action.index }),
     };
+  }
+  if (action.type === 'moveAll') return { to: action.to };
+  if (action.type === 'moveCards') {
+    if (action.index === undefined) return { to: action.to };
+    // Each card goes in after the ones before it, as in this game.
+    const moving = action.instanceIds.filter(
+      (id) => before.cards[id]?.zone !== action.to
+    );
+    return { to: action.to, index: action.index + moving.indexOf(instanceId) };
   }
   if (action.type === 'shuffleIntoLibrary') {
     return { to: 'library', shuffle: true };
@@ -306,7 +317,7 @@ export const departures = (
       change: {
         op: 'return',
         instanceId: card.instanceId,
-        ...destination(action, card.instanceId),
+        ...destination(before, action, card.instanceId),
         state: permanentState(card),
       },
     }));
@@ -331,8 +342,15 @@ export const describeDeparture = (
     return `shuffled ${name} into ${ownerName}'s library`;
   }
   if (change.to === 'library') {
-    const where = change.index === 0 ? 'on top of' : 'on the bottom of';
-    return `put ${name} ${where} ${ownerName}'s library`;
+    if (change.index === 0)
+      return `put ${name} on top of ${ownerName}'s library`;
+    if (change.index === undefined) {
+      return `put ${name} on the bottom of ${ownerName}'s library`;
+    }
+    return (
+      `put ${name} into ${ownerName}'s library ` +
+      `${ordinal(change.index + 1)} from the top`
+    );
   }
   return `put ${name} ${ownerZone[change.to](ownerName)}`;
 };

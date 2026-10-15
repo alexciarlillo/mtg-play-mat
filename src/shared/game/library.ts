@@ -213,7 +213,7 @@ export const reduceLibrary = (
         state,
         rules,
         player.zones.library.slice(0, Math.max(0, action.count)),
-        'graveyard'
+        action.to ?? 'graveyard'
       );
     case 'arrangeTop':
       return arrangeTop(state, rules, player, action);

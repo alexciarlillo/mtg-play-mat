@@ -160,6 +160,25 @@ const steps: Record<PlayerAction['type'], (s: GameState) => PlayerAction> = {
     draw: true,
   }),
   setPhase: () => ({ type: 'setPhase', playerId: P1, phase: 'combat' }),
+  setTapped: (s) => ({
+    type: 'setTapped',
+    playerId: P1,
+    instanceIds: field(s).slice(0, 2),
+    tapped: true,
+  }),
+  moveCards: (s) => ({
+    type: 'moveCards',
+    playerId: P1,
+    instanceIds: hand(s).slice(0, 2),
+    to: 'graveyard',
+  }),
+  moveAll: () => ({
+    type: 'moveAll',
+    playerId: P1,
+    from: 'battlefield',
+    to: 'exile',
+    filter: { types: ['Creature'] },
+  }),
 };
 
 // An order in which every step does something.
@@ -197,6 +216,9 @@ const order: PlayerAction['type'][] = [
   'hideReveal',
   'nextTurn',
   'setPhase',
+  'setTapped',
+  'moveCards',
+  'moveAll',
 ];
 
 describe('undo and redo', () => {

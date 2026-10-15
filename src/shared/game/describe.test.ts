@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import { describeAction, describeStep } from './describe';
 import { reduce } from './reducer';
-import { applyAll, cardRef, startGame, zone } from './testFixtures';
+import { lentCard } from './control';
+import { applyAll, cardRef, player, startGame, zone } from './testFixtures';
 import type { CardRef, GameAction, GameState, ZoneId } from './types';
 import { publicView } from './views';
 
@@ -516,6 +517,267 @@ describe('describeAction wording', () => {
   });
 });
 
+describe('describing batch actions', () => {
+  // The first count hand cards onto the battlefield.
+  const onBattlefield = (count: number) => {
+    const state = opening();
+    return applyAll(
+      state,
+      ids(state, 'hand')
+        .slice(0, count)
+        .map((instanceId) => ({
+          type: 'moveCard',
+          instanceId,
+          to: 'battlefield',
+        }))
+    );
+  };
+  const named = (state: GameState, list: string[]) =>
+    list.map((id) => nameOf(state, id));
+
+  it('names every creature destroyed, in one line', () => {
+    const state = onBattlefield(3);
+    const [a, b, c] = named(state, ids(state, 'battlefield'));
+    const { text } = step(state, {
+      type: 'moveAll',
+      playerId: P1,
+      from: 'battlefield',
+      to: 'graveyard',
+      filter: { types: ['Creature'] },
+    });
+    expect(text).toBe(
+      `put 3 creatures from the battlefield into their graveyard: ` +
+        `${a}, ${b} and ${c}`
+    );
+  });
+
+  it('names the first few of a long list and counts the rest', () => {
+    const state = onBattlefield(7);
+    const [a, b, c, d] = named(state, ids(state, 'battlefield'));
+    const { text } = step(state, {
+      type: 'moveAll',
+      playerId: P1,
+      from: 'battlefield',
+      to: 'exile',
+      filter: { excludeTypes: ['Land'] },
+    });
+    expect(text).toBe(
+      `put 7 nonland permanents from the battlefield into exile: ` +
+        `${a}, ${b}, ${c}, ${d} and 3 more`
+    );
+  });
+
+  it('names permanents bounced to the hand, which were public', () => {
+    const state = onBattlefield(2);
+    const [a, b] = named(state, ids(state, 'battlefield'));
+    const { text } = step(state, {
+      type: 'moveAll',
+      playerId: P1,
+      from: 'battlefield',
+      to: 'hand',
+    });
+    expect(text).toBe(
+      `put 2 permanents from the battlefield into their hand: ${a} and ${b}`
+    );
+  });
+
+  it('names a library put into the graveyard, but not into the hand', () => {
+    const state = opening();
+    const library = ids(state, 'library');
+    const [a, b, c, d] = named(state, library);
+    const gone = step(state, {
+      type: 'moveAll',
+      playerId: P1,
+      from: 'library',
+      to: 'graveyard',
+    });
+    expect(gone.text).toBe(
+      `put ${library.length} cards from their library into their ` +
+        `graveyard: ${a}, ${b}, ${c}, ${d} and ${library.length - 4} more`
+    );
+    const drawn = step(state, {
+      type: 'moveAll',
+      playerId: P1,
+      from: 'library',
+      to: 'hand',
+    });
+    expect(drawn.text).toBe(
+      `put ${library.length} cards from their library into their hand`
+    );
+  });
+
+  it('counts hidden cards moved by id', () => {
+    const state = opening();
+    const { text } = step(state, {
+      type: 'moveCards',
+      playerId: P1,
+      instanceIds: ids(state, 'hand').slice(0, 2),
+      to: 'library',
+      index: 0,
+    });
+    expect(text).toBe('put 2 cards from their hand on top of their library');
+  });
+
+  it('names cards moved by id once they are public', () => {
+    const state = opening();
+    const [a, b] = ids(state, 'hand');
+    const { text } = step(state, {
+      type: 'moveCards',
+      playerId: P1,
+      instanceIds: [a, b],
+      to: 'battlefield',
+      tapped: true,
+    });
+    expect(text).toBe(
+      `put 2 cards from their hand onto the battlefield tapped: ` +
+        `${nameOf(state, a)} and ${nameOf(state, b)}`
+    );
+  });
+
+  it('calls a face-down permanent a face-down card', () => {
+    const state = onBattlefield(1);
+    const [id] = ids(state, 'battlefield');
+    const down = reduce(state, {
+      type: 'setFaceDown',
+      instanceId: id,
+      faceDown: true,
+    });
+    const { text } = step(down, {
+      type: 'moveAll',
+      playerId: P1,
+      from: 'battlefield',
+      to: 'exile',
+      filter: { types: ['Creature'] },
+    });
+    expect(text).toBe(
+      `put 1 creature from the battlefield into exile: ${nameOf(state, id)}`
+    );
+    const hidden = step(down, {
+      type: 'moveAll',
+      playerId: P1,
+      from: 'battlefield',
+      to: 'hand',
+    });
+    expect(hidden.text).toBe(
+      'put 1 permanent from the battlefield into their hand: a face-down card'
+    );
+  });
+
+  it('never tells the types of cards hidden before and after', () => {
+    const state = opening();
+    const filters = [
+      { types: ['Creature'] },
+      { excludeTypes: ['Land'] },
+      { types: ['Land'] },
+    ];
+    const moves: [ZoneId, ZoneId][] = [
+      ['hand', 'library'],
+      ['library', 'hand'],
+    ];
+    moves.forEach(([from, to]) => {
+      filters.forEach((filter) => {
+        const action: GameAction = {
+          type: 'moveAll',
+          playerId: P1,
+          from,
+          to,
+          filter,
+        };
+        const next = reduce(state, action);
+        if (next === state) return;
+        const text = describeStep(state, action, next, P1) ?? '';
+        expect(text).toMatch(/^put \d+ cards? from their/);
+        expect(text).not.toMatch(/creature|land|permanent/i);
+      });
+    });
+  });
+
+  it('names no source when cards left both hidden zones', () => {
+    const state = opening();
+    const [h] = ids(state, 'hand');
+    const [l] = ids(state, 'library');
+    const { text } = step(state, {
+      type: 'moveCards',
+      playerId: P1,
+      instanceIds: [h, l],
+      to: 'exile',
+    });
+    expect(text).toBe(
+      `put 2 cards into exile: ${nameOf(state, h)} and ${nameOf(state, l)}`
+    );
+  });
+
+  it('exiles the top cards by name', () => {
+    const state = opening();
+    const top = named(state, ids(state, 'library').slice(0, 3));
+    const { text } = step(state, {
+      type: 'mill',
+      playerId: P1,
+      count: 3,
+      to: 'exile',
+    });
+    expect(text).toBe(
+      `exiled the top 3 cards of their library: ${top.join(', ')}`
+    );
+    const one = step(state, {
+      type: 'mill',
+      playerId: P1,
+      count: 1,
+      to: 'exile',
+    });
+    expect(one.text).toBe(`exiled the top card of their library: ${top[0]}`);
+  });
+
+  it('taps several permanents in one line', () => {
+    const state = onBattlefield(3);
+    const [a, b, c] = ids(state, 'battlefield');
+    const tapped = reduce(state, { type: 'tap', instanceId: a });
+    const { text, next } = step(
+      tapped,
+      { type: 'setTapped', playerId: P1, instanceIds: [a, b, c], tapped: true },
+      false
+    );
+    expect(text).toBe(
+      `tapped 2 permanents: ${nameOf(state, b)} and ${nameOf(state, c)}`
+    );
+    const one = step(
+      next,
+      { type: 'setTapped', playerId: P1, instanceIds: [c], tapped: false },
+      false
+    );
+    expect(one.text).toBe(`untapped ${nameOf(state, c)}`);
+  });
+
+  it('leaves a borrowed permanent to the line about its return', () => {
+    const lender = onBattlefield(1);
+    const [lentId] = ids(lender, 'battlefield');
+    let state = reduce(startGame([{ ...player('bob', 3) }]), {
+      type: 'gainControl',
+      playerId: 'bob',
+      owner: P1,
+      card: lentCard(lender.cards[lentId]),
+    });
+    state = reduce(state, { type: 'draw', playerId: 'bob', count: 1 });
+    const [own] = zone(state, 'bob', 'hand');
+    state = reduce(state, {
+      type: 'moveCard',
+      instanceId: own,
+      to: 'battlefield',
+    });
+    const action: GameAction = {
+      type: 'moveAll',
+      playerId: 'bob',
+      from: 'battlefield',
+      to: 'graveyard',
+    };
+    const next = reduce(state, action);
+    expect(describeStep(state, action, next, 'bob')).toBe(
+      `put 1 permanent from the battlefield into their graveyard: ` +
+        `${state.cards[own].ref.name}`
+    );
+  });
+});
+
 describe('describeAction privacy under random play', () => {
   const zones: ZoneId[] = [
     'library',
@@ -547,6 +809,28 @@ describe('describeAction privacy under random play', () => {
       const choices: GameAction[] = [
         { type: 'draw', playerId: P1, count: 1 + pick(2) },
         { type: 'mill', playerId: P1, count: 1 + pick(2) },
+        { type: 'mill', playerId: P1, count: 1 + pick(2), to: 'exile' },
+        {
+          type: 'moveCards',
+          playerId: P1,
+          instanceIds: [...new Set([card, all[pick(all.length)]])],
+          to: zones[pick(zones.length)],
+          index: pick(2) === 0 ? 0 : undefined,
+          tapped: pick(2) === 0,
+        },
+        {
+          type: 'moveAll',
+          playerId: P1,
+          from: zones[pick(zones.length)],
+          to: zones[pick(zones.length)],
+          filter: pick(2) === 0 ? { excludeTypes: ['Land'] } : undefined,
+        },
+        {
+          type: 'setTapped',
+          playerId: P1,
+          instanceIds: ids(state, 'battlefield').slice(0, 1 + pick(3)),
+          tapped: pick(2) === 0,
+        },
         {
           type: 'moveCard',
           instanceId: card,

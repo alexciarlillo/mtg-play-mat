@@ -11,6 +11,8 @@ interface ModalProps {
   onClose(): void;
   children: ReactNode;
   wide?: boolean;
+  // Between the default prompt width and wide, for a small table.
+  medium?: boolean;
   // The body fills the dialog's height and scrolls its own content, so
   // toolbars above and below a long list stay in view.
   column?: boolean;
@@ -21,6 +23,7 @@ export const Modal = ({
   onClose,
   children,
   wide,
+  medium,
   column,
 }: ModalProps) => {
   // Listen before the first paint, so an Escape pressed the moment the
@@ -45,7 +48,9 @@ export const Modal = ({
         aria-label={title}
         className={classNames(
           'max-h-[calc(100vh-2rem)] rounded-lg bg-stone-100 text-slate-900 shadow-2xl',
-          wide ? 'w-[min(1100px,calc(100vw-2rem))]' : 'w-80',
+          wide && 'w-[min(1100px,calc(100vw-2rem))]',
+          medium && 'w-[min(32rem,calc(100vw-2rem))]',
+          !wide && !medium && 'w-80',
           column ? 'flex flex-col overflow-hidden p-3' : 'overflow-auto p-4'
         )}
       >

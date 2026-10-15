@@ -15,6 +15,7 @@ import {
   emptyGame,
   type GameAction,
   type GameState,
+  isBatchAction,
   lentCard,
   lentTo,
   libraryView,
@@ -355,8 +356,14 @@ export default class PlayTest {
     if (next === this.state) return;
     const left = departures(this.state, action, next);
     if (left.length > 0) {
-      this.sendHome(left);
+      // A batch may move the player's own cards too. Its line leaves out
+      // the borrowed ones, which sendHome tells with their owner's name.
+      const text = isBatchAction(action)
+        ? this.describe(this.state, action, next)
+        : null;
       this.applyControl(next);
+      if (text) this.addLogEntry(text);
+      this.sendHome(left);
       return;
     }
     const text = this.describe(this.state, action, next);
