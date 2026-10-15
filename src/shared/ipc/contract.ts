@@ -130,6 +130,9 @@ export const requests = {
   getSavedGame: request<[], SavedGameOffer | null>(),
   restoreSavedGame: request<[]>(),
   dismissSavedGame: request<[]>(),
+  // Every printing in the open main deck and commanders, so the board can
+  // offer the deck's tokens. Board or hand only.
+  getDeckPrintingIds: request<[], string[]>(),
   getCardDataStatus: request<[], CardDataStatus>(),
   // Starts a check-and-download; progress arrives as cardDataStatus.
   updateCardData: request<[], CardDataStatus>(),
@@ -161,6 +164,12 @@ export const requests = {
   getCardFacts: request<[ids: string[]], Record<string, CardFacts>>(),
   // Token printings by name, for creating tokens in a play test.
   searchTokens: request<[query: string], TokenSearchResult[]>(),
+  // The tokens, emblems and designations each printing makes. Printings
+  // that make none, or that the card database doesn't know, are left out.
+  relatedTokens: request<
+    [ids: string[]],
+    Record<string, TokenSearchResult[]>
+  >(),
   // App preferences. Main drops invalid keys and values from a patch, and
   // every window hears about the change as settingsChanged.
   // A shareable trace of the networked paths, plus any exception the

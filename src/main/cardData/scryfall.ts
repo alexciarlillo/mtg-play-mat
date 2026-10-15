@@ -47,11 +47,13 @@ export const fetchBulkDataInfo = async (
 
 interface LocalMeta {
   sourceUpdatedAt: string;
+  needsRefresh?: boolean;
 }
 
 // Download when there's nothing local, or when Scryfall has something
 // newer and ours is past the age limit. A forced (manual) update skips
-// the age limit but still won't re-fetch identical data.
+// the age limit but still won't re-fetch identical data, unless the
+// local file was upgraded in place and is missing data.
 export const shouldDownload = ({
   local,
   remoteUpdatedAt,
@@ -65,7 +67,7 @@ export const shouldDownload = ({
   maxAgeMs?: number;
   force?: boolean;
 }): boolean => {
-  if (!local) return true;
+  if (!local || local.needsRefresh) return true;
   const localTime = Date.parse(local.sourceUpdatedAt);
   const remoteTime = Date.parse(remoteUpdatedAt);
   if (Number.isNaN(localTime)) return true;

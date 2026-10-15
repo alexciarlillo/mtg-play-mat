@@ -12,7 +12,7 @@ import CardDB from '../shared/db/CardDB';
 import { ingestBulkFile, parseCardLine } from './ingest';
 
 const fixture = path.join(__dirname, 'fixtures/default-cards.sample.jsonl.gz');
-const FIXTURE_CARDS = 39;
+const FIXTURE_CARDS = 54;
 
 let dir: string;
 let dbPath: string;
@@ -114,6 +114,45 @@ describe('ingestBulkFile', () => {
     const digital = db.searchCardsByName({ setCode: 'ymid' });
     expect(digital.length).toBeGreaterThan(0);
     expect(db.getCardById({ id: digital[0].id })?.digital).toBe(true);
+    db.close();
+  });
+
+  it('keeps the tokens, emblems and designations each card makes', async () => {
+    await ingestFixture();
+    const db = new CardDB(dbPath);
+    const provisioner = 'a1e048e0-19d2-4076-892d-f8b3104dee37';
+    const elspeth = 'a91d9163-c1f2-4eae-acab-5dabbc71d7d4';
+    // Its only parts are itself and a set checklist.
+    const delver = '11bf83bb-c95b-4b4f-9a56-ce7a1816307a';
+    const found = db.relatedTokens([provisioner, elspeth, delver, 'nope']);
+
+    expect([...found.keys()]).toEqual([provisioner, elspeth]);
+    expect(found.get(provisioner)?.map((p) => [p.name, p.layout])).toEqual([
+      ['Food', 'token'],
+      ['Treasure', 'token'],
+    ]);
+    expect(found.get(elspeth)?.map((p) => [p.name, p.layout])).toEqual([
+      ["Elspeth, Sun's Champion Emblem", 'emblem'],
+      ['Soldier', 'token'],
+    ]);
+    // Designations count; "Card"-typed extras like Energy Reserve and
+    // On an Adventure don't, though their printings are in the fixture.
+    const cathar = '0dbac7ce-a6fa-466e-b6ba-173cf2dec98e';
+    const plume = 'b256ddc8-8b12-434c-a610-1a872e948f2f';
+    const hub = '25ea04d8-5d85-49d3-8d8d-7fe123d0ed6c';
+    const giant = db.getCard({ name: 'Bonecrusher Giant' })!.id;
+    const more = db.relatedTokens([cathar, plume, hub, giant]);
+    expect([...more].map(([id, p]) => [id, p.map((t) => t.name)])).toEqual([
+      [cathar, ['Day // Night']],
+      [plume, ['Undercity // The Initiative']],
+    ]);
+    expect(db.searchTokens('energy reserve')).toHaveLength(1);
+
+    // Emblems and designations are found by the token search too.
+    expect(db.searchTokens('elspeth').map((p) => p.layout)).toEqual(['emblem']);
+    expect(db.searchTokens('the monarch').map((p) => p.name)).toEqual([
+      'The Monarch',
+    ]);
     db.close();
   });
 

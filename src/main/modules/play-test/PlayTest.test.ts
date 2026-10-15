@@ -648,6 +648,13 @@ describe('PlayTest sideboard and companion', () => {
     expect(playTest.gameState.players[0].life).toBe(20);
   });
 
+  it('lists the main deck for its tokens, to its windows only', async () => {
+    const { playTest } = await openDeck();
+    // The sideboard and the companion are left out.
+    expect(playTest.handlers.getDeckPrintingIds()).toEqual(['forest']);
+    expect(playTest.guards.getDeckPrintingIds?.({} as never)).toBe(false);
+  });
+
   it('sends the sideboard to the hand window only, and a count to the board', async () => {
     const { playTest, hand, board } = await openDeck();
     const view = (await playTest.handlers.getHandView()) as PrivateView;

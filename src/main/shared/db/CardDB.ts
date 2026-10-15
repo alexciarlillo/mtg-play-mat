@@ -141,7 +141,9 @@ export const toSummary = ({
 const NON_CARD_LAYOUTS = `('art_series', 'token', 'double_faced_token',
   'emblem')`;
 
-const TOKEN_LAYOUTS = `('token', 'double_faced_token')`;
+// Layouts that can be put into play from the token dialog.
+const TOKEN_LAYOUTS = `('token', 'double_faced_token', 'emblem')`;
+const TOKEN_LAYOUT_SET = new Set(['token', 'double_faced_token', 'emblem']);
 
 interface FindPrintingOptions {
   name: string;
@@ -222,6 +224,7 @@ export default class CardDB {
       sourceUpdatedAt,
       ingestedAt,
       printings: Number(meta.get(metaKeys.printings) ?? 0),
+      ...(meta.has(metaKeys.needsRefresh) && { needsRefresh: true as const }),
     };
   };
 
@@ -396,6 +399,47 @@ export default class CardDB {
         )
         .all(key, limit) as unknown as PrintingRow[]
     ).map(toPrinting);
+  };
+
+  // The tokens, emblems and designations each printing makes, by name.
+  // A part whose own printing is missing falls back to the newest paper
+  // printing with its name and type line (a 1/1 and a 2/2 Soldier differ).
+  relatedTokens = (ids: string[]): Map<string, Printing[]> => {
+    const found = new Map<string, Printing[]>();
+    if (!this.db || ids.length === 0) return found;
+    const parts = this.db.prepare(
+      `SELECT r.name AS part_name, r.type_line AS part_type, p.*
+       FROM related_parts AS r
+       LEFT JOIN printings AS p ON p.id = r.part_id
+       WHERE r.printing_id = ?
+       ORDER BY r.name COLLATE NOCASE`
+    );
+    const byName = this.db.prepare(
+      `SELECT * FROM printings
+       WHERE name_key = ?1 AND layout IN ${TOKEN_LAYOUTS}
+         AND (?2 IS NULL OR type_line = ?2)
+       ORDER BY digital, released_at DESC LIMIT 1`
+    );
+    ids.forEach((id) => {
+      const rows = parts.all(id) as unknown as (PrintingRow & {
+        part_name: string;
+        part_type: string | null;
+      })[];
+      const tokens = rows
+        .map((row) =>
+          row.id
+            ? row
+            : (byName.get(nameKey(row.part_name), row.part_type) as
+                PrintingRow | undefined)
+        )
+        .filter(
+          (row): row is PrintingRow =>
+            row !== undefined && TOKEN_LAYOUT_SET.has(row.layout)
+        )
+        .map(toPrinting);
+      if (tokens.length > 0) found.set(id, tokens);
+    });
+    return found;
   };
 
   getCurrentSetList = (): CurrentSetListReturn[] => {

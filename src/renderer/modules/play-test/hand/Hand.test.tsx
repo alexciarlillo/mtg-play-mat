@@ -139,6 +139,7 @@ beforeEach(() => {
       dispatch,
       getLibrary,
       getCardFacts,
+      relatedTokens: () => Promise.resolve({}),
       setLibraryActivity,
       getSettings: () => Promise.resolve(defaultSettings),
       updateSettings: (patch: object) =>

@@ -1,4 +1,5 @@
 import type { CardView, Position, ZoneId } from '@shared/game';
+import type { TokenSearchResult } from '@shared/types/cards';
 import classNames from 'classnames';
 import { useRef, useState } from 'react';
 import Draggable, {
@@ -78,6 +79,8 @@ interface Props extends BattlefieldMenuOptions {
   offsetX?: number;
   // The owner's badge, for a borrowed permanent.
   owner?: string | null;
+  // The tokens this card makes, for its menu.
+  tokens?: TokenSearchResult[];
 }
 
 const BattlefieldCard = ({
@@ -91,6 +94,7 @@ const BattlefieldCard = ({
   ownerName,
   revealTargets,
   owner = null,
+  tokens,
 }: Props) => {
   const nodeRef = useRef<HTMLDivElement>(null);
   const selection = useSelection();
@@ -240,6 +244,7 @@ const BattlefieldCard = ({
     giveTo,
     ownerName,
     revealTargets,
+    tokens,
   });
   const menu =
     together && selection

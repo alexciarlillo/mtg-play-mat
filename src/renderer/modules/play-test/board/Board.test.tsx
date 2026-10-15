@@ -113,6 +113,7 @@ const renderBoard = (
   Object.assign(window, {
     api: {
       ...api,
+      relatedTokens: () => Promise.resolve({}),
       getSettings: () => Promise.resolve(initial),
       onSettingsChanged: (listener: (next: Settings) => void) => {
         pushSettings = listener;
@@ -376,6 +377,20 @@ describe('Board tools', () => {
       untap: true,
       draw: true,
     });
+  });
+
+  it("keeps the deck's tokens behind a button on a board without the hand", async () => {
+    renderBoard(defaultSettings);
+    Object.assign(window.api, {
+      getDeckPrintingIds: vi.fn(async () => []),
+      searchTokens: vi.fn(async () => []),
+    });
+    await act(async () => {});
+    act(() => pushMenuCommand('token'));
+    expect(
+      screen.getByRole('button', { name: 'Show this deck’s tokens' })
+    ).toBeInTheDocument();
+    expect(window.api.getDeckPrintingIds).not.toHaveBeenCalled();
   });
 
   it('adds a placeholder opponent from the menu', async () => {

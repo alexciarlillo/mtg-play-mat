@@ -27,6 +27,12 @@ utility process, with progress shown in the top bar. The new database is built i
 scratch file and swapped in once it's complete, so a failed or offline update keeps
 the old data.
 
+The database also keeps each card's related tokens, emblems and designations (from
+Scryfall's `all_parts`). A database from an older version of the app is upgraded in
+place and keeps working without them; the top bar says "update to add deck tokens",
+and the next check (at launch, or **Update card data**) downloads the same data again
+to fill them in. Offline, it simply tries again next time.
+
 Everything lives in `<userData>`:
 
 - `db/cards.sqlite`: printings, sets, and metadata. It's fully rebuildable; delete
@@ -200,8 +206,20 @@ Card manipulation (right-click a permanent unless noted):
   a creature's stats. Poison, energy, and experience sit under the life total.
 - **Tokens:** right-click the battlefield (or use **Token…**) to search token printings
   in the card database, pick one and a quantity, or make a custom token (name, type,
-  P/T; drawn as a plain frame). "Create copy" makes a token copy of a permanent. Tokens
-  cease to exist when they leave the battlefield.
+  P/T; drawn as a plain frame). Before you search, the dialog lists **This deck's
+  tokens**: everything the main deck and commanders make, once each. The list would hint
+  at cards still in your library, so on a board without the hand (the one you'd share
+  on screen) it waits behind **Show this deck's tokens**; sideboard and companion
+  tokens are always left to a search. A card's
+  own menu, in hand or on the battlefield, has "Create Treasure" and the like for its
+  tokens. "Create copy" makes a token copy of a permanent. Tokens cease to exist when
+  they leave the battlefield. Deck tokens need card data; the sample deck has none.
+- **Designations:** the battlefield menu's Designations section (also buttons in the
+  token dialog) puts out the Monarch, the Initiative, the Ring, the City's Blessing,
+  or Day/Night as the card Scryfall prints for it. The Initiative comes in showing The
+  Initiative (transform it to see the Undercity), and Day/Night is one double-faced
+  card: transform it when day becomes night. They're ordinary cards on your
+  battlefield, so other players see them; without card data a plain stand-in is used.
 - **Face down:** "Turn face down/up", or "Play face down" from the hand. The board
   shows a card back with a 2/2 badge; only the hand window's "Face down" strip shows
   what it is.

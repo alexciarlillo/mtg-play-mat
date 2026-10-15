@@ -10,6 +10,9 @@ export interface LocalCardData {
   sourceUpdatedAt: string;
   ingestedAt: string;
   printings: number;
+  // The file was upgraded in place and lacks data only a download brings
+  // (each card's related tokens), so the next check downloads again.
+  needsRefresh?: true;
 }
 
 export type CardDataPhase = 'idle' | 'checking' | 'updating' | 'error';

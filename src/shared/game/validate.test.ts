@@ -34,6 +34,41 @@ describe('parsePlayerAction', () => {
       index: 0,
       position: { x: 1.5, y: -2 },
     });
+    const ref = {
+      id: '',
+      custom: true,
+      name: 'Day',
+      typeLine: 'Card',
+      faces: [],
+    };
+    expect(
+      parsePlayerAction({
+        type: 'createTokens',
+        playerId: 'p1',
+        ref,
+        count: 1,
+        faceIndex: 1,
+      })
+    ).toEqual({
+      type: 'createTokens',
+      playerId: 'p1',
+      ref,
+      count: 1,
+      faceIndex: 1,
+    });
+    // Older saves and builds leave the face out.
+    expect(
+      parsePlayerAction({ type: 'createTokens', playerId: 'p1', ref, count: 1 })
+    ).toEqual({ type: 'createTokens', playerId: 'p1', ref, count: 1 });
+    expect(() =>
+      parsePlayerAction({
+        type: 'createTokens',
+        playerId: 'p1',
+        ref,
+        count: 1,
+        faceIndex: -1,
+      })
+    ).toThrow(/faceIndex/);
     expect(
       parsePlayerAction({
         type: 'setPosition',

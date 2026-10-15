@@ -23,7 +23,8 @@ const describe = (status: CardDataStatus): string => {
     return `Downloading card data: ${(progress.bytes / MB).toFixed(0)}${total}, ${progress.rows.toLocaleString()} cards`;
   }
   if (!local) return 'No card data yet';
-  return `Card data from ${formatDate(local.sourceUpdatedAt)} (${local.printings.toLocaleString()} cards)`;
+  const current = `Card data from ${formatDate(local.sourceUpdatedAt)} (${local.printings.toLocaleString()} cards)`;
+  return local.needsRefresh ? `${current}; update to add deck tokens` : current;
 };
 
 // Shows when card data was last updated, progress while an update runs,

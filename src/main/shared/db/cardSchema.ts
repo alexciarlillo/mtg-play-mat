@@ -73,6 +73,28 @@ export const cardMigrations: Migration[] = [
       CREATE INDEX printings_front_key ON printings (front_key);
     `);
   },
+  // Tokens, emblems and designations a card makes, from Scryfall's
+  // all_parts. A file upgraded in place has none until it's downloaded
+  // again, so it's flagged for a refresh rather than silently left empty.
+  (db) => {
+    db.exec(`
+      CREATE TABLE related_parts (
+        printing_id TEXT NOT NULL,
+        part_id TEXT NOT NULL,
+        component TEXT NOT NULL,
+        name TEXT NOT NULL,
+        type_line TEXT,
+        PRIMARY KEY (printing_id, part_id)
+      ) WITHOUT ROWID;
+    `);
+    const filled = db.prepare('SELECT 1 FROM printings LIMIT 1').get();
+    if (filled) {
+      db.prepare('INSERT OR REPLACE INTO meta VALUES (?, ?)').run(
+        metaKeys.needsRefresh,
+        '1'
+      );
+    }
+  },
 ];
 
 export const CARD_SCHEMA_VERSION = cardMigrations.length;
@@ -81,4 +103,6 @@ export const metaKeys = {
   sourceUpdatedAt: 'source_updated_at',
   ingestedAt: 'ingested_at',
   printings: 'printings',
+  // Set when the file predates data that only a download brings.
+  needsRefresh: 'needs_refresh',
 } as const;

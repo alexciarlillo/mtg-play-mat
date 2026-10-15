@@ -11,7 +11,7 @@ export const fixture = readFileSync(
     '../src/main/cardData/fixtures/default-cards.sample.jsonl.gz'
   )
 );
-export const FIXTURE_CARDS = 39;
+export const FIXTURE_CARDS = 54;
 
 export interface FakeScryfall {
   bulkDataUrl: string;

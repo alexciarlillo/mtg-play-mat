@@ -1,4 +1,5 @@
 import { frontKey, nameKey } from '@shared/cardNames';
+import { isDesignationName } from '@shared/designations';
 import type { PrintingFace } from '@shared/types/cards';
 
 // The subset of a Scryfall card object that we store.
@@ -34,7 +35,60 @@ export interface ScryfallCard extends ScryfallFace {
   digital?: boolean;
   promo?: boolean;
   card_faces?: ScryfallFace[];
+  all_parts?: ScryfallRelatedCard[];
 }
+
+interface ScryfallRelatedCard {
+  id: string;
+  component: string;
+  name: string;
+  type_line?: string;
+}
+
+// Column values for one related_parts row, in insert order.
+export interface RelatedPartRecord {
+  printing_id: string;
+  part_id: string;
+  component: string;
+  name: string;
+  type_line: string | null;
+}
+
+export const relatedPartColumns: (keyof RelatedPartRecord)[] = [
+  'printing_id',
+  'part_id',
+  'component',
+  'name',
+  'type_line',
+];
+
+// Emblems and designations are listed as combo pieces, like the card
+// itself and much that a card doesn't make (Energy Reserve, checklists),
+// so only emblems and known designations are kept.
+const isMadePart = (card: ScryfallCard, part: ScryfallRelatedCard) => {
+  if (part.id === card.id) return false;
+  if (part.component === 'token') return true;
+  if (part.component !== 'combo_piece') return false;
+  return (
+    (part.type_line ?? '').startsWith('Emblem') || isDesignationName(part.name)
+  );
+};
+
+// The tokens, emblems and designations a card makes, once each.
+export const toRelatedParts = (card: ScryfallCard): RelatedPartRecord[] => {
+  const parts = new Map<string, RelatedPartRecord>();
+  (card.all_parts ?? []).forEach((part) => {
+    if (typeof part.id !== 'string' || !isMadePart(card, part)) return;
+    parts.set(part.id, {
+      printing_id: card.id,
+      part_id: part.id,
+      component: part.component,
+      name: part.name,
+      type_line: part.type_line ?? null,
+    });
+  });
+  return [...parts.values()];
+};
 
 // Column values for one printings row, in insert order.
 export interface PrintingRecord {

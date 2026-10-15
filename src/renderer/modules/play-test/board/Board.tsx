@@ -6,6 +6,7 @@ import {
 } from '@shared/game';
 import { MAX_DIE_SIDES } from '@shared/net/protocol';
 import type { OpponentState } from '@shared/net/remoteViews';
+import type { TokenSearchResult } from '@shared/types/cards';
 import type { BoardMenuCommand } from '@shared/types/playTest';
 import classNames from 'classnames';
 import {
@@ -32,6 +33,7 @@ import { useRevealTargets, useSeenList } from '../common/targetedReveal';
 import { useUndoState } from '../common/useUndoState';
 import { dispatch, redo, undo, useView, type ViewStore } from '../viewStore';
 import AttachDialog from './AttachDialog';
+import { useRelatedTokens } from '../common/relatedTokens';
 import BattlefieldCard from './BattlefieldCard';
 import BulkMoveDialog from './BulkMoveDialog';
 import CommanderPrompt from './CommanderPrompt';
@@ -69,6 +71,7 @@ import ShowingBadge from './ShowingBadge';
 import ScaledField from './ScaledField';
 import { SelectionContext, SelectionStore } from './selection';
 import TableLog from './TableLog';
+import { designationMenu } from './designations';
 import TokenDialog from './TokenDialog';
 import TurnPanel from './TurnPanel';
 import { useMarquee } from './useMarquee';
@@ -152,8 +155,16 @@ const openLibraryDialog = (dialog: LibraryDialog) => {
   });
 };
 
+const NONE: TokenSearchResult[] = [];
+
 const Board = ({ store, opponent, hand }: Props) => {
   const view = useView(store);
+  // One request for the whole field; each card's menu reads the cache.
+  const tokensOf = useRelatedTokens(
+    view?.zones.battlefield.flatMap((card) =>
+      card.ref ? [card.ref.id] : []
+    ) ?? []
+  );
   const remote = useView(opponent ?? noOpponent);
   const menu = useContextMenu();
   const [dialog, setDialog] = useState<Dialog | null>(null);
@@ -297,6 +308,7 @@ const Board = ({ store, opponent, hand }: Props) => {
         { title: 'Redo', action: canRedo ? redo : null },
         { title: 'Restart game…', action: () => setDialog('restart') },
         { title: 'Keyboard shortcuts', action: () => setDialog('help') },
+        ...designationMenu(playerId),
       ],
       x: e.pageX,
       y: e.pageY,
@@ -440,6 +452,7 @@ const Board = ({ store, opponent, hand }: Props) => {
                             revealTargets={revealTargets}
                             ownerName={ownerNameOf(card)}
                             owner={ownerLabel(card, view.playerId, owners)}
+                            tokens={card.ref ? tokensOf(card.ref.id) : NONE}
                           />
                         ))}
                     </SelectionContext>
@@ -698,7 +711,11 @@ const Board = ({ store, opponent, hand }: Props) => {
         )}
         {savedGame && <SavedGamePrompt offer={savedGame} />}
         {view && dialog === 'token' && (
-          <TokenDialog playerId={view.playerId} onClose={close} />
+          <TokenDialog
+            playerId={view.playerId}
+            docked={hand !== undefined}
+            onClose={close}
+          />
         )}
         {cardDialog?.kind === 'counter' && (
           <CounterDialog card={cardDialog.card} onClose={closeCardDialog} />

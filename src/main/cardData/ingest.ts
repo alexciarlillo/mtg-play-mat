@@ -11,8 +11,10 @@ import { migrate, transaction } from '../shared/db/migrate';
 import {
   keyruneCode,
   printingColumns,
+  relatedPartColumns,
   type ScryfallCard,
   toPrintingRecord,
+  toRelatedParts,
 } from './scryfallCard';
 
 const BATCH_SIZE = 2000;
@@ -126,6 +128,10 @@ export const ingestBulkFile = async ({
       `INSERT OR REPLACE INTO printings (${printingColumns.join(', ')})
        VALUES (${printingColumns.map(() => '?').join(', ')})`
     );
+    const insertPart = db.prepare(
+      `INSERT OR REPLACE INTO related_parts (${relatedPartColumns.join(', ')})
+       VALUES (${relatedPartColumns.map(() => '?').join(', ')})`
+    );
 
     const progress: CardDataProgress = { bytes: 0, totalBytes, rows: 0 };
     const report = () => onProgress?.({ ...progress });
@@ -136,6 +142,9 @@ export const ingestBulkFile = async ({
         batch.forEach((card) => {
           const record = toPrintingRecord(card);
           insert.run(...printingColumns.map((column) => record[column]));
+          toRelatedParts(card).forEach((part) => {
+            insertPart.run(...relatedPartColumns.map((column) => part[column]));
+          });
         });
       });
       progress.rows += batch.length;

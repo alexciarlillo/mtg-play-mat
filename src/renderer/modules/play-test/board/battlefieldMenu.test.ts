@@ -78,3 +78,68 @@ describe('revealing a face-down permanent', () => {
     expect(plain).not.toContain('Reveal to everyone');
   });
 });
+
+describe('tokens a permanent makes', () => {
+  const ref = {
+    id: 'a1e048e0-19d2-4076-892d-f8b3104dee37',
+    name: 'Tireless Provisioner',
+    typeLine: 'Creature — Elf Scout',
+    faces: [{ name: 'Tireless Provisioner', typeLine: 'Creature — Elf Scout' }],
+  };
+  const token = (name: string) => ({
+    ref: { id: `id-${name}`, name, typeLine: 'Token', faces: [] },
+    setCode: 'tst',
+    setName: 'Test',
+  });
+  const tokens = [token('Treasure'), token('Food'), token('Treasure')];
+
+  it('offers each token once, and creates one for the controller', () => {
+    const menu = battlefieldMenu(
+      card({ ref, faceDown: false, controller: 'p1' }),
+      { tokens }
+    );
+    const items = menu.filter((item) => item.title.startsWith('Create '));
+    expect(items.map((item) => item.title)).toEqual([
+      'Create copy',
+      'Create Treasure',
+      'Create Food',
+    ]);
+    items[1]?.action?.();
+    expect(dispatch).toHaveBeenCalledWith({
+      type: 'createTokens',
+      playerId: 'p1',
+      ref: tokens[0]?.ref,
+      count: 1,
+    });
+  });
+
+  it('creates the Initiative on its Initiative face', () => {
+    const initiative = {
+      ...token('Undercity // The Initiative').ref,
+      faces: [
+        { name: 'Undercity', typeLine: 'Dungeon — Undercity' },
+        { name: 'The Initiative', typeLine: 'Card' },
+      ],
+    };
+    const menu = battlefieldMenu(card({ ref, faceDown: false }), {
+      tokens: [{ ref: initiative, setCode: 'tclb', setName: 'Test' }],
+    });
+    menu
+      .find((item) => item.title === 'Create Undercity // The Initiative')
+      ?.action?.();
+    expect(dispatch).toHaveBeenCalledWith({
+      type: 'createTokens',
+      playerId: 'p1',
+      ref: initiative,
+      count: 1,
+      faceIndex: 1,
+    });
+  });
+
+  it('offers none for a face-down permanent', () => {
+    const titles = battlefieldMenu(card({ ref }), { tokens }).map(
+      (item) => item.title
+    );
+    expect(titles).not.toContain('Create Treasure');
+  });
+});

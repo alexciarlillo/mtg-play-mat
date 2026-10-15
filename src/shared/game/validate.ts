@@ -363,6 +363,9 @@ export const parsePlayerAction = (input: unknown): PlayerAction => {
         playerId: string(input, 'playerId'),
         ref: parseCardRef(input.ref, fail),
         count: integer(input, 'count', 1, MAX_TOKENS),
+        ...(input.faceIndex !== undefined && {
+          faceIndex: integer(input, 'faceIndex', 0, 3),
+        }),
       };
     case 'setFaceDown':
       return {

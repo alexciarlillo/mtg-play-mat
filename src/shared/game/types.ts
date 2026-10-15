@@ -324,6 +324,9 @@ export interface CreateTokensAction {
   playerId: PlayerId;
   ref: CardRef;
   count: number;
+  // The face to show, e.g. The Initiative rather than the Undercity on
+  // its front. Optional so older saves stay valid.
+  faceIndex?: number;
 }
 
 // Creates a token that copies a permanent.

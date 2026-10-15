@@ -71,7 +71,7 @@ describe('CardDataService', () => {
     expect(cards.getStatus()).toMatchObject({
       phase: 'idle',
       error: null,
-      local: { sourceUpdatedAt: '2026-09-18T09:00:00Z', printings: 39 },
+      local: { sourceUpdatedAt: '2026-09-18T09:00:00Z', printings: 54 },
     });
     expect(cardDb.available).toBe(true);
     expect(cardDb.searchCardsByName({ keyword: 'Delver' })).toHaveLength(1);

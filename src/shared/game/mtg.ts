@@ -317,21 +317,25 @@ export const reduceMtg = (state: GameState, action: MtgAction): GameState => {
         ? state
         : updatePlayer(state, player.id, { counters });
     }
-    case 'createTokens':
+    case 'createTokens': {
+      // A face the ref doesn't have falls back to the front.
+      const wanted = action.faceIndex ?? 0;
+      const faceIndex = wanted < action.ref.faces.length ? wanted : 0;
       return createOnBattlefield(
         state,
         player.id,
         Array.from({ length: Math.min(action.count, MAX_TOKENS) }, () => ({
           ref: action.ref,
           faceDown: false,
-          faceIndex: 0,
+          faceIndex,
           isToken: true,
           counters: entryCounters({
             ref: action.ref,
-            faceIndex: 0,
+            faceIndex,
             faceDown: false,
           }),
         }))
       );
+    }
   }
 };

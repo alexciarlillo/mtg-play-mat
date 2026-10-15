@@ -9,9 +9,11 @@ import {
 import { isPlaneswalker } from '../../../ui/cardStats';
 import type { ContextMenuSpec } from '../../../ui/ContextMenuStore';
 import type { RevealTarget } from '@shared/net/revealTargets';
+import type { TokenSearchResult } from '@shared/types/cards';
 
 import { moveMenu } from '../common/cardMenus';
 import { revealMenu, revealTo } from '../common/targetedReveal';
+import { createTokenMenu } from '../common/tokenMenu';
 import { dispatch } from '../viewStore';
 import type { ControlTarget } from './pod';
 
@@ -33,6 +35,8 @@ export interface BattlefieldMenuOptions {
   ownerName?: string;
   // Who the owner may show a face-down permanent to alone.
   revealTargets?: RevealTarget[];
+  // The tokens this card makes.
+  tokens?: TokenSearchResult[];
 }
 
 const logControlError = (err: unknown) => {
@@ -130,6 +134,7 @@ export const battlefieldMenu = (
     giveTo = [],
     ownerName,
     revealTargets = [],
+    tokens = [],
   }: BattlefieldMenuOptions = {}
 ): ContextMenuSpec[] => {
   const { instanceId } = card;
@@ -198,6 +203,7 @@ export const battlefieldMenu = (
       title: 'Create copy',
       action: () => dispatch({ type: 'copyCard', instanceId }),
     },
+    ...createTokenMenu(card.faceDown ? [] : tokens, card.controller),
     ...(onAttach
       ? [{ title: 'Attach to…', action: () => onAttach(card) }]
       : []),

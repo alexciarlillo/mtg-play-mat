@@ -70,4 +70,6 @@ export interface TokenSearchResult {
   ref: CardRef;
   setCode: string;
   setName: string;
+  // Tells apart tokens that share a name, like a 1/1 and a 2/2 Soldier.
+  oracleId?: string;
 }

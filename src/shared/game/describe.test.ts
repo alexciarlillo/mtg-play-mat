@@ -492,6 +492,29 @@ describe('describeAction wording', () => {
         count: 2,
       })
     ).toBe('created 2 Goblin tokens');
+    const designation = (name: string, typeLine: string): CardRef => ({
+      id: '',
+      custom: true,
+      name,
+      typeLine,
+      faces: [{ name, typeLine }],
+    });
+    expect(
+      text({
+        type: 'createTokens',
+        playerId: P1,
+        ref: designation('The Monarch', 'Card'),
+        count: 1,
+      })
+    ).toBe('created The Monarch');
+    expect(
+      text({
+        type: 'createTokens',
+        playerId: P1,
+        ref: designation('Elspeth Emblem', 'Emblem — Elspeth'),
+        count: 2,
+      })
+    ).toBe('created 2 × Elspeth Emblem');
     expect(text({ type: 'attach', instanceId: a, to: b })).toBe(
       `attached ${nameOf(state, a)} to ${nameOf(state, b)}`
     );

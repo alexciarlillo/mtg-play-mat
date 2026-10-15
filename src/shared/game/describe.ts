@@ -559,6 +559,14 @@ export const describeAction = (
       const made = arrived(before, after, 'battlefield');
       if (made.length === 0) return null;
       const token = nameOf(made[0]);
+      // Emblems and designations like The Monarch aren't "tokens".
+      const ref = made[0]?.ref;
+      const face = ref && currentFace(ref, made[0]?.faceIndex ?? 0);
+      if (face && /^(Emblem\b|Card$)/.test(face.typeLine)) {
+        return made.length === 1
+          ? `created ${token}`
+          : `created ${made.length} × ${token}`;
+      }
       return made.length === 1
         ? `created a ${token} token`
         : `created ${made.length} ${token} tokens`;

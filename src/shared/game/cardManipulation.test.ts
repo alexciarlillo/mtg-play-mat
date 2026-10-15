@@ -315,6 +315,23 @@ describe('createTokens', () => {
     expect(field(next)[0].ref).toEqual(custom);
     expect(replay(next.log)).toEqual(next);
   });
+
+  it('puts a double-faced token in on the face asked for', () => {
+    const create = (faceIndex?: number) =>
+      field(
+        reduce(startGame(), {
+          type: 'createTokens',
+          playerId: P1,
+          ref: dfc,
+          count: 1,
+          ...(faceIndex !== undefined && { faceIndex }),
+        })
+      )[0]?.faceIndex;
+    expect(create()).toBe(0);
+    expect(create(1)).toBe(1);
+    // A face the card doesn't have falls back to the front.
+    expect(create(3)).toBe(0);
+  });
 });
 
 describe('copyCard', () => {

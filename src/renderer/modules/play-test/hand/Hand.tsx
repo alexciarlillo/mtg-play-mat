@@ -4,6 +4,7 @@ import {
   type PrivateView,
   type RevealView,
 } from '@shared/game';
+import type { TokenSearchResult } from '@shared/types/cards';
 import type { HandCommand } from '@shared/types/playTest';
 import classNames from 'classnames';
 import {
@@ -23,6 +24,8 @@ import type { ContextMenuSpec } from '../../../ui/ContextMenuStore';
 import type { HoverKey } from '../../../ui/hoverKeys';
 import { moveMenu, moveTo } from '../common/cardMenus';
 import { RestartDialog } from '../common/Dialogs';
+import { useRelatedTokens } from '../common/relatedTokens';
+import { createTokenMenu } from '../common/tokenMenu';
 import { handHoverAction } from '../common/hoverActions';
 import LibraryPositionPrompt from '../common/LibraryPositionPrompt';
 import ShortcutHelp from '../common/ShortcutHelp';
@@ -88,6 +91,8 @@ type LibraryEnd = 'top' | 'bottom';
 interface HandMenuOptions {
   // Other players the card may be shown to alone.
   revealTargets: RevealTarget[];
+  // The tokens each printing makes.
+  tokensOf(id: string): TokenSearchResult[];
   onPutInLibrary(card: CardView): void;
   // Left out until the opening hand is kept.
   onPutBack?(card: CardView, end: LibraryEnd): void;
@@ -97,7 +102,7 @@ interface HandMenuOptions {
 // tapped, face down (morph, manifest), or as the back of a modal DFC.
 const handMenu = (
   card: CardView,
-  { revealTargets, onPutInLibrary, onPutBack }: HandMenuOptions
+  { revealTargets, tokensOf, onPutInLibrary, onPutBack }: HandMenuOptions
 ): ContextMenuSpec[] => {
   const moves = moveMenu(
     card,
@@ -122,6 +127,7 @@ const handMenu = (
       () => revealCard(card),
       (to) => revealTo({ to, source: 'card', instanceId: card.instanceId })
     ),
+    ...createTokenMenu(card.ref ? tokensOf(card.ref.id) : [], card.owner),
   ];
   const putBack: ContextMenuSpec[] = onPutBack
     ? [
@@ -511,6 +517,9 @@ const Hand = ({ store, dock }: Props) => {
   });
 
   const handIds = new Set(view?.hand.map((card) => card.instanceId));
+  const tokensOf = useRelatedTokens(
+    view?.hand.flatMap((card) => (card.ref ? [card.ref.id] : [])) ?? []
+  );
   const faceDown =
     view?.zones.battlefield.filter((card) => card.faceDown) ?? [];
   const chosen = picked.filter((id) => handIds.has(id));
@@ -568,6 +577,7 @@ const Hand = ({ store, dock }: Props) => {
 
   const menuOptions: HandMenuOptions = {
     revealTargets,
+    tokensOf,
     onPutInLibrary: setPlacing,
     onPutBack: kept ? startPutBack : undefined,
   };

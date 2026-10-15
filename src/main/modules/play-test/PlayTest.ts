@@ -174,6 +174,7 @@ type PlayTestHandlers = Pick<
   | 'getSavedGame'
   | 'restoreSavedGame'
   | 'dismissSavedGame'
+  | 'getDeckPrintingIds'
 >;
 
 const badActivity = (message: string): never => {
@@ -506,6 +507,7 @@ export default class PlayTest {
     getSavedGame: () => this.savedOffer,
     restoreSavedGame: () => this.restoreSaved(),
     dismissSavedGame: () => this.dismissSaved(),
+    getDeckPrintingIds: () => this.deckPrintingIds(),
     getLookAtTop: () => this.lookAtTop,
     setLookAtTop: (on: unknown) => {
       if (!this.isOpen) return;
@@ -560,6 +562,15 @@ export default class PlayTest {
     getSavedGame: (sender) => this.isPlayTestSender(sender),
     restoreSavedGame: (sender) => this.isPlayTestSender(sender),
     dismissSavedGame: (sender) => this.isPlayTestSender(sender),
+    getDeckPrintingIds: (sender) => this.isPlayTestSender(sender),
+  };
+
+  // The main deck and commanders as opened. Sideboard tokens would name
+  // hidden cards, so they and the companion's are left to a search.
+  private deckPrintingIds = (): string[] => {
+    const { library, command } = this.deck;
+    const ids = [library, command].flatMap((refs) => refs.map((ref) => ref.id));
+    return [...new Set(ids)].filter((id) => id !== '');
   };
 
   // A fixed seed is only passed by end-to-end tests, which may also ask

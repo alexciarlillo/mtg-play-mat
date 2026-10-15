@@ -38,6 +38,13 @@ describe('shouldDownload', () => {
     ).toBe(false);
   });
 
+  it('downloads the same data again for a file upgraded in place', () => {
+    const local = { sourceUpdatedAt: daysAgo(1), needsRefresh: true };
+    expect(shouldDownload({ local, remoteUpdatedAt: daysAgo(1), now })).toBe(
+      true
+    );
+  });
+
   it('skips the age limit when forced', () => {
     const local = { sourceUpdatedAt: daysAgo(1) };
     expect(
