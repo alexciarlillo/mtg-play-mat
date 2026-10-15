@@ -11,6 +11,8 @@ import {
   departures,
   describeDeparture,
   describeRegain,
+  describeShowing,
+  describeShowingSource,
   describeStep,
   emptyGame,
   type GameAction,
@@ -19,24 +21,34 @@ import {
   lentCard,
   lentTo,
   libraryView,
+  MAX_REVEALED_CARDS,
   OPENING_HAND_SIZE,
   parseLibraryActivity,
   parsePlayerAction,
+  parseRevealRequest,
   type PlayerAction,
   permanentState,
   type PlayerId,
+  type PrivateLogEntry,
   privateView,
   publicName,
   publicView,
   type PublicView,
   redoAction,
   reduce,
+  type RevealRequest,
+  type ShowingSource,
+  type ShowingView,
+  type ShownToYou,
   startingLife,
   undoLast,
   type UndoState,
 } from '@shared/game';
+import type { RevealChange } from '@shared/net/protocol';
+import type { RevealTarget } from '@shared/net/revealTargets';
 import type { DeckFormat } from '@shared/types/decks';
 import { isHandCommand, type PlayTestStatus } from '@shared/types/playTest';
+import type { EventPayload } from '@shared/ipc/contract';
 import { app, BrowserWindow, screen, type WebContents } from 'electron';
 
 import { type GameMenuCommand, runGameMenuCommand } from '../../gameMenu';
@@ -77,6 +89,22 @@ export interface ControlLink {
   peerName(playerId: PlayerId): string | null;
 }
 
+// How the play test shows cards to one other player.
+export interface RevealLink {
+  send(to: PlayerId, change: RevealChange): void;
+  targets(): RevealTarget[];
+}
+
+// Cards shown to someone else, kept briefly; the shown list is longer.
+const MAX_PRIVATE_LOG = 100;
+const MAX_SHOWN_TO_YOU = 20;
+
+type Showing = ShowingView & { id: number };
+
+const badReveal = (message: string): never => {
+  throw new Error(`[play-test] bad reveal: ${message}`);
+};
+
 type PlayTestHandlers = Pick<
   RequestHandlers,
   | 'startPlayTest'
@@ -97,6 +125,12 @@ type PlayTestHandlers = Pick<
   | 'openHandDialog'
   | 'getLookAtTop'
   | 'setLookAtTop'
+  | 'revealTo'
+  | 'stopShowing'
+  | 'getRevealTargets'
+  | 'getShownToYou'
+  | 'dismissShown'
+  | 'getPrivateLog'
 >;
 
 const badActivity = (message: string): never => {
@@ -164,6 +198,22 @@ export default class PlayTest {
 
   private control: ControlLink | null = null;
 
+  private reveal: RevealLink | null = null;
+
+  // A side channel, not game state: never undone, and it ends at the
+  // player's next action, like a reveal to everyone.
+  private showing: Showing | null = null;
+
+  // Starts somewhere random each run, so a receiver never mistakes a
+  // reveal from this run for one it kept from the last.
+  private revealId = randomInt(2 ** 40) * 1000;
+
+  private shownToYou: ShownToYou[] = [];
+
+  private privateLog: PrivateLogEntry[] = [];
+
+  private privateLogId = 0;
+
   constructor({ cardDb, deckDb, playerId, playerName, handInBoard }: Deps) {
     this.cardDb = cardDb;
     this.deckDb = deckDb;
@@ -221,8 +271,21 @@ export default class PlayTest {
   // The board shows the same public view peers get.
   private boardView = (): PublicView | null => {
     const view = publicView(this.state, this.playerId);
-    return view && { ...view, libraryActivity: this.libraryActivity.current };
+    return (
+      view && {
+        ...view,
+        libraryActivity: this.libraryActivity.current,
+        showing: this.publicShowing(),
+      }
+    );
   };
+
+  private publicShowing = (): ShowingView | null =>
+    this.showing && {
+      to: this.showing.to,
+      source: this.showing.source,
+      count: this.showing.count,
+    };
 
   onPublicChange = (listener: PublicListener) => {
     this.publicListeners.add(listener);
@@ -271,7 +334,7 @@ export default class PlayTest {
     // Renderer input is untrusted, so parse it rather than trust its type.
     dispatch: (action: unknown) => this.dispatch(parsePlayerAction(action)),
     getBoardView: () => this.boardView(),
-    getHandView: () => privateView(this.state, this.playerId),
+    getHandView: () => this.handView(),
     getCommanderPrompts: () => this.commanderPrompts,
     dismissCommanderPrompt: (instanceId: unknown) => {
       const rest = this.commanderPrompts.filter(
@@ -301,6 +364,28 @@ export default class PlayTest {
       target.focus();
       sendEvent(target, 'handCommand', command);
     },
+    // The board may ask too (a face-down permanent, the top card): main
+    // reads the cards, so the board never holds them.
+    revealTo: (request: unknown, then?: unknown) => {
+      if (!this.isOpen) return;
+      this.revealTo(
+        parseRevealRequest(request, badReveal, MAX_REVEALED_CARDS),
+        then === undefined ? undefined : parsePlayerAction(then)
+      );
+    },
+    stopShowing: () => this.endShowing(),
+    getRevealTargets: () => this.reveal?.targets() ?? [],
+    getShownToYou: () => this.shownToYou,
+    dismissShown: (key: unknown) => {
+      const rest =
+        typeof key === 'string'
+          ? this.shownToYou.filter((entry) => entry.key !== key)
+          : [];
+      if (rest.length === this.shownToYou.length) return;
+      this.shownToYou = rest;
+      this.pushPrivate('shownToYou', rest);
+    },
+    getPrivateLog: () => this.privateLog,
     getLookAtTop: () => this.lookAtTop,
     setLookAtTop: (on: unknown) => {
       if (!this.isOpen) return;
@@ -335,6 +420,13 @@ export default class PlayTest {
     setLibraryActivity: (sender) => this.isPlayTestSender(sender),
     openHandDialog: (sender) => this.isPlayTestSender(sender),
     setLookAtTop: (sender) => this.isPlayTestSender(sender),
+    revealTo: (sender) => this.isPlayTestSender(sender),
+    stopShowing: (sender) => this.isPlayTestSender(sender),
+    getRevealTargets: (sender) => this.isPlayTestSender(sender),
+    // Cards others showed this player are as private as the hand.
+    getShownToYou: (sender) => mayReadLibrary(this.senders(), sender),
+    dismissShown: (sender) => mayReadLibrary(this.senders(), sender),
+    getPrivateLog: (sender) => mayReadLibrary(this.senders(), sender),
   };
 
   // A fixed seed is only passed by end-to-end tests, which may also ask
@@ -372,10 +464,11 @@ export default class PlayTest {
 
   // Windows may only act on the local player's cards; stale actions on
   // cards that no longer exist are dropped the same way.
-  private dispatch = (action: PlayerAction) => {
+  private dispatch = (action: PlayerAction, keepShowing = false) => {
     if (actionPlayer(this.state, action) !== this.playerId) return;
     const next = reduce(this.state, action);
     if (next === this.state) return;
+    if (!keepShowing) this.endShowing(false);
     const left = departures(this.state, action, next);
     if (left.length > 0) {
       // A batch may move the player's own cards too. Its line leaves out
@@ -529,9 +622,180 @@ export default class PlayTest {
     this.addLogEntry(`gave ${names} back to ${ownerName}`);
   };
 
+  linkReveal = (link: RevealLink) => {
+    this.reveal = link;
+  };
+
+  // The players cards could be shown to changed; both windows offer them.
+  revealTargetsChanged = (targets: RevealTarget[]) => {
+    sendEvent(this.board, 'revealTargets', targets);
+    sendEvent(this.hand, 'revealTargets', targets);
+  };
+
+  // Only to the window showing the hand: the board is screenshared
+  // unless the hand is docked in it.
+  private pushPrivate = <C extends 'shownToYou' | 'privateLog'>(
+    channel: C,
+    payload: EventPayload<C>
+  ) => {
+    sendEvent(this.hand, channel, payload);
+    if (this.handInBoard) sendEvent(this.board, channel, payload);
+  };
+
+  private addPrivateLine = (text: string, notice = false) => {
+    this.privateLogId += 1;
+    const entry: PrivateLogEntry = {
+      id: this.privateLogId,
+      at: Date.now(),
+      text,
+      ...(notice && { notice: true }),
+    };
+    this.privateLog = [...this.privateLog, entry].slice(-MAX_PRIVATE_LOG);
+    this.pushPrivate('privateLog', this.privateLog);
+  };
+
+  // The cards a request names, read from the game rather than trusted
+  // from the window; none if any of them isn't where it should be.
+  private revealedCards = (request: RevealRequest): CardRef[] => {
+    const player = this.state.players.find((p) => p.id === this.playerId);
+    if (!player) return [];
+    const { cards } = this.state;
+    const refs = (ids: string[]) => ids.map((id) => cards[id].ref);
+    switch (request.source) {
+      case 'hand':
+        return refs(player.zones.hand.slice(0, MAX_REVEALED_CARDS));
+      case 'card':
+        return player.zones.hand.includes(request.instanceId)
+          ? refs([request.instanceId])
+          : [];
+      case 'libraryTop':
+        return refs(player.zones.library.slice(0, request.count));
+      case 'search': {
+        const ids = request.instanceIds;
+        const distinct = new Set(ids).size === ids.length;
+        return distinct && ids.every((id) => player.zones.library.includes(id))
+          ? refs(ids)
+          : [];
+      }
+      case 'faceDown': {
+        const card = cards[request.instanceId];
+        const own =
+          card?.zone === 'battlefield' &&
+          card.faceDown &&
+          card.owner === this.playerId &&
+          card.controller === this.playerId;
+        return own ? refs([card.instanceId]) : [];
+      }
+    }
+  };
+
+  // Shows cards to one player only. Everyone else learns who and how
+  // many, never which. An action passed along (a search moving the
+  // cards it showed) runs right after, without ending the showing.
+  private revealTo = (request: RevealRequest, then?: PlayerAction) => {
+    const link = this.reveal;
+    const target = link?.targets().find((t) => t.playerId === request.to);
+    const cards = this.revealedCards(request);
+    // Refused outright, search and all: the player chose to show these
+    // cards to that player, never to nobody or to everyone.
+    if (!link || !target?.ready || cards.length === 0) {
+      const who = target?.name ?? 'That player';
+      const why = !target?.ready
+        ? `${who} can't be shown cards now`
+        : 'Those cards have moved';
+      this.addPrivateLine(`${why}, so nothing was revealed or moved.`, true);
+      return;
+    }
+    this.endShowing(false);
+    // A search that changes nothing leaves nothing to show.
+    if (then) {
+      const before = this.state;
+      this.dispatch(then, true);
+      if (this.state === before) return;
+    }
+    this.revealId += 1;
+    const source: ShowingSource = request.source;
+    this.showing = {
+      id: this.revealId,
+      to: target.playerId,
+      source,
+      count: cards.length,
+    };
+    link.send(target.playerId, {
+      op: 'show',
+      id: this.revealId,
+      source,
+      cards,
+    });
+    this.addLogEntry(describeShowing(source, cards.length, target.name));
+    this.addPrivateLine(
+      `You showed ${target.name} ${describeShowingSource(source, cards.length)}: ` +
+        cards.map((ref) => ref.name).join(', ')
+    );
+    this.pushViews();
+  };
+
+  // Tells the player shown the cards that they are no longer shown,
+  // unless the player is gone. Pushes unless the caller pushes anyway.
+  private endShowing = (push = true, tell = true) => {
+    const was = this.showing;
+    if (!was) return;
+    this.showing = null;
+    if (tell) this.reveal?.send(was.to, { op: 'end', id: was.id });
+    if (push) this.pushViews();
+  };
+
+  // With the game closed, nothing shown either way is kept.
+  private forgetReveals = () => {
+    this.endShowing(false);
+    this.shownToYou = [];
+    this.privateLog = [];
+  };
+
+  // Another player showed this one cards, or stopped showing them.
+  receiveReveal = (from: PlayerId, fromName: string, change: RevealChange) => {
+    if (!this.isOpen) return;
+    const key = `${from}:${change.id}`;
+    if (change.op === 'end') {
+      const known = this.shownToYou.some((e) => e.key === key && !e.ended);
+      if (!known) return;
+      this.shownToYou = this.shownToYou.map((entry) =>
+        entry.key === key ? { ...entry, ended: true } : entry
+      );
+      this.pushPrivate('shownToYou', this.shownToYou);
+      return;
+    }
+    const entry: ShownToYou = {
+      key,
+      from,
+      fromName,
+      source: change.source,
+      cards: change.cards,
+      at: Date.now(),
+      ended: false,
+    };
+    this.shownToYou = [
+      ...this.shownToYou.filter((e) => e.key !== key),
+      entry,
+    ].slice(-MAX_SHOWN_TO_YOU);
+    this.pushPrivate('shownToYou', this.shownToYou);
+    this.addPrivateLine(
+      `${fromName} showed you ${describeShowingSource(change.source, change.cards.length)}: ` +
+        change.cards.map((ref) => ref.name).join(', ')
+    );
+  };
+
   // A player left or closed their game: everything that changed hands
   // with them comes home, and nothing is sent, since nobody is there.
   peerGone = (playerId: PlayerId, name: string) => {
+    if (this.showing?.to === playerId) this.endShowing(true, false);
+    // Nobody is left to stop showing them, so they are over.
+    if (this.shownToYou.some((e) => e.from === playerId && !e.ended)) {
+      this.shownToYou = this.shownToYou.map((entry) =>
+        entry.from === playerId ? { ...entry, ended: true } : entry
+      );
+      this.pushPrivate('shownToYou', this.shownToYou);
+    }
     this.release(playerId, name);
     lentTo(this.state, playerId).forEach((card) => {
       this.regain(playerId, name, {
@@ -590,6 +854,7 @@ export default class PlayTest {
   private undo = () => {
     const undone = undoLast(this.state, this.playerId, this.undoFloor);
     if (!undone) return;
+    this.endShowing(false);
     // Told as if the action were applied again to the state without it.
     const redone = reduce(undone.state, undone.action);
     const text = this.describe(undone.state, undone.action, redone);
@@ -601,6 +866,7 @@ export default class PlayTest {
   private redo = () => {
     const action = this.redoStack.pop();
     if (!action) return;
+    this.endShowing(false);
     const next = redoAction(this.state, action);
     if (next) {
       const text = this.describe(this.state, action, next);
@@ -642,8 +908,14 @@ export default class PlayTest {
     sendEvent(this.board, 'commanderPrompts', prompts);
   };
 
+  // The player's own side of a showing is theirs to see and stop.
+  private handView = () => {
+    const view = privateView(this.state, this.playerId);
+    return view && { ...view, showing: this.publicShowing() };
+  };
+
   private pushViews = () => {
-    const hand = privateView(this.state, this.playerId);
+    const hand = this.handView();
     if (hand) {
       sendEvent(this.hand, 'handView', hand);
       if (this.handInBoard) sendEvent(this.board, 'handView', hand);
@@ -684,6 +956,7 @@ export default class PlayTest {
     this.commanderPrompts = [];
     this.libraryActivity.reset();
     this.setLookAtTop(false);
+    this.endShowing(false);
     sendEvent(this.board, 'commanderPrompts', []);
     sendEvent(this.board, 'gameStarted', null);
     sendEvent(this.hand, 'gameStarted', null);
@@ -791,6 +1064,7 @@ export default class PlayTest {
         this.board = null;
         this.settleControl();
         this.libraryActivity.reset();
+        this.forgetReveals();
         this.hand?.close();
         this.notifyPublic();
         this.pushStatus();
@@ -805,6 +1079,7 @@ export default class PlayTest {
         this.hand = null;
         this.settleControl();
         this.libraryActivity.reset();
+        this.forgetReveals();
         this.board?.close();
         this.notifyPublic();
         this.pushStatus();

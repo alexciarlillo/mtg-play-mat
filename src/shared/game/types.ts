@@ -88,6 +88,9 @@ export type RevealSource = 'hand' | 'libraryTop' | 'card';
 export interface Reveal {
   source: RevealSource;
   instanceIds: InstanceId[];
+  // Cards found in a search, wherever hidden they went: the hand or
+  // either end of the library.
+  search?: true;
 }
 
 export interface PlayerState {
@@ -388,6 +391,9 @@ export interface SearchLibraryAction {
   playerId: PlayerId;
   picks: SearchPick[];
   shuffle: boolean;
+  // Shows everyone the picks that end up hidden (hand or library), as a
+  // reveal that lasts until the player's next action.
+  reveal?: boolean;
 }
 
 // Puts hand cards into the library in one step. Top cards go on in the
@@ -400,7 +406,8 @@ export interface PutFromHandAction {
   bottom: InstanceId[];
 }
 
-// Shows the whole hand, the top count library cards, or one hand card.
+// Shows the whole hand, the top count library cards, or one card: from
+// the hand, or one of the owner's own face-down permanents.
 export type RevealAction = {
   type: 'reveal';
   playerId: PlayerId;

@@ -72,7 +72,11 @@ to each other and no server is involved at all.
 
 Either way a pod is a star — guests talk to the host, and the host passes messages on. Hands
 and libraries never leave the machine they are on, except for cards a player chooses to show:
-a reveal, or the top card while playing with it revealed.
+a reveal, or the top card while playing with it revealed. A card revealed to one player goes
+to that player alone and shows only in their hand window, never on a board (unless they
+keep the hand docked in the board window, where it shows in the docked tray); everyone else
+sees who was shown how many cards. It is not encrypted, though: it passes through the host
+(or the relay), which could technically read it.
 
 ## Development
 
@@ -246,7 +250,13 @@ table. **Reveal until…** in the library menu shows the table one more card at 
 search query (A), then puts the hit into the hand, onto the battlefield or into exile and
 the rest on the bottom at random or into the graveyard, as one action. **Play with the top
 card revealed** turns the library pile face up on every board until it is turned off;
-**Always look at the top card** shows it in your hand window only. A life total that just changed flashes too — red for damage, green for life
+**Always look at the top card** shows it in your hand window only.
+Every reveal — a hand card (or **R** over it), the whole hand, the top cards, the cards
+picked in a search (**Reveal picked cards**), or your own face-down permanent — can go to
+everyone or to one other player. A reveal to one player lands in their hand window under
+**Shown to you** until they dismiss it, with a line in their **Private log**; the table sees
+"Alice is showing Bob 2 cards" and a log line that names no cards. It ends at your next
+action, and it is not part of undo. A life total that just changed flashes too — red for damage, green for life
 gained — and fades back over a second, on your own counter and on every opponent's,
 so a hit lands visibly even with the log folded away.
 Each opponent's seat carries its own log under their command zone: just that

@@ -1,4 +1,5 @@
 import {
+  type CardRef,
   emptyGame,
   type GameAction,
   type GameState,
@@ -14,7 +15,11 @@ import {
   startingLife,
 } from '@shared/game';
 import { guestSeats } from '@shared/net/lobby';
-import { namespaceView, type PeerInfo } from '@shared/net/protocol';
+import {
+  FEATURE_REVEAL,
+  namespaceView,
+  type PeerInfo,
+} from '@shared/net/protocol';
 import type { RemotePeer } from '@shared/net/remoteViews';
 
 import buildSampleDeck from '../play-test/sampleDeck';
@@ -169,11 +174,23 @@ const dealtGame = (
   return board.reduce(reduce, kept);
 };
 
+// Dev-only: this seat shows the local player's own board instead of a
+// generated one, because a generated board is tidier than a real one
+// and says little about how the player's layout reads from a seat.
+export const MIRROR_SEAT = 0;
+
 const fakePeer = (index: number, seed: number, life: number): RemotePeer => {
   const { playerId, name } = fakePlayers[index];
   const state = dealtGame(playerId, name, seatSeed(seed, index), life);
   const view = publicView(state, playerId);
-  const info: PeerInfo = { playerId, name, appVersion: FAKE_APP_VERSION };
+  // Generated seats can take a reveal; the mirror stands in for a peer on
+  // an older build, so the picker's greyed-out entry can be seen too.
+  const info: PeerInfo = {
+    playerId,
+    name,
+    appVersion: FAKE_APP_VERSION,
+    ...(index !== MIRROR_SEAT && { features: [FEATURE_REVEAL] }),
+  };
   return {
     info,
     // Guest seats, because the local player always holds the host seat.
@@ -207,12 +224,14 @@ export const fakePeers = (
     fakePeer(index, seed, life)
   );
 
-// Dev-only: this seat shows the local player's own board instead of a
-// generated one, because a generated board is tidier than a real one
-// and says little about how the player's layout reads from a seat.
-export const MIRROR_SEAT = 0;
-
 // Namespaced exactly as a received view is, or the mirrored instance
 // ids would collide with the local game's.
 export const mirroredView = (view: PublicView | null): PublicView | null =>
   view && namespaceView(view, fakePlayers[MIRROR_SEAT].playerId);
+
+// Dev-only: a few cards a fake seat can show the local player. Any
+// sample cards do, since a fake's hand is never on the wire anyway.
+export const fakeRevealCards = (count: number): CardRef[] =>
+  buildSampleDeck()
+    .filter((ref) => !ref.typeLine.includes('Land'))
+    .slice(0, count);

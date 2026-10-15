@@ -1,4 +1,10 @@
-import type { CardView, PrivateView } from '@shared/game';
+import type {
+  CardView,
+  PrivateLogEntry,
+  PrivateView,
+  ShownToYou,
+} from '@shared/game';
+import type { RevealTarget } from '@shared/net/revealTargets';
 import { defaultSettings } from '@shared/settings';
 import type { HandCommand } from '@shared/types/playTest';
 import {
@@ -116,6 +122,13 @@ let pushGameStarted: () => void;
 let pushHandCommand: (command: HandCommand) => void;
 let pushLookAtTop: (on: boolean) => void;
 const getLookAtTop = vi.fn(() => Promise.resolve(false));
+let revealTargets: RevealTarget[] = [];
+let pushRevealTargets: (targets: RevealTarget[]) => void;
+let pushShownToYou: (entries: ShownToYou[]) => void;
+let pushPrivateLog: (entries: PrivateLogEntry[]) => void;
+const revealTo = vi.fn(() => Promise.resolve());
+const stopShowing = vi.fn(() => Promise.resolve());
+const dismissShown = vi.fn(() => Promise.resolve());
 
 beforeEach(() => {
   Object.assign(window, {
@@ -143,11 +156,33 @@ beforeEach(() => {
         pushLookAtTop = listener;
         return () => {};
       },
+      getRevealTargets: () => Promise.resolve(revealTargets),
+      onRevealTargets: (listener: typeof pushRevealTargets) => {
+        pushRevealTargets = listener;
+        return () => {};
+      },
+      getShownToYou: () => Promise.resolve([]),
+      onShownToYou: (listener: typeof pushShownToYou) => {
+        pushShownToYou = listener;
+        return () => {};
+      },
+      getPrivateLog: () => Promise.resolve([]),
+      onPrivateLog: (listener: typeof pushPrivateLog) => {
+        pushPrivateLog = listener;
+        return () => {};
+      },
+      revealTo,
+      stopShowing,
+      dismissShown,
     },
   });
 });
 
 afterEach(() => {
+  revealTargets = [];
+  revealTo.mockClear();
+  stopShowing.mockClear();
+  dismissShown.mockClear();
   dispatch.mockClear();
   getLibrary.mockClear();
   setLibraryActivity.mockClear();
@@ -1140,5 +1175,266 @@ describe('Hand always looking at the top card', () => {
     );
     act(() => pushLookAtTop(false));
     expect(screen.queryByTestId('own-top-card')).toBeNull();
+  });
+});
+
+describe('Hand reveals to one player', () => {
+  const pod: RevealTarget[] = [
+    { playerId: 'bob', name: 'Bob', ready: true },
+    {
+      playerId: 'dave',
+      name: 'Dave',
+      ready: false,
+      why: 'needs a newer version',
+    },
+  ];
+
+  const inPod = async (patch: Partial<PrivateView> = {}) => {
+    revealTargets = pod;
+    const result = renderHand(viewOf({ keptHand: true, ...patch }));
+    // The targets arrive after the first render.
+    act(() => pushRevealTargets(pod));
+    return result;
+  };
+
+  it('offers everyone first, then each player, greying out an old build', async () => {
+    await inPod();
+    fireEvent.contextMenu(cards()[2]);
+    expect(
+      screen.getByRole('menuitem', { name: 'Reveal to everyone' })
+    ).toBeEnabled();
+    expect(
+      screen.getByRole('menuitem', {
+        name: 'Reveal to Dave (needs a newer version)',
+      })
+    ).toBeDisabled();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Reveal to Bob' }));
+    expect(revealTo).toHaveBeenCalledWith(
+      { to: 'bob', source: 'card', instanceId: 'p1:2' },
+      undefined
+    );
+    expect(dispatch).not.toHaveBeenCalled();
+
+    fireEvent.contextMenu(cards()[1]);
+    fireEvent.click(
+      screen.getByRole('menuitem', { name: 'Reveal to everyone' })
+    );
+    expect(dispatch).toHaveBeenLastCalledWith({
+      type: 'reveal',
+      playerId: 'p1',
+      source: 'card',
+      instanceId: 'p1:1',
+    });
+  });
+
+  it('asks who to show the whole hand', async () => {
+    await inPod();
+    fireEvent.click(screen.getByRole('button', { name: 'Reveal hand' }));
+    expect(dispatch).not.toHaveBeenCalled();
+    fireEvent.click(
+      screen.getByRole('menuitem', { name: 'Reveal hand to Bob' })
+    );
+    expect(revealTo).toHaveBeenCalledWith(
+      { to: 'bob', source: 'hand' },
+      undefined
+    );
+  });
+
+  it('reveals the hovered card to everyone with R, rather than restarting', () => {
+    renderHand(viewOf({ keptHand: true }));
+    fireEvent.mouseEnter(cards()[3]);
+    fireEvent.keyDown(window, { key: 'r' });
+    expect(dispatch).toHaveBeenLastCalledWith({
+      type: 'reveal',
+      playerId: 'p1',
+      source: 'card',
+      instanceId: 'p1:3',
+    });
+    expect(screen.queryByRole('dialog', { name: 'Restart game?' })).toBeNull();
+    fireEvent.mouseLeave(cards()[3]);
+    fireEvent.keyDown(window, { key: 'r' });
+    expect(
+      screen.getByRole('dialog', { name: 'Restart game?' })
+    ).toBeInTheDocument();
+  });
+
+  it('says who the player is showing, and stops on request', async () => {
+    await inPod({ showing: { to: 'bob', source: 'hand', count: 7 } });
+    expect(screen.getByTestId('hand-showing-banner')).toHaveTextContent(
+      'Only Bob can see the 7 cards you showed'
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Stop' }));
+    expect(stopShowing).toHaveBeenCalled();
+  });
+
+  it('shows the picks to one player before moving them, or to everyone', async () => {
+    await inPod();
+    const tile = async (name: string) =>
+      within(
+        (await screen.findAllByTestId('search-card')).find(
+          (el) => within(el).getByTestId('card').dataset.cardName === name
+        )!
+      ).getByTestId('card');
+    const search = async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Search library…' }));
+      fireEvent.click(await tile('Forest'));
+      fireEvent.click(screen.getByLabelText('Reveal picked cards'));
+    };
+
+    await search();
+    const to = screen.getByLabelText('Reveal picked cards to');
+    expect(
+      within(to).getByRole('option', {
+        name: 'Dave (needs a newer version)',
+      })
+    ).toBeDisabled();
+    expect(screen.getByTestId('reveal-target-hint')).toBeInTheDocument();
+    fireEvent.change(to, { target: { value: 'bob' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Move 1 and shuffle' }));
+    const search1 = {
+      type: 'searchLibrary',
+      playerId: 'p1',
+      picks: [{ instanceId: 'p1:21', to: 'hand' }],
+      shuffle: true,
+    };
+    expect(revealTo).toHaveBeenCalledWith(
+      { to: 'bob', source: 'search', instanceIds: ['p1:21'] },
+      search1
+    );
+    expect(dispatch).not.toHaveBeenCalled();
+
+    await search();
+    fireEvent.click(screen.getByRole('button', { name: 'Move 1 and shuffle' }));
+    expect(dispatch).toHaveBeenCalledWith({ ...search1, reveal: true });
+  });
+
+  const searchTile = async (name: string) =>
+    within(
+      (await screen.findAllByTestId('search-card')).find(
+        (el) => within(el).getByTestId('card').dataset.cardName === name
+      )!
+    ).getByTestId('card');
+
+  it('never widens a reveal to everyone when the chosen player drops out', async () => {
+    await inPod();
+    fireEvent.click(screen.getByRole('button', { name: 'Search library…' }));
+    fireEvent.click(await searchTile('Forest'));
+    fireEvent.click(screen.getByLabelText('Reveal picked cards'));
+    const to = screen.getByLabelText('Reveal picked cards to');
+    fireEvent.change(to, { target: { value: 'bob' } });
+    const move = screen.getByRole('button', { name: 'Move 1 and shuffle' });
+    expect(move).toBeEnabled();
+
+    // Bob's build stops taking reveals: the choice stays, flagged.
+    act(() =>
+      pushRevealTargets([
+        { playerId: 'bob', name: 'Bob', ready: false, why: 'no game open' },
+      ])
+    );
+    expect((to as HTMLSelectElement).value).toBe('bob');
+    expect(screen.getByTestId('reveal-target-unavailable')).toHaveTextContent(
+      'Bob can’t be shown cards now (no game open)'
+    );
+    expect(move).toBeDisabled();
+    fireEvent.click(move);
+
+    // Bob leaves altogether: still Bob, still blocked.
+    act(() => pushRevealTargets([]));
+    expect((to as HTMLSelectElement).value).toBe('bob');
+    expect(
+      within(to).getByRole('option', { name: 'Bob (left the table)' })
+    ).toBeDisabled();
+    expect(move).toBeDisabled();
+    fireEvent.click(move);
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(revealTo).not.toHaveBeenCalled();
+
+    // Only choosing again lets it go ahead.
+    fireEvent.change(to, { target: { value: 'everyone' } });
+    expect(move).toBeEnabled();
+  });
+
+  it('reveals only the picks that end up hidden', async () => {
+    await inPod();
+    fireEvent.click(screen.getByRole('button', { name: 'Search library…' }));
+    fireEvent.click(await searchTile('Forest'));
+    fireEvent.click(await searchTile('Island'));
+    fireEvent.change(screen.getByLabelText('Destination for 2. Island'), {
+      target: { value: 'graveyard' },
+    });
+    fireEvent.click(screen.getByLabelText('Reveal picked cards'));
+    fireEvent.change(screen.getByLabelText('Reveal picked cards to'), {
+      target: { value: 'bob' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Move 2 and shuffle' }));
+    expect(revealTo).toHaveBeenCalledWith(
+      { to: 'bob', source: 'search', instanceIds: ['p1:21'] },
+      expect.objectContaining({ type: 'searchLibrary' })
+    );
+  });
+
+  it('shows a refused reveal until the player closes it', async () => {
+    await inPod();
+    act(() =>
+      pushPrivateLog([
+        {
+          id: 3,
+          at: 0,
+          text: "Bob can't be shown cards now, so nothing was revealed or moved.",
+          notice: true,
+        },
+      ])
+    );
+    const notice = screen.getByTestId('hand-reveal-notice');
+    expect(notice).toHaveTextContent("Bob can't be shown cards now");
+    fireEvent.click(within(notice).getByRole('button', { name: 'OK' }));
+    expect(screen.queryByTestId('hand-reveal-notice')).toBeNull();
+  });
+
+  it('keeps cards shown to the player until dismissed, and a private log', async () => {
+    await inPod();
+    expect(screen.queryByTestId('shown-to-you')).toBeNull();
+    act(() =>
+      pushShownToYou([
+        {
+          key: 'bob:1',
+          from: 'bob',
+          fromName: 'Bob',
+          source: 'card',
+          cards: [handCard(40).ref!],
+          at: 0,
+          ended: true,
+        },
+      ])
+    );
+    const tray = screen.getByTestId('shown-to-you');
+    expect(within(tray).getByTestId('card')).toHaveAttribute(
+      'data-card-name',
+      'Card 40'
+    );
+    expect(tray).toHaveTextContent(
+      'Bob: a card from their hand (no longer shown)'
+    );
+    fireEvent.click(
+      within(tray).getByRole('button', {
+        name: 'Dismiss the cards Bob showed you',
+      })
+    );
+    expect(dismissShown).toHaveBeenCalledWith('bob:1');
+
+    expect(screen.queryByRole('button', { name: 'Private log' })).toBeNull();
+    act(() =>
+      pushPrivateLog([
+        {
+          id: 1,
+          at: 0,
+          text: 'Bob showed you a card from their hand: Card 40',
+        },
+      ])
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Private log' }));
+    expect(screen.getByTestId('private-log')).toHaveTextContent(
+      'Bob showed you a card from their hand: Card 40'
+    );
   });
 });

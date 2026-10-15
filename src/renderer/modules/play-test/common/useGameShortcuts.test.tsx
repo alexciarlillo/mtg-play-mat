@@ -280,3 +280,32 @@ describe('useGameShortcuts', () => {
     expect(onHoverKey).toHaveBeenCalledWith('g');
   });
 });
+
+describe('R over a card', () => {
+  it('goes to a card that takes it, and restarts otherwise', () => {
+    const takes = vi.fn(() => true);
+    const { unmount } = render(<Hovered onHoverKey={takes} />);
+    fireEvent.mouseEnter(screen.getByTestId('card'));
+    fireEvent.keyDown(window, { key: 'r' });
+    expect(takes).toHaveBeenCalledWith('r');
+    expect(onRestart).not.toHaveBeenCalled();
+    unmount();
+
+    // A permanent gives R back, so it still restarts the game.
+    const declines = vi.fn(() => false);
+    render(<Hovered onHoverKey={declines} />);
+    fireEvent.mouseEnter(screen.getByTestId('card'));
+    fireEvent.keyDown(window, { key: 'r' });
+    expect(declines).toHaveBeenCalledWith('r');
+    expect(onRestart).toHaveBeenCalledTimes(1);
+  });
+
+  it('never reaches a card through the plain hover key path', () => {
+    const onHoverKey = vi.fn();
+    render(<Hovered onHoverKey={onHoverKey} />);
+    fireEvent.mouseEnter(screen.getByTestId('card'));
+    fireEvent.keyDown(window, { key: 'R', shiftKey: true });
+    expect(onHoverKey).not.toHaveBeenCalled();
+    expect(onRestart).not.toHaveBeenCalled();
+  });
+});

@@ -14,8 +14,11 @@ import {
   useState,
 } from 'react';
 
+import type { RevealTarget } from '@shared/net/revealTargets';
+
 import useSettings from '../../../hooks/useSettings';
 import Card from '../../../ui/Card';
+import { useContextMenu } from '../../../ui/ContextMenuProvider';
 import type { ContextMenuSpec } from '../../../ui/ContextMenuStore';
 import type { HoverKey } from '../../../ui/hoverKeys';
 import { moveMenu, moveTo } from '../common/cardMenus';
@@ -30,6 +33,15 @@ import {
 } from '../common/useGameShortcuts';
 import { dispatch, useView, type ViewStore } from '../viewStore';
 import { useLookAtTop } from '../common/useLookAtTop';
+import {
+  revealMenu,
+  revealTo,
+  stopShowing,
+  usePrivateLog,
+  useRevealTargets,
+} from '../common/targetedReveal';
+import PrivateLogDialog from './PrivateLogDialog';
+import ShownToYouTray from './ShownToYouTray';
 import BottomCardDialog from './BottomCardDialog';
 import LookAtTopDialog from './LookAtTopDialog';
 import LookPrompt, { type LookChoice } from './LookPrompt';
@@ -39,9 +51,22 @@ import { useLibrary } from './useLibrary';
 
 const play = (card: CardView) => moveTo(card, 'battlefield');
 
+const revealCard = (card: CardView) =>
+  dispatch({
+    type: 'reveal',
+    playerId: card.owner,
+    source: 'card',
+    instanceId: card.instanceId,
+  });
+
 const onHandKey = (card: CardView, key: HoverKey) => {
+  if (key === 'r') {
+    revealCard(card);
+    return true;
+  }
   const action = handHoverAction(card, key);
   if (action) dispatch(action);
+  return undefined;
 };
 
 const playAs = (
@@ -55,17 +80,11 @@ const playAs = (
     ...options,
   });
 
-const revealCard = (card: CardView) =>
-  dispatch({
-    type: 'reveal',
-    playerId: card.owner,
-    source: 'card',
-    instanceId: card.instanceId,
-  });
-
 type LibraryEnd = 'top' | 'bottom';
 
 interface HandMenuOptions {
+  // Other players the card may be shown to alone.
+  revealTargets: RevealTarget[];
   onPutInLibrary(card: CardView): void;
   // Left out until the opening hand is kept.
   onPutBack?(card: CardView, end: LibraryEnd): void;
@@ -75,7 +94,7 @@ interface HandMenuOptions {
 // tapped, face down (morph, manifest), or as the back of a modal DFC.
 const handMenu = (
   card: CardView,
-  { onPutInLibrary, onPutBack }: HandMenuOptions
+  { revealTargets, onPutInLibrary, onPutBack }: HandMenuOptions
 ): ContextMenuSpec[] => {
   const moves = moveMenu(
     card,
@@ -94,7 +113,12 @@ const handMenu = (
         ]
       : []),
     { title: 'Play face down', action: () => playAs(card, { faceDown: true }) },
-    { title: 'Reveal', action: () => revealCard(card) },
+    ...revealMenu(
+      'Reveal',
+      revealTargets,
+      () => revealCard(card),
+      (to) => revealTo({ to, source: 'card', instanceId: card.instanceId })
+    ),
   ];
   const putBack: ContextMenuSpec[] = onPutBack
     ? [
@@ -157,8 +181,18 @@ const revealTitles = {
   card: 'a card from your hand',
 };
 
+const revealTitle = (reveal: RevealView) => {
+  if (reveal.faceDown) return 'your face-down permanent';
+  if (reveal.search) return 'the cards you searched for';
+  if (reveal.source === 'card' && reveal.cards.length > 1) {
+    return 'cards from your hand';
+  }
+  return revealTitles[reveal.source];
+};
+
 type Dialog =
   | 'help'
+  | 'privateLog'
   | 'lookCount'
   | 'look'
   | 'search'
@@ -315,8 +349,8 @@ const RevealBar = ({
     className="flex min-w-0 items-center gap-2 rounded bg-sky-200 px-2 py-0.5 text-xs"
   >
     <span className="truncate font-semibold">
-      Everyone can see {revealTitles[reveal.source]} ({reveal.cards.length}). It
-      hides at your next action.
+      Everyone can see {revealTitle(reveal)} ({reveal.cards.length}). It hides
+      at your next action.
     </span>
     <button
       type="button"
@@ -324,6 +358,27 @@ const RevealBar = ({
       onClick={() => dispatch({ type: 'hideReveal', playerId: view.playerId })}
     >
       Hide
+    </button>
+  </div>
+);
+
+// The player's own side of a reveal to one player: who sees what, and a
+// way to stop before the next action ends it anyway.
+const ShowingBar = ({ to, count }: { to: string; count: number }) => (
+  <div
+    data-testid="hand-showing-banner"
+    className="flex min-w-0 items-center gap-2 rounded bg-violet-200 px-2 py-0.5 text-xs"
+  >
+    <span className="truncate font-semibold">
+      Only {to} can see {count === 1 ? 'the card' : `the ${count} cards`} you
+      showed. It ends at your next action.
+    </span>
+    <button
+      type="button"
+      className={`${mulliganButton} shrink-0 ring-1 ring-slate-600`}
+      onClick={stopShowing}
+    >
+      Stop
     </button>
   </div>
 );
@@ -431,6 +486,12 @@ const Hand = ({ store, dock }: Props) => {
     []
   );
   const lookAtTop = useLookAtTop();
+  const revealTargets = useRevealTargets();
+  const privateLog = usePrivateLog();
+  // The latest refused reveal stays up until the player closes it.
+  const notice = privateLog.findLast((entry) => entry.notice);
+  const [closedNotice, setClosedNotice] = useState<number | null>(null);
+  const contextMenu = useContextMenu();
   const { turnTracking } = useSettings().settings;
   // Docked, the board window's own shortcuts already cover the keys.
   useGameShortcuts(view, {
@@ -499,6 +560,7 @@ const Hand = ({ store, dock }: Props) => {
   };
 
   const menuOptions: HandMenuOptions = {
+    revealTargets,
     onPutInLibrary: setPlacing,
     onPutBack: kept ? startPutBack : undefined,
   };
@@ -538,21 +600,73 @@ const Hand = ({ store, dock }: Props) => {
             type="button"
             className={titleButton}
             disabled={!view || view.hand.length === 0}
-            onClick={() =>
-              view &&
-              dispatch({
-                type: 'reveal',
-                playerId: view.playerId,
-                source: 'hand',
-              })
-            }
+            onClick={(e) => {
+              if (!view) return;
+              const toEveryone = () =>
+                dispatch({
+                  type: 'reveal',
+                  playerId: view.playerId,
+                  source: 'hand',
+                });
+              if (revealTargets.length === 0) {
+                toEveryone();
+                return;
+              }
+              // The body's click would close the menu straight away.
+              e.stopPropagation();
+              const box = e.currentTarget.getBoundingClientRect();
+              contextMenu.open({
+                specs: revealMenu(
+                  'Reveal hand',
+                  revealTargets,
+                  toEveryone,
+                  (to) => revealTo({ to, source: 'hand' })
+                ),
+                x: box.left + window.scrollX,
+                y: box.bottom + window.scrollY,
+              });
+            }}
           >
             Reveal hand
           </button>
+          {privateLog.length > 0 && (
+            <button
+              type="button"
+              className={titleButton}
+              onClick={() => openDialog('privateLog')}
+            >
+              Private log
+            </button>
+          )}
         </div>
         <div className="flex min-w-0 items-center gap-2">
           {!dock?.collapsed && view?.revealed && (
             <RevealBar view={view} reveal={view.revealed} />
+          )}
+          {notice && notice.id !== closedNotice && (
+            <div
+              data-testid="hand-reveal-notice"
+              role="alert"
+              className="flex min-w-0 items-center gap-2 rounded bg-red-200 px-2 py-0.5 text-xs"
+            >
+              <span className="truncate font-semibold">{notice.text}</span>
+              <button
+                type="button"
+                className={`${mulliganButton} shrink-0 ring-1 ring-slate-600`}
+                onClick={() => setClosedNotice(notice.id)}
+              >
+                OK
+              </button>
+            </div>
+          )}
+          {!dock?.collapsed && view?.showing && (
+            <ShowingBar
+              to={
+                revealTargets.find((t) => t.playerId === view.showing?.to)
+                  ?.name ?? 'another player'
+              }
+              count={view.showing.count}
+            />
           )}
           {!dock?.collapsed && putBackEnd && (
             <PutBackBar
@@ -639,9 +753,13 @@ const Hand = ({ store, dock }: Props) => {
           })}
           {view && lookAtTop && <TopCardPeek seq={view.seq} />}
           {faceDown.length > 0 && <FaceDownPeek cards={faceDown} />}
+          <ShownToYouTray />
         </div>
       )}
       {dialog === 'help' && <ShortcutHelp onClose={close} />}
+      {dialog === 'privateLog' && (
+        <PrivateLogDialog entries={privateLog} onClose={close} />
+      )}
       {dialog === 'restart' && <RestartDialog onClose={close} />}
       {view && placing && (
         <LibraryPositionPrompt

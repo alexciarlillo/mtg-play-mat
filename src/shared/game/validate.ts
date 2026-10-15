@@ -461,6 +461,7 @@ export const parsePlayerAction = (input: unknown): PlayerAction => {
         playerId: string(input, 'playerId'),
         picks: searchPicks(input, 'picks'),
         shuffle: bool(input, 'shuffle'),
+        ...(flag(input, 'reveal') && { reveal: true }),
       };
     case 'putFromHand':
       return parsePutFromHand(input);

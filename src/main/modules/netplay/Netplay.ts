@@ -10,6 +10,7 @@ import {
   type ControlChange,
   type PlayerId,
   type PublicView,
+  type ShowingView,
   startingLife,
 } from '@shared/game';
 import {
@@ -37,6 +38,7 @@ import {
   cleanLogText,
   encodeNetMessage,
   FEATURE_CONTROL,
+  FEATURE_REVEAL,
   hasFeature,
   HOST_SEAT,
   localFeatures,
@@ -49,10 +51,12 @@ import {
   parseRollRequest,
   PROTOCOL_VERSION,
   type RollRequest,
+  type RevealChange,
   type RollResult,
   type RosterEntry,
   VersionError,
 } from '@shared/net/protocol';
+import { type RevealTarget, revealTargets } from '@shared/net/revealTargets';
 import {
   type OpponentState,
   type RemotePeer,
@@ -61,7 +65,12 @@ import {
 import type { DeckFormat } from '@shared/types/decks';
 
 import type { RequestHandlers } from '../../ipc';
-import { fakePeers, MIRROR_SEAT, mirroredView } from './fakeOpponents';
+import {
+  fakePeers,
+  fakeRevealCards,
+  MIRROR_SEAT,
+  mirroredView,
+} from './fakeOpponents';
 
 // Where the peer connections actually live (a hidden renderer window).
 export interface Transport {
@@ -102,6 +111,10 @@ export interface NetplayDeps {
     fromName: string,
     change: ControlChange
   ): void;
+  // Cards another player showed this one alone.
+  receiveReveal?(from: PlayerId, fromName: string, change: RevealChange): void;
+  // What this build announces it can do; tests stand in an older one.
+  features?: readonly string[];
   // A player with a game open no longer has one here: they left, or
   // closed it. Whatever changed hands with them has to come home.
   peerGone?(playerId: PlayerId, name: string): void;
@@ -321,6 +334,7 @@ export default class Netplay {
     if (next.length === 0 && this.fakes.length === 0) return true;
     this.fakeLife = life;
     this.fakes = next;
+    this.fakeShowing = null;
     this.mirrorLocal(this.deps.localView());
     this.fakeRev += 1;
     this.pushOpponent();
@@ -355,6 +369,7 @@ export default class Netplay {
 
   localViewChanged = (view: PublicView | null) => {
     this.send({ kind: 'public', view });
+    this.endFakeShowing();
     const redealt = this.redealFakes();
     if (this.mirrorLocal(view) || redealt) {
       this.fakeRev += 1;
@@ -423,14 +438,102 @@ export default class Netplay {
   // which passes it on to that seat alone.
   sendControl = (to: PlayerId, change: ControlChange) => {
     if (!this.remote.peer(to)) return;
-    const seats =
-      this.state.role === 'host'
-        ? this.boundSeats()
-            .filter((s) => s.playerId === to)
-            .map((s) => s.seat)
-        : undefined;
     this.log.info(`control ${change.op}`, { to });
-    this.send({ kind: 'control', to, change }, seats);
+    this.send({ kind: 'control', to, change }, this.seatsFor(to));
+  };
+
+  private seatsFor = (to: PlayerId): number[] | undefined =>
+    this.state.role === 'host'
+      ? this.boundSeats()
+          .filter((s) => s.playerId === to)
+          .map((s) => s.seat)
+      : undefined;
+
+  // Everyone else at the table, each marked with whether they can be
+  // shown cards right now.
+  revealTargets = (): RevealTarget[] => {
+    const host =
+      this.state.role === 'guest' && this.hostId
+        ? this.remote.peer(this.hostId)
+        : null;
+    const oldHost =
+      host && !hasFeature(host, FEATURE_REVEAL) ? host.playerId : undefined;
+    return revealTargets(this.opponentState().peers, oldHost);
+  };
+
+  // Routed exactly like control: never to anyone but the one player. A
+  // fake seat has no wire, so it only notes what it was shown.
+  sendReveal = (to: PlayerId, change: RevealChange) => {
+    if (this.fakes.some((peer) => peer.info.playerId === to)) {
+      this.log.info(`reveal ${change.op} to a fake seat`, {
+        to,
+        cards: change.op === 'show' ? change.cards.length : 0,
+      });
+      return;
+    }
+    if (!this.remote.peer(to)) return;
+    // Counts only: which cards were shown never goes in the log.
+    this.log.info(`reveal ${change.op}`, { to });
+    this.send({ kind: 'reveal', to, change }, this.seatsFor(to));
+  };
+
+  private fakeRevealId = 0;
+
+  // The fake seat showing the player cards, until the player next acts,
+  // the way a real reveal ends at its revealer's next action.
+  private fakeShowing: { playerId: PlayerId; id: number } | null = null;
+
+  private setFakeShowing = (
+    playerId: PlayerId,
+    showing: ShowingView | null
+  ) => {
+    this.fakes = this.fakes.map((p) =>
+      p.info.playerId === playerId && p.view
+        ? { ...p, view: { ...p.view, showing } }
+        : p
+    );
+    this.fakeRev += 1;
+  };
+
+  // Dev-only: a generated seat shows the local player a few cards, the
+  // way a real peer's reveal arrives. Returns whether one could.
+  fakeReveal = (count = 2): boolean => {
+    const peer = this.fakes.find(
+      (p, i) => i !== MIRROR_SEAT && p.view !== null
+    );
+    if (!peer) return false;
+    this.endFakeShowing();
+    this.fakeRevealId += 1;
+    const cards = fakeRevealCards(count);
+    const { playerId } = this.deps.profile();
+    const from = peer.info.playerId;
+    this.setFakeShowing(from, {
+      to: playerId,
+      source: 'hand',
+      count: cards.length,
+    });
+    this.fakeShowing = { playerId: from, id: this.fakeRevealId };
+    this.pushOpponent();
+    this.deps.receiveReveal?.(from, peer.info.name, {
+      op: 'show',
+      id: this.fakeRevealId,
+      source: 'hand',
+      cards,
+    });
+    return true;
+  };
+
+  private endFakeShowing = () => {
+    const was = this.fakeShowing;
+    if (!was) return;
+    this.fakeShowing = null;
+    this.setFakeShowing(was.playerId, null);
+    this.pushOpponent();
+    const name = this.fakes.find((p) => p.info.playerId === was.playerId)?.info
+      .name;
+    if (name) {
+      this.deps.receiveReveal?.(was.playerId, name, { op: 'end', id: was.id });
+    }
   };
 
   host = async () => {
@@ -889,11 +992,13 @@ export default class Netplay {
         this.rollFor(message.from, name, message.request);
         return;
       }
-      case 'control': {
+      case 'control':
+      case 'reveal': {
         if (message.to === this.deps.profile().playerId) {
-          this.deliverControl(message.from, message.change);
+          this.deliverTargeted(message);
           return;
         }
+        // Passed on to that one seat alone, never to the rest.
         const target = this.otherSeats(seat).find(
           (s) => s.playerId === message.to
         );
@@ -953,8 +1058,9 @@ export default class Netplay {
         );
         return;
       case 'control':
+      case 'reveal':
         if (message.to === this.deps.profile().playerId) {
-          this.deliverControl(message.from, message.change);
+          this.deliverTargeted(message);
         }
         return;
       case 'hello':
@@ -981,11 +1087,18 @@ export default class Netplay {
     }
   };
 
-  private deliverControl = (from: PlayerId, change: ControlChange) => {
+  private deliverTargeted = (
+    message: Extract<NetMessage, { kind: 'control' | 'reveal' }>
+  ) => {
+    const { from } = message;
     const name = this.remote.peer(from)?.name;
     if (!name) return;
-    this.log.info(`control ${change.op} arrived`, { from });
-    this.deps.receiveControl?.(from, name, change);
+    this.log.info(`${message.kind} ${message.change.op} arrived`, { from });
+    if (message.kind === 'control') {
+      this.deps.receiveControl?.(from, name, message.change);
+    } else {
+      this.deps.receiveReveal?.(from, name, message.change);
+    }
   };
 
   // A peer's mat or back: the bytes are written before the board is
@@ -1166,7 +1279,7 @@ export default class Netplay {
       playerId,
       name: displayName,
       appVersion: this.deps.appVersion,
-      features: [...localFeatures],
+      features: [...(this.deps.features ?? localFeatures)],
     };
   };
 
@@ -1329,6 +1442,7 @@ export default class Netplay {
   private clearFakes = (): boolean => {
     if (this.fakes.length === 0) return false;
     this.fakes = [];
+    this.fakeShowing = null;
     this.fakeRev += 1;
     return true;
   };

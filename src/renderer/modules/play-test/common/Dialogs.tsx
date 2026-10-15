@@ -87,6 +87,10 @@ interface NumberPromptProps {
   max?: number;
   onSubmit(value: number): void;
   onClose(): void;
+  // More fields under the number, such as who it is for.
+  children?: ReactNode;
+  // Those fields aren't valid yet, so OK waits.
+  blocked?: boolean;
 }
 
 export const NumberPrompt = ({
@@ -97,6 +101,8 @@ export const NumberPrompt = ({
   max,
   onSubmit,
   onClose,
+  children,
+  blocked = false,
 }: NumberPromptProps) => {
   const [text, setText] = useState(String(initial));
   const value = Number(text);
@@ -104,7 +110,8 @@ export const NumberPrompt = ({
     text.trim() !== '' &&
     Number.isInteger(value) &&
     (min === undefined || value >= min) &&
-    (max === undefined || value <= max);
+    (max === undefined || value <= max) &&
+    !blocked;
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -129,6 +136,7 @@ export const NumberPrompt = ({
             onFocus={(e) => e.target.select()}
           />
         </label>
+        {children}
         <div className="flex justify-end gap-2">
           <button type="button" className={buttonClass} onClick={onClose}>
             Cancel

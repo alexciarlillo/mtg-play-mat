@@ -121,6 +121,9 @@ const createAppWindow = (playTest: PlayTest) => {
   menu = new MenuBuilder(window, {
     fakeOpponents: () => netplay?.fakeOpponents ?? 0,
     fakeOpponentsEnabled: fakeOpponentsAllowed,
+    fakeReveal: () => {
+      netplay?.fakeReveal();
+    },
     openSamplePlayTest: playTest.openSampleDeck,
     openSettings: () => openSettings(playTest),
     playTestOpen: () => playTest.isOpen,
@@ -315,6 +318,9 @@ const start = (onDeepLink: ReturnType<typeof watchDeepLinks>) => {
           testMatFile = file;
         },
         openedUrls: () => openedUrls,
+        setFakeOpponents: (count: number) =>
+          online.netplay.setFakeOpponents(count),
+        fakeReveal: () => online.netplay.fakeReveal(),
       },
     });
   }

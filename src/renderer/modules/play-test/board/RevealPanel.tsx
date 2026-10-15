@@ -10,6 +10,12 @@ const titles: Record<RevealSource, string> = {
   card: 'Revealed from hand',
 };
 
+const titleOf = (reveal: RevealView) => {
+  if (reveal.faceDown) return 'Revealed face-down';
+  if (reveal.search) return 'Revealed from a search';
+  return titles[reveal.source];
+};
+
 interface Props {
   reveal: RevealView | null | undefined;
   size?: CardSize;
@@ -35,7 +41,7 @@ const RevealPanel = ({
     >
       <div className="flex items-center justify-between gap-3 text-sm font-semibold">
         <span>
-          {titles[reveal.source]} ({reveal.cards.length})
+          {titleOf(reveal)} ({reveal.cards.length})
         </span>
         {onHide && (
           <button

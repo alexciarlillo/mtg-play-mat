@@ -19,7 +19,7 @@ export const shortcutList: Shortcut[] = [
   { key: 'N', description: 'Next turn (with turn tracking on)' },
   { key: 'V', description: 'Search your library' },
   { key: '⇧V', description: 'Look at the top of your library' },
-  { key: 'R', description: 'Restart the game' },
+  { key: 'R', description: 'Restart the game (not over a hand card)' },
   { key: '↑ / +', description: 'Gain 1 life' },
   { key: '↓ / −', description: 'Lose 1 life' },
   { key: '⌘/Ctrl+Z', description: 'Undo your last action' },
@@ -41,6 +41,7 @@ export const hoverShortcutList: Shortcut[] = [
   { key: 'L', description: 'Put on top of the library' },
   { key: '⇧L', description: 'Put on the bottom of the library' },
   { key: 'C', description: 'Move a commander to the command zone' },
+  { key: 'R', description: 'Reveal a card in your hand to everyone' },
 ];
 
 // Checkboxes and buttons take no text, so game keys still work on them.
@@ -174,7 +175,8 @@ export const useGameShortcuts = (view: PublicView | null, options: Options) => {
           else if (current.libraryCount > 0) opts.onLibraryDialog('look');
           break;
         case 'r':
-          opts.onRestart();
+          // Over one of the player's hand cards, R reveals it instead.
+          if (!hovered.pressHoverKey('r')) opts.onRestart();
           break;
         default:
           return;

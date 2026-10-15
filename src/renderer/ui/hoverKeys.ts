@@ -1,7 +1,8 @@
 // Keys that act on the card under the pointer. Shift+L is its own key,
-// the library bottom, so it reads as upper case.
+// the library bottom, so it reads as upper case. R is also the restart
+// key, so it is only ever offered on its own (see useGameShortcuts).
 export type HoverKey =
-  't' | 'f' | 'x' | 'g' | 'e' | 'h' | 'b' | 'l' | 'L' | 'c';
+  't' | 'f' | 'x' | 'g' | 'e' | 'h' | 'b' | 'l' | 'L' | 'c' | 'r';
 
 const plain: ReadonlySet<string> = new Set([
   't',
@@ -32,4 +33,5 @@ export const hoverKeyOf = (e: KeyboardEvent): HoverKey | null => {
 };
 
 // What a hovered card does with a key; a card without one ignores keys.
-export type HoverKeyHandler = (key: HoverKey) => void;
+// Returning false gives the key back, so it does what it does elsewhere.
+export type HoverKeyHandler = (key: HoverKey) => boolean | void;

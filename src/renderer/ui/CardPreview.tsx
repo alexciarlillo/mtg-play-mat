@@ -92,8 +92,7 @@ export const CardPreviewProvider = ({
       pressHoverKey: (key) => {
         const handler = hovered.current?.current;
         if (!handler) return false;
-        handler(key);
-        return true;
+        return handler(key) !== false;
       },
     }),
     [reserveRight]

@@ -406,11 +406,17 @@ const describeSearch = (
     counted(count('bottom'), 'on the bottom of their library'),
   ].filter((part): part is string => typeof part === 'string');
   const found = joinParts(parts);
+  // Hidden picks are named only when the player chose to show them.
+  const shown = action.reveal ? (after.revealed?.cards ?? []) : [];
+  const searched =
+    shown.length > 0
+      ? `searched their library, revealed ${listNames(shown.map(refName))},`
+      : 'searched their library';
   // The shuffle comes before placing, which matters for library picks.
-  if (!action.shuffle) return `searched their library and put ${found}`;
+  if (!action.shuffle) return `${searched} and put ${found}`;
   return count('top') + count('bottom') > 0
-    ? `searched their library, then shuffled, and put ${found}`
-    : `searched their library and put ${found}, then shuffled`;
+    ? `${searched.replace(/,$/, '')}, then shuffled, and put ${found}`
+    : `${searched} and put ${found}, then shuffled`;
 };
 
 // Hand to library is hidden to hidden, so only the counts are told.
@@ -461,7 +467,9 @@ const describeReveal = (
         : `revealed the top ${shown.length} cards of their library: ` +
             listNames(shown);
     case 'card':
-      return `revealed ${listNames(shown)} from their hand`;
+      return after.revealed?.faceDown
+        ? `revealed a face-down permanent: ${listNames(shown)}`
+        : `revealed ${listNames(shown)} from their hand`;
   }
 };
 

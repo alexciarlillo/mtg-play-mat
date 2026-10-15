@@ -1,4 +1,9 @@
 import type { IceServer, NetConfig } from '@shared/net/lobby';
+import { localFeatures } from '@shared/net/protocol';
+import {
+  type RevealTarget,
+  sameRevealTargets,
+} from '@shared/net/revealTargets';
 import { relayHost } from '@shared/debug';
 import { app, BrowserWindow, screen } from 'electron';
 
@@ -66,6 +71,14 @@ const growForTable = (board: BrowserWindow | null, opponents: number) => {
   });
 };
 
+// Tests stand in a build from before some feature by naming it here.
+const announcedFeatures = (testHooks: boolean): readonly string[] => {
+  const dropped = testHooks
+    ? (process.env.MTG_PLAY_MAT_TEST_DROP_FEATURES ?? '').split(',')
+    : [];
+  return localFeatures.filter((feature) => !dropped.includes(feature));
+};
+
 type NetplaySetupHandlers = Pick<
   RequestHandlers,
   | 'getNetState'
@@ -128,6 +141,8 @@ export const setupNetplay = ({
   const keepPicture = (id: string, data: string) =>
     mats.receive(id, Buffer.from(data, 'base64'));
 
+  let lastTargets: RevealTarget[] = [];
+
   const netplay: Netplay = new Netplay({
     transports: { p2p: netWindow, relay },
     config,
@@ -147,10 +162,17 @@ export const setupNetplay = ({
     localBack: () => sharePicture(settings.settings.cardBack),
     receiveBack: keepPicture,
     receiveControl: playTest.receiveControl,
+    receiveReveal: playTest.receiveReveal,
+    features: announcedFeatures(testHooks),
     peerGone: playTest.peerGone,
     pushOpponent: (state) => {
       growForTable(playTest.boardWindow, state.peers.length);
       sendEvent(playTest.boardWindow, 'opponentView', state);
+      const targets = netplay.revealTargets();
+      if (!sameRevealTargets(targets, lastTargets)) {
+        lastTargets = targets;
+        playTest.revealTargetsChanged(targets);
+      }
     },
   });
 
@@ -164,6 +186,11 @@ export const setupNetplay = ({
   playTest.linkControl({
     send: netplay.sendControl,
     peerName: netplay.peerName,
+  });
+
+  playTest.linkReveal({
+    send: netplay.sendReveal,
+    targets: netplay.revealTargets,
   });
 
   // Peers learn a new name without waiting for a reconnect, whichever

@@ -9,6 +9,7 @@ import {
 } from './core';
 import { untapAll } from './mtg';
 import { shuffle } from './rng';
+import { isHiddenSearchPick } from './showing';
 import { MAX_REVEALED_CARDS } from './views';
 import type {
   ArrangeTopAction,
@@ -22,6 +23,7 @@ import type {
   Reveal,
   RevealAction,
   SearchLibraryAction,
+  SearchPick,
 } from './types';
 
 const moveAll = (
@@ -124,13 +126,30 @@ const searchLibrary = (
     : removed;
 
   let top = 0;
-  return action.picks.reduce((next, { instanceId, to, tapped }) => {
+  const placed = action.picks.reduce((next, { instanceId, to, tapped }) => {
     if (to === 'top') {
       return moveCard(next, rules, instanceId, 'library', { index: top++ });
     }
     if (to === 'bottom') return moveCard(next, rules, instanceId, 'library');
     return moveCard(next, rules, instanceId, to, { tapped });
   }, shuffled);
+  return action.reveal ? revealPicks(placed, player.id, action.picks) : placed;
+};
+
+// Every pick that went somewhere hidden: the hand, or either end of the
+// library. Sent as a card reveal, which older builds know.
+const revealPicks = (
+  state: GameState,
+  playerId: PlayerId,
+  picks: SearchPick[]
+): GameState => {
+  const instanceIds = picks
+    .filter(isHiddenSearchPick)
+    .map((pick) => pick.instanceId)
+    .slice(0, MAX_REVEALED_CARDS);
+  if (instanceIds.length === 0) return hideReveal(state, playerId);
+  const revealed: Reveal = { source: 'card', instanceIds, search: true };
+  return updatePlayer(state, playerId, { revealed });
 };
 
 // Refused unless every card is a distinct card in the hand, so a stale
@@ -170,11 +189,19 @@ const revealedIds = (
         0,
         Math.max(0, Math.min(action.count, MAX_REVEALED_CARDS))
       );
-    case 'card':
-      return state.cards[action.instanceId]?.zone === 'hand' &&
-        player.zones.hand.includes(action.instanceId)
-        ? [action.instanceId]
-        : [];
+    case 'card': {
+      const card = state.cards[action.instanceId];
+      const inHand =
+        card?.zone === 'hand' && player.zones.hand.includes(card.instanceId);
+      // Only the owner, while the permanent is still theirs, knows it.
+      const faceDown =
+        card?.zone === 'battlefield' &&
+        card.faceDown &&
+        card.owner === player.id &&
+        card.controller === player.id &&
+        player.zones.battlefield.includes(card.instanceId);
+      return inHand || faceDown ? [action.instanceId] : [];
+    }
   }
 };
 

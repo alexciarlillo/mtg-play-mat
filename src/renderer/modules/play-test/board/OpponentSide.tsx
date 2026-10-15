@@ -36,6 +36,7 @@ import PlayMat, { MatBackdrop } from './PlayMat';
 import { ownerLabel, type OwnerLabels } from './pod';
 import PlayerCounters from './PlayerCounters';
 import RevealPanel from './RevealPanel';
+import ShowingBadge from './ShowingBadge';
 import ScaledField from './ScaledField';
 import SeatLog from './SeatLog';
 import ZoneBrowser from './ZoneBrowser';
@@ -213,6 +214,8 @@ const OpponentSide = ({
   tight = false,
   showTurn = false,
   owners = {},
+  selfId,
+  names = {},
   hidden = false,
   log = [],
   logOpen = false,
@@ -231,6 +234,8 @@ const OpponentSide = ({
   // Follows the local turn tracking setting, not the opponent's.
   showTurn?: boolean;
   owners?: OwnerLabels;
+  selfId?: string;
+  names?: Record<string, string>;
   // Board folded away, usually because this player is out of the game.
   // Only the battlefield goes: the panel is how they are still tracked.
   hidden?: boolean;
@@ -383,6 +388,14 @@ const OpponentSide = ({
             reveal={view?.revealed}
             size={compact ? 'xs' : 'sm'}
             testId="opponent-reveal-panel"
+          />
+          <ShowingBadge
+            name={peer.name}
+            showing={view?.showing}
+            selfId={selfId}
+            names={names}
+            compact={compact}
+            testId="opponent-showing-badge"
           />
           {view && bounds ? (
             <ScaledField

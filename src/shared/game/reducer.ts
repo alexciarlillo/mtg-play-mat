@@ -87,6 +87,8 @@ const endReveal = (
   action: GameAction
 ): GameState => {
   if (action.type === 'newGame' || action.type === 'reveal') return after;
+  // It sets its own reveal, of the cards it just found.
+  if (action.type === 'searchLibrary' && action.reveal) return after;
   const actor = actionPlayer(before, action);
   if (!actor || !getPlayer(after, actor)?.revealed) return after;
   return hideReveal(after, actor);

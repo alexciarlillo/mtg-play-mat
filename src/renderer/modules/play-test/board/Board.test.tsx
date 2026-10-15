@@ -1,5 +1,6 @@
 import type { CardView, PublicView } from '@shared/game';
 import type { OpponentState } from '@shared/net/remoteViews';
+import type { RevealTarget } from '@shared/net/revealTargets';
 import {
   defaultSettings,
   MIN_OPPONENT_ROW_HEIGHT,
@@ -15,7 +16,7 @@ import {
   within,
 } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ContextMenuProvider } from '../../../ui/ContextMenuProvider';
 import type { ViewStore } from '../viewStore';
@@ -64,6 +65,8 @@ let pushMenuCommand: (command: BoardMenuCommand) => void;
 let pushGameStarted: () => void;
 let pushUndoState: (next: { canUndo: boolean; canRedo: boolean }) => void;
 let api: Record<string, ReturnType<typeof vi.fn>>;
+let revealTargets: RevealTarget[] = [];
+let pushRevealTargets: (next: RevealTarget[]) => void;
 
 // A store whose view can be replaced, as main and peers push new ones.
 const pushable = <V,>(initial: V) => {
@@ -97,6 +100,12 @@ const renderBoard = (
     getLookAtTop: vi.fn(async () => false),
     setLookAtTop: vi.fn(async () => {}),
     onLookAtTop: vi.fn(() => () => {}),
+    getRevealTargets: vi.fn(async () => revealTargets),
+    onRevealTargets: vi.fn((listener: (next: RevealTarget[]) => void) => {
+      pushRevealTargets = listener;
+      return () => {};
+    }),
+    revealTo: vi.fn(async () => {}),
   };
   Object.assign(window, {
     api: {
@@ -724,6 +733,123 @@ describe('Board top of the library', () => {
       type: 'setTopRevealed',
       playerId: 'p1',
       revealed: false,
+    });
+  });
+});
+
+describe('Board reveals to one player', () => {
+  afterEach(() => {
+    revealTargets = [];
+  });
+
+  it('badges whoever is showing whom, and never the cards', async () => {
+    renderBoard(
+      defaultSettings,
+      {
+        ...view,
+        name: 'Alice',
+        showing: { to: 'p2', source: 'hand', count: 2 },
+      },
+      {
+        ...opponent,
+        peers: [
+          {
+            ...opponent.peers[0],
+            view: {
+              ...view,
+              playerId: 'p2',
+              name: 'Bob',
+              showing: { to: 'p1', source: 'card', count: 1 },
+            },
+          },
+        ],
+      }
+    );
+    await act(async () => {});
+    expect(screen.getByTestId('showing-badge')).toHaveTextContent(
+      'Alice is showing Bob 2 cards'
+    );
+    expect(screen.getByTestId('opponent-showing-badge')).toHaveTextContent(
+      'Bob is showing you 1 card'
+    );
+  });
+
+  it('shows the top cards to one player from the library menu', async () => {
+    revealTargets = [{ playerId: 'p2', name: 'Bob', ready: true }];
+    renderBoard(defaultSettings);
+    await act(async () => {});
+    fireEvent.contextMenu(screen.getByTestId('library'));
+    fireEvent.click(
+      screen.getByRole('menuitem', { name: 'Reveal the top card to Bob' })
+    );
+    expect(api.revealTo).toHaveBeenCalledWith(
+      { to: 'p2', source: 'libraryTop', count: 1 },
+      undefined
+    );
+
+    fireEvent.contextMenu(screen.getByTestId('library'));
+    fireEvent.click(
+      screen.getByRole('menuitem', { name: 'Reveal the top N…' })
+    );
+    const dialog = screen.getByRole('dialog', { name: 'Reveal cards' });
+    fireEvent.change(within(dialog).getByRole('spinbutton'), {
+      target: { value: '3' },
+    });
+    fireEvent.change(within(dialog).getByLabelText('Reveal to'), {
+      target: { value: 'p2' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'OK' }));
+    expect(api.revealTo).toHaveBeenLastCalledWith(
+      { to: 'p2', source: 'libraryTop', count: 3 },
+      undefined
+    );
+    expect(api.dispatch).not.toHaveBeenCalled();
+  });
+
+  it('keeps a departed player chosen for the top N, and waits', async () => {
+    revealTargets = [{ playerId: 'p2', name: 'Bob', ready: true }];
+    renderBoard(defaultSettings);
+    await act(async () => {});
+    fireEvent.contextMenu(screen.getByTestId('library'));
+    fireEvent.click(
+      screen.getByRole('menuitem', { name: 'Reveal the top N…' })
+    );
+    const dialog = screen.getByRole('dialog', { name: 'Reveal cards' });
+    fireEvent.change(within(dialog).getByLabelText('Reveal to'), {
+      target: { value: 'p2' },
+    });
+    act(() => pushRevealTargets([]));
+    expect(
+      (within(dialog).getByLabelText('Reveal to') as HTMLSelectElement).value
+    ).toBe('p2');
+    expect(
+      within(dialog).getByTestId('reveal-target-unavailable')
+    ).toHaveTextContent('Bob can’t be shown cards now (left the table)');
+    const ok = within(dialog).getByRole('button', { name: 'OK' });
+    expect(ok).toBeDisabled();
+    fireEvent.click(ok);
+    expect(api.revealTo).not.toHaveBeenCalled();
+    expect(api.dispatch).not.toHaveBeenCalled();
+  });
+
+  it('reveals the top N to everyone outside a pod', async () => {
+    renderBoard(defaultSettings);
+    await act(async () => {});
+    fireEvent.contextMenu(screen.getByTestId('library'));
+    fireEvent.click(
+      screen.getByRole('menuitem', { name: 'Reveal the top N…' })
+    );
+    const dialog = screen.getByRole('dialog', { name: 'Reveal cards' });
+    expect(within(dialog).queryByLabelText('Reveal to')).toBeNull();
+    fireEvent.change(within(dialog).getByRole('spinbutton'), {
+      target: { value: '2' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'OK' }));
+    expect(api.dispatch).toHaveBeenCalledWith({
+      type: 'reveal',
+      playerId: 'p1',
+      source: 'libraryTop',
+      count: 2,
     });
   });
 });

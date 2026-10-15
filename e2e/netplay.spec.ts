@@ -864,7 +864,9 @@ test('a reveal and the turn number reach the other board', async () => {
   const card = handCards(hostHand).first();
   const name = await card.getAttribute('data-card-name');
   await card.click({ button: 'right' });
-  await hostHand.getByRole('menuitem', { name: 'Reveal', exact: true }).click();
+  await hostHand
+    .getByRole('menuitem', { name: 'Reveal to everyone', exact: true })
+    .click();
   await expect(panel.getByTestId('card')).toHaveAttribute(
     'data-card-name',
     name!

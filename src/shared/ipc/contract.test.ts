@@ -20,6 +20,9 @@ describe('ipc contract', () => {
       'onBoardMenuCommand',
       'onHandCommand',
       'onLookAtTop',
+      'onRevealTargets',
+      'onShownToYou',
+      'onPrivateLog',
       'onNavigate',
       'onDebugLog',
     ]);

@@ -2,7 +2,7 @@
 import type { ControlChange, PublicView } from '@shared/game';
 import { packDescription } from '@shared/net/codec';
 import type { NetCommand, NetState } from '@shared/net/lobby';
-import type { NetMessage } from '@shared/net/protocol';
+import type { NetMessage, RevealChange } from '@shared/net/protocol';
 import type { OpponentState } from '@shared/net/remoteViews';
 import type { DeckFormat } from '@shared/types/decks';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -89,6 +89,7 @@ const setup = (me = 'alice') => {
   let format: DeckFormat = 'constructed';
   const rolls: number[] = [];
   const control: [string, string, ControlChange][] = [];
+  const reveals: [string, string, RevealChange][] = [];
   const gone: string[] = [];
   const netplay = new Netplay({
     transports: { p2p: transport, relay },
@@ -111,6 +112,7 @@ const setup = (me = 'alice') => {
       return Promise.resolve(true);
     },
     receiveControl: (from, name, change) => control.push([from, name, change]),
+    receiveReveal: (from, name, change) => reveals.push([from, name, change]),
     peerGone: (playerId, name) => gone.push(`${playerId} ${name}`),
     connectTimeoutMs: 50,
     randomInt: (max) => {
@@ -137,6 +139,7 @@ const setup = (me = 'alice') => {
     keptBacks,
     rolls,
     control,
+    reveals,
     gone,
     opponent: () => opponents.at(-1),
     state: () => netplay.netState,
@@ -614,7 +617,7 @@ describe('Netplay guest', () => {
       playerId: 'bob',
       name: 'Bob',
       appVersion: '9.9.9',
-      features: ['control'],
+      features: ['control', 'reveal'],
     });
     expect(pub).toMatchObject({ seq: 2, kind: 'public', view: view('bob') });
     expect(t.state()).toMatchObject({
@@ -1489,5 +1492,203 @@ describe('Netplay changes of control', () => {
     expect(t.gone).toEqual(['bob Bob']);
     say(t, 3, raw('carol', 3, { kind: 'bye' }));
     expect(t.gone).toEqual(['bob Bob', 'carol Carol']);
+  });
+});
+
+describe('Netplay targeted reveals', () => {
+  const bear = {
+    id: '409f9b88-f03e-40b6-9883-68c14c37c0de',
+    name: 'Grizzly Bears',
+    typeLine: 'Creature — Bear',
+    faces: [{ name: 'Grizzly Bears', typeLine: 'Creature — Bear' }],
+  };
+  const show: RevealChange = {
+    op: 'show',
+    id: 1,
+    source: 'hand',
+    cards: [bear],
+  };
+
+  const helloWith = (from: string, features: string[], seq = 1) =>
+    raw(from, seq, {
+      kind: 'hello',
+      playerId: from,
+      name: names[from],
+      appVersion: '1',
+      features,
+    });
+
+  const publicOf = (from: string, seq: number, v: PublicView | null) =>
+    raw(from, seq, { kind: 'public', view: v });
+
+  const seat = (t: Harness, n: number, id: string, features: string[]) => {
+    say(t, n, helloWith(id, features, 10));
+    say(t, n, publicOf(id, 11, view(id)));
+  };
+
+  it('lists every player, greying out one without a game or the feature', async () => {
+    const t = await hostWith({ 2: 'bob', 3: 'carol', 4: 'dave' });
+    seat(t, 2, 'bob', ['control', 'reveal']);
+    seat(t, 3, 'carol', ['control']);
+    say(t, 4, helloWith('dave', ['reveal'], 10));
+    expect(t.netplay.revealTargets()).toEqual([
+      { playerId: 'bob', name: 'Bob', ready: true },
+      {
+        playerId: 'carol',
+        name: 'Carol',
+        ready: false,
+        why: 'needs a newer version',
+      },
+      { playerId: 'dave', name: 'Dave', ready: false, why: 'no game open' },
+    ]);
+  });
+
+  it('as a guest, greys out other guests while the host is an older build', async () => {
+    const t = await guestIn([
+      ['alice', 1],
+      ['bob', 2],
+      ['carol', 3],
+    ]);
+    // The host's hello announced nothing, so it would drop the relay.
+    say(t, 1, helloWith('carol', ['reveal'], 10));
+    say(t, 1, publicOf('carol', 11, view('carol')));
+    say(t, 1, publicOf('alice', 12, view('alice')));
+    expect(t.netplay.revealTargets()).toEqual([
+      {
+        playerId: 'alice',
+        name: 'Alice',
+        ready: false,
+        why: 'needs a newer version',
+      },
+      {
+        playerId: 'carol',
+        name: 'Carol',
+        ready: false,
+        why: 'the host needs a newer version',
+      },
+    ]);
+
+    say(t, 1, helloWith('alice', ['reveal'], 13));
+    expect(t.netplay.revealTargets().map((target) => target.ready)).toEqual([
+      true,
+      true,
+    ]);
+  });
+
+  it('sends the host’s reveal to that one seat', async () => {
+    const t = await hostWith({ 2: 'bob', 3: 'carol' });
+    t.netplay.sendReveal('carol', show);
+    const sent = t.sends().at(-1);
+    expect(sent?.seats).toEqual([3]);
+    expect(JSON.parse(sent?.data ?? '')).toMatchObject({
+      kind: 'reveal',
+      from: 'alice',
+      to: 'carol',
+      change: show,
+    });
+    // Never the cards in the debug log.
+    expect(t.logged.join('\n')).not.toContain('Grizzly Bears');
+  });
+
+  it('passes a guest’s reveal on to its seat alone, unchanged', async () => {
+    const t = await hostWith({ 2: 'bob', 3: 'carol', 4: 'dave' });
+    const before = t.sends().length;
+    const data = raw('bob', 2, { kind: 'reveal', to: 'carol', change: show });
+    say(t, 2, data);
+    expect(t.sends().slice(before)).toEqual([{ op: 'send', seats: [3], data }]);
+    expect(t.reveals).toEqual([]);
+  });
+
+  it('takes a reveal meant for the host itself, and its end', async () => {
+    const t = await hostWith({ 2: 'bob' });
+    say(t, 2, raw('bob', 2, { kind: 'reveal', to: 'alice', change: show }));
+    say(
+      t,
+      2,
+      raw('bob', 3, {
+        kind: 'reveal',
+        to: 'alice',
+        change: { op: 'end', id: 1 },
+      })
+    );
+    expect(t.reveals).toEqual([
+      ['bob', 'Bob', show],
+      ['bob', 'Bob', { op: 'end', id: 1 }],
+    ]);
+  });
+
+  it('as a guest, sends by the host and keeps only its own', async () => {
+    const t = await guestIn([
+      ['alice', 1],
+      ['bob', 2],
+      ['carol', 3],
+    ]);
+    say(t, 1, hello('carol'));
+    t.netplay.sendReveal('carol', show);
+    expect(t.sends().at(-1)?.seats).toEqual([1]);
+
+    say(t, 1, raw('carol', 2, { kind: 'reveal', to: 'dave', change: show }));
+    say(t, 1, raw('carol', 3, { kind: 'reveal', to: 'bob', change: show }));
+    expect(t.reveals).toEqual([['carol', 'Carol', show]]);
+  });
+
+  it('announces the feature unless told it is an older build', async () => {
+    const t = await guestIn();
+    const sentHello = t
+      .sentTo(1)
+      .find(
+        (m): m is Extract<NetMessage, { kind: 'hello' }> => m.kind === 'hello'
+      );
+    expect(sentHello?.features).toContain('reveal');
+  });
+});
+
+describe('Netplay fake reveals', () => {
+  it('lets a generated seat show the player cards, but never the mirror', () => {
+    const t = setup();
+    t.netplay.setFakeOpponents(1);
+    expect(t.netplay.fakeReveal()).toBe(false);
+    t.netplay.setFakeOpponents(2);
+    const targets = t.netplay.revealTargets();
+    expect(targets.map((target) => target.ready)).toEqual([false, true]);
+
+    expect(t.netplay.fakeReveal()).toBe(true);
+    const [[from, name, change]] = t.reveals;
+    expect(from).toBe('fake-desmond');
+    expect(name).toBe('Desmond Okafor');
+    expect(change).toMatchObject({ op: 'show', source: 'hand' });
+    expect(change.op === 'show' && change.cards.length).toBe(2);
+    const seat = t.opponent()?.peers.find((p) => p.info.playerId === from);
+    expect(seat?.view?.showing).toEqual({
+      to: 'alice',
+      source: 'hand',
+      count: 2,
+    });
+  });
+
+  it('ends the fake showing at the player’s next action', () => {
+    const t = setup();
+    t.netplay.setFakeOpponents(2);
+    t.netplay.fakeReveal();
+    const [[from, , shown]] = t.reveals;
+    t.netplay.localViewChanged(view('alice', 19));
+    expect(t.reveals.at(-1)).toEqual([
+      from,
+      'Desmond Okafor',
+      { op: 'end', id: shown.id },
+    ]);
+    const seat = t.opponent()?.peers.find((p) => p.info.playerId === from);
+    expect(seat?.view?.showing).toBeNull();
+    // Only once.
+    t.netplay.localViewChanged(view('alice', 18));
+    expect(t.reveals).toHaveLength(2);
+  });
+
+  it('takes a reveal to a fake seat without touching the wire', () => {
+    const t = setup();
+    t.netplay.setFakeOpponents(2);
+    const before = t.commands.length;
+    t.netplay.sendReveal('fake-desmond', { op: 'end', id: 1 });
+    expect(t.commands.length).toBe(before);
   });
 });

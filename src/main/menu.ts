@@ -17,6 +17,8 @@ interface DarwinMenuItemConstructorOptions extends MenuItemConstructorOptions {
 export interface MenuActions {
   fakeOpponents(): number;
   fakeOpponentsEnabled(): boolean;
+  // A generated seat shows the player a few cards, as a peer would.
+  fakeReveal(): void;
   openSamplePlayTest(): void;
   openSettings(): void;
   playTestOpen(): boolean;
@@ -289,15 +291,27 @@ export default class MenuBuilder {
       id: 'fake-opponents',
       label: 'Fake Opponents',
       enabled: this.actions.fakeOpponentsEnabled(),
-      submenu: Array.from({ length: MAX_FAKE_PEERS + 1 }, (_, count) => ({
-        id: `fake-opponents-${count}`,
-        label: count === 0 ? 'None' : String(count),
-        type: 'radio' as const,
-        checked: count === current,
-        click: () => {
-          this.actions.setFakeOpponents(count);
+      submenu: [
+        ...Array.from({ length: MAX_FAKE_PEERS + 1 }, (_, count) => ({
+          id: `fake-opponents-${count}`,
+          label: count === 0 ? 'None' : String(count),
+          type: 'radio' as const,
+          checked: count === current,
+          click: () => {
+            this.actions.setFakeOpponents(count);
+          },
+        })),
+        { type: 'separator' as const },
+        {
+          id: 'fake-reveal',
+          label: 'Show Me Cards From a Fake Opponent',
+          // The mirror seat can't, so it takes a second seat.
+          enabled: current > 1 && this.actions.playTestOpen(),
+          click: () => {
+            this.actions.fakeReveal();
+          },
         },
-      })),
+      ],
     };
   }
 

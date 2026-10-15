@@ -1,5 +1,6 @@
 import { isMatId, MAT_ID_LENGTH } from '../mat';
 import {
+  type CardRef,
   type CardView,
   type CommanderDamage,
   type ControlChange,
@@ -15,8 +16,11 @@ import {
   type Position,
   type PublicView,
   type PublicZoneId,
+  parseShowingSource,
   type RevealSource,
   type RevealView,
+  type ShowingSource,
+  type ShowingView,
   type ZoneId,
   zoneIds,
 } from '../game';
@@ -44,7 +48,13 @@ export const MAX_MESSAGE_BYTES = 256 * 1024;
 // asked to do what it says it can.
 export const FEATURE_CONTROL = 'control';
 
-export const localFeatures: readonly string[] = [FEATURE_CONTROL];
+// Cards shown to one player only, in their hand window.
+export const FEATURE_REVEAL = 'reveal';
+
+export const localFeatures: readonly string[] = [
+  FEATURE_CONTROL,
+  FEATURE_REVEAL,
+];
 
 const MAX_FEATURES = 20;
 
@@ -58,6 +68,12 @@ export interface PeerInfo {
 
 export const hasFeature = (info: PeerInfo, feature: string) =>
   info.features?.includes(feature) ?? false;
+
+// Cards one player shows another. Ids are the sender's own, so the
+// receiver can tell which reveal an end belongs to.
+export type RevealChange =
+  | { op: 'show'; id: number; source: ShowingSource; cards: CardRef[] }
+  | { op: 'end'; id: number };
 
 export interface RosterEntry {
   playerId: PlayerId;
@@ -108,7 +124,10 @@ export type NetPayload =
   | { kind: 'back'; id: string | null; data: string | null }
   // A permanent changing hands, for one player only: the host passes it
   // on to that seat alone. Added within v2, behind FEATURE_CONTROL.
-  | { kind: 'control'; to: PlayerId; change: ControlChange };
+  | { kind: 'control'; to: PlayerId; change: ControlChange }
+  // Cards shown to one player only, routed exactly like control. Added
+  // within v2, behind FEATURE_REVEAL.
+  | { kind: 'reveal'; to: PlayerId; change: RevealChange };
 
 export type NetMessage = Envelope & NetPayload;
 
@@ -290,7 +309,40 @@ const revealed = (value: unknown): RevealView | null => {
     cards: list(fields.cards, 'revealed.cards', MAX_REVEALED_CARDS).map((ref) =>
       parseCardRef(ref, fail)
     ),
+    ...(fields.faceDown === true && { faceDown: true }),
+    ...(fields.search === true && { search: true }),
   };
+};
+
+const MAX_REVEAL_ID = Number.MAX_SAFE_INTEGER;
+
+const showing = (value: unknown): ShowingView | null => {
+  if (value === null) return null;
+  const fields = object(value, 'showing');
+  return {
+    to: text(fields, 'to'),
+    source: parseShowingSource(fields.source, fail),
+    count: int(fields, 'count', 1, MAX_REVEALED_CARDS),
+  };
+};
+
+const revealChange = (value: unknown): RevealChange => {
+  const fields = object(value, 'change');
+  switch (fields.op) {
+    case 'show':
+      return {
+        op: 'show',
+        id: int(fields, 'id', 1, MAX_REVEAL_ID),
+        source: parseShowingSource(fields.source, fail),
+        cards: list(fields.cards, 'change.cards', MAX_REVEALED_CARDS).map(
+          (ref) => parseCardRef(ref, fail)
+        ),
+      };
+    case 'end':
+      return { op: 'end', id: int(fields, 'id', 1, MAX_REVEAL_ID) };
+    default:
+      return fail('unknown reveal change');
+  }
 };
 
 const permanentState = (fields: Fields): PermanentState => {
@@ -404,6 +456,8 @@ export const parsePublicView = (value: unknown): PublicView => {
     ...(fields.libraryActivity !== undefined && {
       libraryActivity: parseLibraryActivity(fields.libraryActivity, fail),
     }),
+    // Added within v2 as well; an unknown source reads as 'other'.
+    ...(fields.showing !== undefined && { showing: showing(fields.showing) }),
   };
 };
 
@@ -547,6 +601,13 @@ export const parseNetMessage = (raw: unknown): NetMessage => {
         kind: 'control',
         to: text(fields, 'to'),
         change: controlChange(fields.change, envelope.from),
+      };
+    case 'reveal':
+      return {
+        ...envelope,
+        kind: 'reveal',
+        to: text(fields, 'to'),
+        change: revealChange(fields.change),
       };
     case 'log': {
       const line = cleanLogText(text(fields, 'text', { max: MAX_LOG_TEXT }));

@@ -1,5 +1,5 @@
 // @vitest-environment node
-import type { LentCard } from '@shared/game';
+import type { LentCard, ShownToYou } from '@shared/game';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('electron', () => ({
@@ -123,5 +123,301 @@ describe('PlayTest look at top', () => {
     playTest.handlers.restartPlayTest();
     expect(playTest.handlers.getLookAtTop()).toBe(false);
     expect(board.webContents.send).toHaveBeenCalledWith('lookAtTop', false);
+  });
+});
+
+const { createWindow } = await import('../../windows');
+
+type FakeWindow = ReturnType<typeof fakeWindow>;
+
+// The board, then the hand (absent when docked), as the play test made
+// them for its most recent opening.
+const windowsOf = (docked: boolean) => {
+  const made = vi
+    .mocked(createWindow)
+    .mock.results.map((r) => r.value as FakeWindow);
+  return docked
+    ? { board: made.at(-1) as FakeWindow, hand: null }
+    : { board: made.at(-2) as FakeWindow, hand: made.at(-1) as FakeWindow };
+};
+
+const sentOn = (window: FakeWindow | null, channel: string) =>
+  (window?.webContents.send.mock.calls ?? []).filter(([c]) => c === channel);
+
+const openForReveals = async ({
+  docked = false,
+  ready = true,
+}: { docked?: boolean; ready?: boolean } = {}) => {
+  const playTest = new PlayTest({
+    cardDb: {} as never,
+    deckDb: {} as never,
+    playerId: 'p1',
+    playerName: () => 'Alice',
+    handInBoard: () => docked,
+  });
+  const send = vi.fn();
+  playTest.linkReveal({
+    send,
+    targets: () => [
+      ready
+        ? { playerId: 'bob', name: 'Bob', ready: true }
+        : {
+            playerId: 'bob',
+            name: 'Bob',
+            ready: false,
+            why: 'needs a newer version',
+          },
+    ],
+  });
+  const log: string[] = [];
+  playTest.onLogEntry((text) => log.push(text));
+  await playTest.openSampleDeck(7);
+  return { playTest, send, log, ...windowsOf(docked) };
+};
+
+describe('PlayTest reveals to one player', () => {
+  it('sends the cards to that player alone, and tells the table only who and how many', async () => {
+    const { playTest, send, log, board, hand } = await openForReveals();
+    const [card] = playTest.gameState.players[0].zones.hand;
+    const name = playTest.gameState.cards[card].ref.name;
+    const before = playTest.gameState;
+
+    playTest.handlers.revealTo({ to: 'bob', source: 'card', instanceId: card });
+
+    expect(send).toHaveBeenCalledWith('bob', {
+      op: 'show',
+      id: expect.any(Number),
+      source: 'card',
+      cards: [before.cards[card].ref],
+    });
+    expect(log.at(-1)).toBe('revealed a card from their hand to Bob');
+    const view = playTest.currentPublicView();
+    expect(view?.showing).toEqual({ to: 'bob', source: 'card', count: 1 });
+    expect(playTest.handlers.getHandView()).toMatchObject({
+      showing: { to: 'bob', count: 1 },
+    });
+    expect(JSON.stringify(view)).not.toContain(name);
+    // A side channel: the game itself, and so undo, never saw it.
+    expect(playTest.gameState).toBe(before);
+    // The player's own record goes to the hand window only.
+    expect(sentOn(hand, 'privateLog').at(-1)?.[1]).toEqual([
+      expect.objectContaining({
+        text: `You showed Bob a card from their hand: ${name}`,
+      }),
+    ]);
+    expect(sentOn(board, 'privateLog')).toEqual([]);
+    expect(JSON.stringify(board.webContents.send.mock.calls)).not.toContain(
+      name
+    );
+  });
+
+  it('ends at the next action, and tells the player shown', async () => {
+    const { playTest, send } = await openForReveals();
+    playTest.handlers.revealTo({ to: 'bob', source: 'hand' });
+    expect(playTest.currentPublicView()?.showing).toMatchObject({
+      source: 'hand',
+      count: 7,
+    });
+    const first = (send.mock.calls[0][1] as { id: number }).id;
+    playTest.handlers.dispatch({
+      type: 'adjustLife',
+      playerId: 'p1',
+      delta: 1,
+    });
+    expect(send).toHaveBeenLastCalledWith('bob', { op: 'end', id: first });
+    expect(playTest.currentPublicView()?.showing).toBeNull();
+
+    playTest.handlers.revealTo({ to: 'bob', source: 'libraryTop', count: 2 });
+    playTest.handlers.stopShowing();
+    expect(send).toHaveBeenLastCalledWith('bob', {
+      op: 'end',
+      id: first + 1,
+    });
+  });
+
+  it('lets a search show its picks first, then move them as one action', async () => {
+    const { playTest, send, log } = await openForReveals();
+    const [a, b] = playTest.gameState.players[0].zones.library;
+    const refs = [a, b].map((id) => playTest.gameState.cards[id].ref);
+    playTest.handlers.revealTo(
+      { to: 'bob', source: 'search', instanceIds: [a, b] },
+      {
+        type: 'searchLibrary',
+        playerId: 'p1',
+        picks: [
+          { instanceId: a, to: 'hand' },
+          { instanceId: b, to: 'top' },
+        ],
+        shuffle: true,
+      }
+    );
+    expect(send).toHaveBeenCalledWith('bob', {
+      op: 'show',
+      id: expect.any(Number),
+      source: 'search',
+      cards: refs,
+    });
+    expect(playTest.gameState.cards[a].zone).toBe('hand');
+    // Shown only once the search has gone through.
+    expect(log.slice(-2)).toEqual([
+      'searched their library, then shuffled, and put a card into their ' +
+        'hand and a card on top of their library',
+      'revealed 2 cards they searched for to Bob',
+    ]);
+    // The search that showed them doesn't end the showing.
+    expect(playTest.currentPublicView()?.showing).toMatchObject({ count: 2 });
+  });
+
+  it('sends nothing to a player who can’t take it, or for stale cards', async () => {
+    const greyed = await openForReveals({ ready: false });
+    greyed.playTest.handlers.revealTo({ to: 'bob', source: 'hand' });
+    expect(greyed.send).not.toHaveBeenCalled();
+    // A search meant to be shown doesn't quietly go ahead without it.
+    const state = greyed.playTest.gameState;
+    const [pick] = state.players[0].zones.library;
+    greyed.playTest.handlers.revealTo(
+      { to: 'bob', source: 'search', instanceIds: [pick] },
+      {
+        type: 'searchLibrary',
+        playerId: 'p1',
+        picks: [{ instanceId: pick, to: 'hand' }],
+        shuffle: true,
+      }
+    );
+    expect(greyed.playTest.gameState).toBe(state);
+    expect(greyed.send).not.toHaveBeenCalled();
+    expect(sentOn(greyed.hand, 'privateLog').at(-1)?.[1]).toContainEqual(
+      expect.objectContaining({
+        notice: true,
+        text: "Bob can't be shown cards now, so nothing was revealed or moved.",
+      })
+    );
+
+    const { playTest, send } = await openForReveals();
+    const [inLibrary] = playTest.gameState.players[0].zones.library;
+    playTest.handlers.revealTo({
+      to: 'bob',
+      source: 'card',
+      instanceId: inLibrary,
+    });
+    playTest.handlers.revealTo({
+      to: 'bob',
+      source: 'faceDown',
+      instanceId: inLibrary,
+    });
+    expect(send).not.toHaveBeenCalled();
+    expect(() =>
+      playTest.handlers.revealTo({ to: 'bob', source: 'graveyard' } as never)
+    ).toThrow(/bad reveal/);
+  });
+
+  it('shows a face-down permanent only to its owner’s choice', async () => {
+    const { playTest, send } = await openForReveals();
+    const [card] = playTest.gameState.players[0].zones.hand;
+    playTest.handlers.dispatch({
+      type: 'moveCard',
+      instanceId: card,
+      to: 'battlefield',
+      faceDown: true,
+    });
+    playTest.handlers.revealTo({
+      to: 'bob',
+      source: 'faceDown',
+      instanceId: card,
+    });
+    expect(send).toHaveBeenCalledWith(
+      'bob',
+      expect.objectContaining({ source: 'faceDown' })
+    );
+    expect(playTest.currentPublicView()?.zones.battlefield[0].ref).toBeNull();
+  });
+});
+
+describe('PlayTest cards shown to this player', () => {
+  const bear = borrowed.ref;
+
+  it('keeps them for the hand window until dismissed, never the board', async () => {
+    const { playTest, board, hand } = await openForReveals();
+    playTest.receiveReveal('bob', 'Bob', {
+      op: 'show',
+      id: 4,
+      source: 'hand',
+      cards: [bear],
+    });
+    expect(playTest.handlers.getShownToYou()).toEqual([
+      expect.objectContaining({
+        key: 'bob:4',
+        fromName: 'Bob',
+        cards: [bear],
+        ended: false,
+      }),
+    ]);
+    expect(sentOn(hand, 'shownToYou')).toHaveLength(1);
+    expect(sentOn(hand, 'privateLog').at(-1)?.[1]).toEqual([
+      expect.objectContaining({
+        text: 'Bob showed you their hand (a card): Borrowed Bear',
+      }),
+    ]);
+    expect(JSON.stringify(board.webContents.send.mock.calls)).not.toContain(
+      'Borrowed Bear'
+    );
+
+    playTest.receiveReveal('bob', 'Bob', { op: 'end', id: 4 });
+    const [entry] = playTest.handlers.getShownToYou() as ShownToYou[];
+    expect(entry.ended).toBe(true);
+
+    // Bob leaving ends whatever he was still showing.
+    playTest.receiveReveal('bob', 'Bob', {
+      op: 'show',
+      id: 5,
+      source: 'card',
+      cards: [bear],
+    });
+    playTest.peerGone('bob', 'Bob');
+    expect(
+      (playTest.handlers.getShownToYou() as ShownToYou[]).map((e) => e.ended)
+    ).toEqual([true, true]);
+    playTest.handlers.dismissShown('bob:5');
+
+    playTest.handlers.dismissShown('bob:4');
+    expect(playTest.handlers.getShownToYou()).toEqual([]);
+    expect(sentOn(hand, 'shownToYou').at(-1)?.[1]).toEqual([]);
+  });
+
+  it('shows them on the board only when it hosts the hand', async () => {
+    const { playTest, board } = await openForReveals({ docked: true });
+    playTest.receiveReveal('bob', 'Bob', {
+      op: 'show',
+      id: 1,
+      source: 'card',
+      cards: [bear],
+    });
+    expect(sentOn(board, 'shownToYou')).toHaveLength(1);
+  });
+
+  it('is never added to the game or the table log', async () => {
+    const { playTest, log } = await openForReveals();
+    const state = playTest.gameState;
+    const lines = log.length;
+    playTest.receiveReveal('bob', 'Bob', {
+      op: 'show',
+      id: 1,
+      source: 'card',
+      cards: [bear],
+    });
+    expect(playTest.gameState).toBe(state);
+    expect(log).toHaveLength(lines);
+  });
+});
+
+describe('PlayTest reveal ids', () => {
+  it('start somewhere random each run', async () => {
+    const one = await openForReveals();
+    const two = await openForReveals();
+    one.playTest.handlers.revealTo({ to: 'bob', source: 'hand' });
+    two.playTest.handlers.revealTo({ to: 'bob', source: 'hand' });
+    const idOf = (send: typeof one.send) =>
+      (send.mock.calls[0][1] as { id: number }).id;
+    expect(idOf(one.send)).not.toBe(idOf(two.send));
   });
 });

@@ -38,6 +38,19 @@ export {
   parseLibraryActivity,
   sameLibraryActivity,
 } from './libraryActivity';
+export {
+  describeShowing,
+  describeShowingSource,
+  isHiddenSearchPick,
+  parseRevealRequest,
+  parseShowingSource,
+  type PrivateLogEntry,
+  type RevealRequest,
+  type ShowingSource,
+  showingSources,
+  type ShowingView,
+  type ShownToYou,
+} from './showing';
 export { redoAction, type Undone, undoLast, type UndoState } from './history';
 export {
   ATTACH_OFFSET,

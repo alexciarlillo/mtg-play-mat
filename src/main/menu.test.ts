@@ -33,16 +33,23 @@ const build = async ({
   packaged = false,
   count = 0,
   enabled = true,
-}: { packaged?: boolean; count?: number; enabled?: boolean } = {}) => {
+  open = false,
+}: {
+  packaged?: boolean;
+  count?: number;
+  enabled?: boolean;
+  open?: boolean;
+} = {}) => {
   electron.isPackaged = packaged;
   vi.resetModules();
   const { default: MenuBuilder } = await import('./menu');
   const actions: MenuActions = {
     fakeOpponents: vi.fn(() => count),
     fakeOpponentsEnabled: vi.fn(() => enabled),
+    fakeReveal: vi.fn(),
     openSamplePlayTest: vi.fn(),
     openSettings: vi.fn(),
-    playTestOpen: vi.fn(() => false),
+    playTestOpen: vi.fn(() => open),
     runGameCommand: vi.fn(),
     setFakeOpponents: vi.fn(),
   };
@@ -60,6 +67,16 @@ const build = async ({
   return { actions, darwin, other, fakes };
 };
 
+const counts = (item: MenuItemConstructorOptions | undefined) =>
+  (item?.submenu as MenuItemConstructorOptions[]).filter(
+    (i) => i.type === 'radio'
+  );
+
+const revealItem = (item: MenuItemConstructorOptions | undefined) =>
+  (item?.submenu as MenuItemConstructorOptions[]).find(
+    (i) => i.id === 'fake-reveal'
+  );
+
 describe('fake opponents menu', () => {
   beforeEach(() => {
     electron.isPackaged = false;
@@ -70,9 +87,7 @@ describe('fake opponents menu', () => {
     [darwin, other].forEach((view) => {
       const item = fakes(view);
       expect(item?.label).toBe('Fake Opponents');
-      expect(
-        (item?.submenu as MenuItemConstructorOptions[]).map((i) => i.label)
-      ).toEqual(['None', '1', '2', '3']);
+      expect(counts(item).map((i) => i.label)).toEqual(['None', '1', '2', '3']);
     });
   });
 
@@ -95,19 +110,18 @@ describe('fake opponents menu', () => {
 
   it('checks the count the netplay instance reports', async () => {
     const { darwin, fakes } = await build({ count: 2 });
-    const items = fakes(darwin)?.submenu as MenuItemConstructorOptions[];
+    const items = counts(fakes(darwin));
     expect(items.map((item) => item.checked)).toEqual([
       false,
       false,
       true,
       false,
     ]);
-    expect(items.every((item) => item.type === 'radio')).toBe(true);
   });
 
   it('checks None when no fakes are set', async () => {
     const { darwin, fakes } = await build();
-    const items = fakes(darwin)?.submenu as MenuItemConstructorOptions[];
+    const items = counts(fakes(darwin));
     expect(items.map((item) => item.checked)).toEqual([
       true,
       false,
@@ -118,7 +132,7 @@ describe('fake opponents menu', () => {
 
   it('passes the clicked count through', async () => {
     const { actions, darwin, fakes } = await build();
-    const items = fakes(darwin)?.submenu as MenuItemConstructorOptions[];
+    const items = counts(fakes(darwin));
     items.forEach((item) => (item.click as () => void)());
     expect(vi.mocked(actions.setFakeOpponents).mock.calls).toEqual([
       [0],
@@ -133,5 +147,19 @@ describe('fake opponents menu', () => {
     expect(live.fakes(live.darwin)?.enabled).toBe(false);
     const idle = await build();
     expect(idle.fakes(idle.darwin)?.enabled).toBe(true);
+  });
+
+  it('lets a second fake seat show the player cards in an open game', async () => {
+    const closed = await build({ count: 2 });
+    expect(revealItem(closed.fakes(closed.darwin))?.enabled).toBe(false);
+    const mirrorOnly = await build({ count: 1, open: true });
+    expect(revealItem(mirrorOnly.fakes(mirrorOnly.darwin))?.enabled).toBe(
+      false
+    );
+    const ready = await build({ count: 2, open: true });
+    const item = revealItem(ready.fakes(ready.darwin));
+    expect(item?.enabled).toBe(true);
+    (item?.click as () => void)();
+    expect(ready.actions.fakeReveal).toHaveBeenCalledTimes(1);
   });
 });

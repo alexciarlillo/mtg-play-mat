@@ -6,13 +6,17 @@ import type {
   CommanderMove,
   LibraryActivity,
   PlayerAction,
+  PrivateLogEntry,
   PrivateView,
   PublicView,
+  RevealRequest,
+  ShownToYou,
   UndoState,
 } from '../game';
 import type { NetCommand, NetReport, NetState } from '../net/lobby';
 import type { RollRequest } from '../net/protocol';
 import type { OpponentState } from '../net/remoteViews';
+import type { RevealTarget } from '../net/revealTargets';
 import type { Settings, SettingsPatch } from '../settings';
 import type { CardDataStatus } from '../types/cardData';
 import type {
@@ -101,6 +105,18 @@ export const requests = {
   // shows: never game state or public, and off again in each new game.
   getLookAtTop: request<[], boolean>(),
   setLookAtTop: request<[on: boolean]>(),
+  // Shows cards to one other player only; main reads the cards itself.
+  // A search passes the action that moves its picks, which runs after.
+  // The table hears who and how many, never which. Board or hand only.
+  revealTo: request<[request: RevealRequest, then?: PlayerAction]>(),
+  stopShowing: request<[]>(),
+  // Who cards could be shown to; also pushed as revealTargets.
+  getRevealTargets: request<[], RevealTarget[]>(),
+  // Cards others showed this player, and the lines only they see. Only
+  // the window that shows the hand may ask.
+  getShownToYou: request<[], ShownToYou[]>(),
+  dismissShown: request<[key: string | null]>(),
+  getPrivateLog: request<[], PrivateLogEntry[]>(),
   getCardDataStatus: request<[], CardDataStatus>(),
   // Starts a check-and-download; progress arrives as cardDataStatus.
   updateCardData: request<[], CardDataStatus>(),
@@ -172,6 +188,10 @@ export const events = {
   handCommand: event<HandCommand>(),
   // To the board and hand, whenever "always look at the top" changes.
   lookAtTop: event<boolean>(),
+  revealTargets: event<RevealTarget[]>(),
+  // Only to the window that shows the hand, never a shared board.
+  shownToYou: event<ShownToYou[]>(),
+  privateLog: event<PrivateLogEntry[]>(),
   // To the app window.
   navigate: event<AppRoute>(),
   debugLog: event<DebugSnapshot>(),

@@ -8,7 +8,10 @@ import {
 
 import { isPlaneswalker } from '../../../ui/cardStats';
 import type { ContextMenuSpec } from '../../../ui/ContextMenuStore';
+import type { RevealTarget } from '@shared/net/revealTargets';
+
 import { moveMenu } from '../common/cardMenus';
+import { revealMenu, revealTo } from '../common/targetedReveal';
 import { dispatch } from '../viewStore';
 import type { ControlTarget } from './pod';
 
@@ -28,6 +31,8 @@ export interface BattlefieldMenuOptions {
   giveTo?: ControlTarget[];
   // Set for a borrowed permanent: who it goes back to.
   ownerName?: string;
+  // Who the owner may show a face-down permanent to alone.
+  revealTargets?: RevealTarget[];
 }
 
 const logControlError = (err: unknown) => {
@@ -124,6 +129,7 @@ export const battlefieldMenu = (
     onPutInLibrary,
     giveTo = [],
     ownerName,
+    revealTargets = [],
   }: BattlefieldMenuOptions = {}
 ): ContextMenuSpec[] => {
   const { instanceId } = card;
@@ -150,6 +156,21 @@ export const battlefieldMenu = (
       action: () =>
         dispatch({ type: 'setFaceDown', instanceId, faceDown: !card.faceDown }),
     },
+    // Only its owner knows a face-down card, and only main reads it.
+    ...(card.faceDown && card.owner === card.controller
+      ? revealMenu(
+          'Reveal',
+          revealTargets,
+          () =>
+            dispatch({
+              type: 'reveal',
+              playerId: card.owner,
+              source: 'card',
+              instanceId,
+            }),
+          (to) => revealTo({ to, source: 'faceDown', instanceId })
+        )
+      : []),
     {
       title: 'Add +1/+1 counter',
       action: () => adjustCounter(card, counterNames.plusOne, 1),

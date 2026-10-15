@@ -1,5 +1,6 @@
 import { getPlayer } from './core';
 import type { LibraryActivity } from './libraryActivity';
+import type { ShowingView } from './showing';
 import type {
   CardInstance,
   CommanderDamage,
@@ -27,6 +28,10 @@ export const MAX_REVEALED_CARDS = 100;
 export interface RevealView {
   source: RevealSource;
   cards: CardRef[];
+  // A face-down permanent shown by its owner, or cards found in a search.
+  // Older builds drop these and title the reveal as cards from the hand.
+  faceDown?: true;
+  search?: true;
 }
 
 // What every player (and a screenshare) may see of one player. It holds
@@ -56,6 +61,9 @@ export interface PublicView {
   topCard?: CardRef | null;
   // Not game state: set while the player has a library dialog open.
   libraryActivity?: LibraryActivity | null;
+  // Not game state either: who the player is showing cards to, and how
+  // many, but never which.
+  showing?: ShowingView | null;
 }
 
 // What the player themselves may see: the public view plus their hand.
@@ -114,18 +122,39 @@ const zoneViews = (
     ])
   ) as Record<PublicZoneId, CardView[]>;
 
-// Only cards still where they were revealed from are shown.
+const isFaceDownHere = (state: GameState, player: PlayerState, id: string) =>
+  state.cards[id]?.faceDown === true && player.zones.battlefield.includes(id);
+
+// Only cards still where they were revealed from are shown. A single
+// card may also be one of the player's face-down permanents.
 const revealView = (
   state: GameState,
   player: PlayerState
 ): RevealView | null => {
   const reveal = player.revealed;
   if (!reveal) return null;
+  if (reveal.search) {
+    const hidden = new Set([...player.zones.hand, ...player.zones.library]);
+    const found = reveal.instanceIds
+      .filter((id) => hidden.has(id))
+      .map((id) => state.cards[id].ref);
+    return found.length > 0
+      ? { source: reveal.source, cards: found, search: true }
+      : null;
+  }
   const from: ZoneId = reveal.source === 'libraryTop' ? 'library' : 'hand';
+  const faceDown =
+    reveal.source === 'card' &&
+    reveal.instanceIds.some((id) => isFaceDownHere(state, player, id));
   const cards = reveal.instanceIds
-    .filter((id) => player.zones[from].includes(id))
+    .filter((id) =>
+      faceDown
+        ? isFaceDownHere(state, player, id)
+        : player.zones[from].includes(id)
+    )
     .map((id) => state.cards[id].ref);
-  return cards.length > 0 ? { source: reveal.source, cards } : null;
+  if (cards.length === 0) return null;
+  return { source: reveal.source, cards, ...(faceDown && { faceDown: true }) };
 };
 
 const topCardOf = (state: GameState, player: PlayerState): CardRef | null => {

@@ -1,8 +1,21 @@
-import type { CardView, PlayerId, SearchPick } from '@shared/game';
+import {
+  type CardView,
+  isHiddenSearchPick,
+  type PlayerId,
+  type SearchLibraryAction,
+  type SearchPick,
+} from '@shared/game';
 import { useState } from 'react';
 
 import CardBrowser from '../common/CardBrowser';
 import { Modal } from '../common/Dialogs';
+import RevealTargetSelect from '../common/RevealTargetSelect';
+import {
+  EVERYONE,
+  revealTo,
+  useRevealChoice,
+  useRevealTargets,
+} from '../common/targetedReveal';
 import { useLibraryActivity } from '../common/useLibraryActivity';
 import { dispatch } from '../viewStore';
 import { useLibrary } from './useLibrary';
@@ -68,6 +81,9 @@ const SearchLibraryDialog = ({ playerId, seq, onClose }: Props) => {
   // Per-pick choices that differ from the "all" destination.
   const [own, setOwn] = useState<Record<string, Destination>>({});
   const [shuffle, setShuffle] = useState(true);
+  const [reveal, setReveal] = useState(false);
+  const targets = useRevealTargets();
+  const revealFor = useRevealChoice(targets);
 
   const [prunedFor, setPrunedFor] = useState(library);
 
@@ -97,13 +113,32 @@ const SearchLibraryDialog = ({ playerId, seq, onClose }: Props) => {
     setOwn({});
   };
 
+  const picks = chosen.map((id) => toPick(id, destinationOf(id)));
+  // Picks onto the battlefield, graveyard or exile are seen anyway.
+  const hidden = picks.filter(isHiddenSearchPick).map((p) => p.instanceId);
+  const showing = reveal && hidden.length > 0;
+  // Never fall back to everyone: the player has to choose again.
+  const blocked = showing && !revealFor.ready;
+
   const confirm = () => {
-    dispatch({
+    if (blocked) return;
+    const action: SearchLibraryAction = {
       type: 'searchLibrary',
       playerId,
-      picks: chosen.map((id) => toPick(id, destinationOf(id))),
+      picks,
       shuffle,
-    });
+      ...(showing && revealFor.value === EVERYONE && { reveal: true }),
+    };
+    // Main reads them while still in the library and shows them once the
+    // search has moved them, as one step.
+    if (showing && revealFor.value !== EVERYONE) {
+      revealTo(
+        { to: revealFor.value, source: 'search', instanceIds: hidden },
+        action
+      );
+    } else {
+      dispatch(action);
+    }
     onClose();
   };
 
@@ -186,9 +221,31 @@ const SearchLibraryDialog = ({ playerId, seq, onClose }: Props) => {
             />
             Shuffle afterwards
           </label>
+          <label className="flex items-center gap-1">
+            <input
+              type="checkbox"
+              checked={reveal}
+              disabled={chosen.length === 0}
+              onChange={(e) => setReveal(e.target.checked)}
+            />
+            Reveal picked cards
+          </label>
+          {reveal && (targets.length > 0 || revealFor.value !== EVERYONE) && (
+            <label className="flex items-center gap-1">
+              to
+              <RevealTargetSelect
+                label="Reveal picked cards to"
+                targets={targets}
+                choice={revealFor}
+                disabled={chosen.length === 0}
+                className={select}
+              />
+            </label>
+          )}
           <button
             type="button"
             className={`${button} ml-auto bg-slate-800 text-white`}
+            disabled={blocked}
             onClick={chosen.length > 0 || shuffle ? confirm : onClose}
           >
             {confirmLabel}

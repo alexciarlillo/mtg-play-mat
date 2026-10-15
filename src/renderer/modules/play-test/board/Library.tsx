@@ -1,4 +1,5 @@
 import type { CardRef, LibraryActivity } from '@shared/game';
+import type { RevealTarget } from '@shared/net/revealTargets';
 import classNames from 'classnames';
 import type { MouseEvent } from 'react';
 
@@ -9,6 +10,7 @@ import CardImg from '../../../ui/CardImg';
 import { useContextMenu } from '../../../ui/ContextMenuProvider';
 import { setLookAtTop, useLookAtTop } from '../common/useLookAtTop';
 import { shownCard } from '../common/shownCard';
+import { revealMenu, revealTo } from '../common/targetedReveal';
 import { dispatch } from '../viewStore';
 import LibraryActivityBadge from './LibraryActivityBadge';
 import ZoneCountBadge from './ZoneCountBadge';
@@ -24,6 +26,9 @@ interface Props {
   onMill(): void;
   onExileTop(): void;
   onLibraryTo(to: 'graveyard' | 'exile'): void;
+  onRevealTop(): void;
+  // Other players the top cards may be shown to alone.
+  revealTargets?: RevealTarget[];
 }
 
 const Library = ({
@@ -36,6 +41,8 @@ const Library = ({
   onMill,
   onExileTop,
   onLibraryTo,
+  onRevealTop,
+  revealTargets = [],
 }: Props) => {
   const menu = useContextMenu();
   const canDraw = playerId !== undefined && count > 0;
@@ -80,19 +87,21 @@ const Library = ({
           title: 'View bottom card',
           action: count > 0 ? openInHand('viewBottom') : null,
         },
-        {
-          title: 'Reveal the top card',
-          action:
-            count > 0
-              ? () =>
-                  dispatch({
-                    type: 'reveal',
-                    playerId,
-                    source: 'libraryTop',
-                    count: 1,
-                  })
-              : null,
-        },
+        // Main reads the card for a reveal to one player, so this shared
+        // board never holds it.
+        ...revealMenu(
+          'Reveal the top card',
+          revealTargets,
+          () =>
+            dispatch({
+              type: 'reveal',
+              playerId,
+              source: 'libraryTop',
+              count: 1,
+            }),
+          (to) => revealTo({ to, source: 'libraryTop', count: 1 })
+        ).map((spec) => (count > 0 ? spec : { ...spec, action: null })),
+        { title: 'Reveal the top N…', action: count > 0 ? onRevealTop : null },
         {
           title: 'Reveal until…',
           action: count > 0 ? openInHand('revealUntil') : null,

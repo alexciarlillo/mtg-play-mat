@@ -45,6 +45,8 @@ const OpponentsRow = ({
   onHeightChange,
   showTurn,
   owners = {},
+  selfId,
+  names = {},
   log,
   logOpen,
   onLogOpenChange,
@@ -55,6 +57,9 @@ const OpponentsRow = ({
   showTurn: boolean;
   // Names for permanents someone controls but does not own.
   owners?: OwnerLabels;
+  // Everyone at the table by id, for saying who a player shows cards to.
+  selfId?: string;
+  names?: Record<string, string>;
   log: TableEntry[];
   // One preference for every seat: folding one away folds them all, so
   // nobody has to do it three times in a pod.
@@ -180,6 +185,8 @@ const OpponentsRow = ({
             tight={tight}
             showTurn={showTurn}
             owners={owners}
+            selfId={selfId}
+            names={names}
             hidden={isHidden(peer.info.playerId)}
             log={log}
             logOpen={logOpen}

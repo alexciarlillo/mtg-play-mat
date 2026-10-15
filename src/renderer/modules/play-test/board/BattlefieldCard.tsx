@@ -89,6 +89,7 @@ const BattlefieldCard = ({
   onPutInLibrary,
   giveTo,
   ownerName,
+  revealTargets,
   owner = null,
 }: Props) => {
   const nodeRef = useRef<HTMLDivElement>(null);
@@ -221,11 +222,14 @@ const BattlefieldCard = ({
 
   // On the wrapper, so pointing at the counter badges still counts.
   const hoverKeys = useHoverKeys((key) => {
+    // R restarts over a permanent; only hand cards take it.
+    if (key === 'r') return false;
     const together = selection?.groupOf(card);
     const action = together
       ? selectionHoverAction(together, card, key)
       : battlefieldHoverAction(card, key);
     if (action) dispatch(action);
+    return undefined;
   });
 
   const together = selected ? selection?.groupOf(card) : null;
@@ -235,6 +239,7 @@ const BattlefieldCard = ({
     onPutInLibrary,
     giveTo,
     ownerName,
+    revealTargets,
   });
   const menu =
     together && selection

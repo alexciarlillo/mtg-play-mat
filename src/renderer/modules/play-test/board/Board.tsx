@@ -28,6 +28,7 @@ import {
   type LibraryDialog,
   useGameShortcuts,
 } from '../common/useGameShortcuts';
+import { useRevealTargets } from '../common/targetedReveal';
 import { useUndoState } from '../common/useUndoState';
 import { dispatch, redo, undo, useView, type ViewStore } from '../viewStore';
 import AttachDialog from './AttachDialog';
@@ -61,6 +62,8 @@ import {
 } from './pod';
 import PlayerCounters from './PlayerCounters';
 import RevealPanel from './RevealPanel';
+import RevealTopDialog from './RevealTopDialog';
+import ShowingBadge from './ShowingBadge';
 import ScaledField from './ScaledField';
 import { SelectionContext, SelectionStore } from './selection';
 import TableLog from './TableLog';
@@ -88,7 +91,8 @@ type Dialog =
   | 'graveyard'
   | 'exile'
   | 'token'
-  | 'rollDie';
+  | 'rollDie'
+  | 'revealTop';
 
 // Dialogs about one permanent, opened from its menu.
 type CardDialog = {
@@ -297,7 +301,12 @@ const Board = ({ store, opponent, hand }: Props) => {
   const peers = remote ? seatOrder(remote.peers, remote.selfSeat) : [];
   const log = remote?.log ?? [];
   const giveTo = controlTargets(peers);
+  const revealTargets = useRevealTargets();
   const owners = ownerLabels(peers, playerId);
+  const names: Record<string, string> = {
+    ...Object.fromEntries(peers.map(({ info }) => [info.playerId, info.name])),
+    ...(view && { [view.playerId]: view.name }),
+  };
   const ownerNameOf = (card: CardView) =>
     peers.find((peer) => peer.info.playerId === card.owner)?.info.name;
   // With an opponent the board splits in two and the own panel compacts.
@@ -339,6 +348,8 @@ const Board = ({ store, opponent, hand }: Props) => {
               }}
               showTurn={turnTracking}
               owners={owners}
+              selfId={playerId}
+              names={names}
               log={log}
               logOpen={settings.seatLog}
               onLogOpenChange={(seatLog) => {
@@ -366,6 +377,14 @@ const Board = ({ store, opponent, hand }: Props) => {
                   onHide={() =>
                     dispatch({ type: 'hideReveal', playerId: view.playerId })
                   }
+                />
+              )}
+              {view && (
+                <ShowingBadge
+                  name={view.name}
+                  showing={view.showing}
+                  selfId={playerId}
+                  names={names}
                 />
               )}
               {/* Over the field, not in the player panel, which is full in
@@ -411,6 +430,7 @@ const Board = ({ store, opponent, hand }: Props) => {
                             onAttach={onAttach}
                             onPutInLibrary={onPutInLibrary}
                             giveTo={giveTo}
+                            revealTargets={revealTargets}
                             ownerName={ownerNameOf(card)}
                             owner={ownerLabel(card, view.playerId, owners)}
                           />
@@ -477,6 +497,8 @@ const Board = ({ store, opponent, hand }: Props) => {
                               : 'libraryToExile'
                           )
                         }
+                        onRevealTop={() => setDialog('revealTop')}
+                        revealTargets={revealTargets}
                       />
                       <div
                         data-testid="hand-count"
@@ -576,6 +598,14 @@ const Board = ({ store, opponent, hand }: Props) => {
             onSubmit={(count) =>
               dispatch({ type: 'draw', playerId: view.playerId, count })
             }
+            onClose={close}
+          />
+        )}
+        {view && dialog === 'revealTop' && (
+          <RevealTopDialog
+            playerId={view.playerId}
+            libraryCount={view.libraryCount}
+            targets={revealTargets}
             onClose={close}
           />
         )}

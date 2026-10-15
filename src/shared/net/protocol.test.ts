@@ -7,6 +7,8 @@ import type { CardRef, GameAction, GameState } from '../game/types';
 import {
   cleanLogText,
   encodeNetMessage,
+  FEATURE_REVEAL,
+  localFeatures,
   MAX_MESSAGE_BYTES,
   namespaceView,
   type NetMessage,
@@ -978,5 +980,145 @@ describe('card backs over the wire', () => {
     expect(() =>
       parseNetMessage(message({ kind: 'back', id: '../x', data: 'x' }))
     ).toThrow(/back id is not a mat id/);
+  });
+});
+
+describe('targeted reveals over the wire', () => {
+  const reveal = (change: unknown, to = 'bob') =>
+    parseNetMessage(message({ kind: 'reveal', to, change }));
+
+  it('round-trips showing cards and ending it', () => {
+    const changes = [
+      { op: 'show', id: 1, source: 'hand', cards: [deck[1], deck[2]] },
+      { op: 'show', id: 2, source: 'search', cards: [deck[3]] },
+      { op: 'show', id: 3, source: 'faceDown', cards: [deck[4]] },
+      { op: 'end', id: 3 },
+    ];
+    changes.forEach((change) => {
+      expect(reveal(change)).toEqual({
+        v: 2,
+        seq: 1,
+        from: 'alice',
+        kind: 'reveal',
+        to: 'bob',
+        change,
+      });
+    });
+  });
+
+  it('keeps only known fields, and reads an unknown source as "other"', () => {
+    const parsed = reveal({
+      op: 'show',
+      id: 1,
+      source: 'graveyardOfTheFuture',
+      cards: [{ ...deck[1], secret: 'x' }],
+      extra: 2,
+    });
+    expect(parsed).toMatchObject({
+      change: { op: 'show', source: 'other', cards: [deck[1]] },
+    });
+    expect(JSON.stringify(parsed)).not.toMatch(/secret|extra/);
+  });
+
+  it('refuses malformed reveals', () => {
+    expect(() => reveal({ op: 'peek', id: 1 })).toThrow(/unknown reveal/);
+    expect(() => reveal({ op: 'end', id: 0 })).toThrow(/id must be/);
+    expect(() =>
+      reveal({ op: 'show', id: 1, source: 'hand', cards: 'Card 1' })
+    ).toThrow(/cards must be/);
+    expect(() =>
+      reveal({ op: 'show', id: 1, source: 3, cards: [deck[1]] })
+    ).toThrow(/source must be/);
+    expect(() => reveal({ op: 'end', id: 1 }, '')).toThrow(/to must be/);
+  });
+
+  it('is announced with the other features', () => {
+    expect(localFeatures).toContain(FEATURE_REVEAL);
+  });
+});
+
+describe('who a player is showing cards to', () => {
+  const base = (): PublicView => {
+    const v = publicView(game(), 'alice');
+    if (!v) throw new Error('no view');
+    return v;
+  };
+  const showing = { to: 'bob', source: 'card', count: 2 } as const;
+
+  it('round-trips the badge, or null, and never any card', () => {
+    const v = { ...base(), showing };
+    const parsed = parseNetMessage(
+      encodeNetMessage({
+        v: PROTOCOL_VERSION,
+        seq: 1,
+        from: 'alice',
+        kind: 'public',
+        view: v,
+      })
+    );
+    if (parsed.kind !== 'public') throw new Error('not public');
+    expect(parsed.view).toEqual(v);
+    expect(parsePublicView({ ...v, showing: null }).showing).toBeNull();
+    expect(
+      parsePublicView({ ...v, showing: { ...showing, cards: [deck[1]] } })
+        .showing
+    ).toEqual(showing);
+  });
+
+  it('accepts views without it, and reads an unknown source as "other"', () => {
+    expect('showing' in parsePublicView(base())).toBe(false);
+    expect(
+      parsePublicView({ ...base(), showing: { ...showing, source: 'moon' } })
+        .showing
+    ).toEqual({ ...showing, source: 'other' });
+  });
+
+  // Older builds rebuild views from the fields they know.
+  it('is dropped like any field a build does not know', () => {
+    const v = base();
+    expect(parsePublicView({ ...v, futureShowing: showing })).toEqual(v);
+  });
+
+  it('rejects a malformed badge', () => {
+    const bad: unknown[] = [
+      'bob',
+      { ...showing, count: 0 },
+      { ...showing, count: 101 },
+      { ...showing, to: '' },
+    ];
+    bad.forEach((value) =>
+      expect(() => parsePublicView({ ...base(), showing: value })).toThrow(
+        /bad message/
+      )
+    );
+  });
+
+  it('carries a face-down reveal’s mark, which older builds drop', () => {
+    const v = {
+      ...base(),
+      revealed: {
+        source: 'card' as const,
+        cards: [deck[1]],
+        faceDown: true as const,
+      },
+    };
+    expect(parsePublicView(v).revealed).toEqual(v.revealed);
+    expect(
+      parsePublicView({ ...v, revealed: { ...v.revealed, faceDown: 'yes' } })
+        .revealed
+    ).toEqual({ source: 'card', cards: [deck[1]] });
+  });
+
+  it('carries a search reveal’s mark, which older builds drop too', () => {
+    const revealed = {
+      source: 'card' as const,
+      cards: [deck[1], deck[2]],
+      search: true as const,
+    };
+    expect(parsePublicView({ ...base(), revealed }).revealed).toEqual(revealed);
+    expect(
+      parsePublicView({ ...base(), revealed: { ...revealed, search: 1 } })
+        .revealed
+    ).toEqual({ source: 'card', cards: [deck[1], deck[2]] });
   });
 });
