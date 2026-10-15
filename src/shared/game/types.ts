@@ -296,7 +296,7 @@ export interface MillAction {
 }
 
 // Applies a look at the top of the library (scry, surveil, and the like)
-// in one step. The four lists together must be exactly the top cards;
+// in one step. The five lists together must be exactly the top cards;
 // top and bottom keep the order given, first nearest the top.
 export interface ArrangeTopAction {
   type: 'arrangeTop';
@@ -304,7 +304,12 @@ export interface ArrangeTopAction {
   top: InstanceId[];
   bottom: InstanceId[];
   graveyard: InstanceId[];
+  exile: InstanceId[];
   hand: InstanceId[];
+  // Shuffles the bottom cards among themselves instead of keeping order.
+  bottomRandom?: boolean;
+  // Shuffles the whole library once the cards are placed (Ponder).
+  shuffleAfter?: boolean;
 }
 
 export type SearchDestination =

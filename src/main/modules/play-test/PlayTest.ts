@@ -36,7 +36,7 @@ import {
 } from '@shared/game';
 import type { DeckFormat } from '@shared/types/decks';
 import type { PlayTestStatus } from '@shared/types/playTest';
-import { app, BrowserWindow, screen } from 'electron';
+import { app, BrowserWindow, screen, type WebContents } from 'electron';
 
 import { type GameMenuCommand, runGameMenuCommand } from '../../gameMenu';
 import { type RequestHandlers, type SenderGuards, sendEvent } from '../../ipc';
@@ -93,6 +93,7 @@ type PlayTestHandlers = Pick<
   | 'getUndoState'
   | 'getLibrary'
   | 'setLibraryActivity'
+  | 'openHandDialog'
 >;
 
 const badActivity = (message: string): never => {
@@ -282,7 +283,21 @@ export default class PlayTest {
       if (!this.isOpen) return;
       this.libraryActivity.set(parseLibraryActivity(activity, badActivity));
     },
+    openHandDialog: (command: unknown) => {
+      if (!this.isOpen) return;
+      if (command !== 'viewBottom') {
+        throw new Error('[play-test] unknown hand dialog');
+      }
+      const target = this.handInBoard ? this.board : this.hand;
+      if (!target) return;
+      target.show();
+      target.focus();
+      sendEvent(target, 'handCommand', command);
+    },
   };
+
+  private isPlayTestSender = (sender: WebContents) =>
+    [this.board, this.hand].some((w) => w !== null && w.webContents === sender);
 
   private senders = () => ({
     board: this.board?.webContents ?? null,
@@ -295,10 +310,8 @@ export default class PlayTest {
   readonly guards: SenderGuards = {
     getLibrary: (sender) => mayReadLibrary(this.senders(), sender),
     getHandView: (sender) => mayReadHand(this.senders(), sender),
-    setLibraryActivity: (sender) =>
-      [this.board, this.hand].some(
-        (w) => w !== null && w.webContents === sender
-      ),
+    setLibraryActivity: (sender) => this.isPlayTestSender(sender),
+    openHandDialog: (sender) => this.isPlayTestSender(sender),
   };
 
   // A fixed seed is only passed by end-to-end tests, which may also ask

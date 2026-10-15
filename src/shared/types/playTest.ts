@@ -14,5 +14,8 @@ export interface PlayTestStatus {
 export type BoardMenuCommand =
   'drawMany' | 'mill' | 'token' | 'restart' | 'help' | 'addDummy';
 
+// Private dialogs the board may ask the hand to open, wherever it is.
+export type HandCommand = 'viewBottom';
+
 // App window pages main may ask it to show.
 export type AppRoute = 'settings';

@@ -111,6 +111,7 @@ const getCardFacts = vi.fn(() =>
 );
 const setLibraryActivity = vi.fn(() => Promise.resolve());
 let pushGameStarted: () => void;
+let pushHandCommand: (command: 'viewBottom') => void;
 
 beforeEach(() => {
   Object.assign(window, {
@@ -125,6 +126,10 @@ beforeEach(() => {
       onSettingsChanged: () => () => {},
       onGameStarted: (listener: () => void) => {
         pushGameStarted = listener;
+        return () => {};
+      },
+      onHandCommand: (listener: typeof pushHandCommand) => {
+        pushHandCommand = listener;
         return () => {};
       },
       onUndoState: () => () => {},
@@ -332,47 +337,214 @@ describe('Hand', () => {
     });
   });
 
+  const openLook = async (
+    count: string,
+    preset?: string,
+    take?: string
+  ): Promise<HTMLElement[]> => {
+    fireEvent.click(screen.getByRole('button', { name: 'Look at top…' }));
+    if (preset) {
+      fireEvent.change(screen.getByLabelText('Effect'), {
+        target: { value: preset },
+      });
+    }
+    fireEvent.change(screen.getByLabelText('How many cards?'), {
+      target: { value: count },
+    });
+    if (take) {
+      fireEvent.change(screen.getByLabelText('How many into your hand?'), {
+        target: { value: take },
+      });
+    }
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    return screen.findAllByTestId('look-card');
+  };
+
+  const press = (key: string, shiftKey = false) =>
+    fireEvent.keyDown(window, { key, shiftKey });
+
+  const lanesOf = () =>
+    screen
+      .getAllByTestId('look-card')
+      .map((el) => `${el.dataset.cardName}:${el.dataset.dest}`);
+
+  const arranged = (lists: Record<string, string[]>, extra = {}) => ({
+    type: 'arrangeTop',
+    playerId: 'p1',
+    top: [],
+    bottom: [],
+    graveyard: [],
+    exile: [],
+    hand: [],
+    ...lists,
+    ...extra,
+  });
+
   it('looks at the top cards and applies the arrangement at once', async () => {
     renderHand(viewOf({ keptHand: true }));
-    fireEvent.click(screen.getByRole('button', { name: 'Look at top…' }));
-    fireEvent.change(screen.getByLabelText('How many cards?'), {
-      target: { value: '3' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
-
-    const look = await screen.findAllByTestId('look-card');
+    const look = await openLook('3');
     expect(setLibraryActivity).toHaveBeenCalledWith({ kind: 'look', count: 3 });
     expect(look.map((el) => el.dataset.cardName)).toEqual([
       'Grizzly Bears',
       'Forest',
       'Giant Growth',
     ]);
-    fireEvent.click(
-      within(look[0]).getByRole('button', { name: 'Move right' })
+    // Every lane is offered, each saying which end is the top.
+    expect(screen.getByTestId('look-lane-top')).toHaveTextContent(
+      'left is the top card'
     );
-    fireEvent.change(within(look[2]).getByLabelText('Destination'), {
-      target: { value: 'bottom' },
-    });
-    fireEvent.change(
-      within(screen.getAllByTestId('look-card')[0]).getByLabelText(
-        'Destination'
-      ),
-      { target: { value: 'graveyard' } }
-    );
+    expect(screen.getByTestId('look-lane-exile')).toBeInTheDocument();
+
+    press('ArrowRight', true);
+    press('ArrowRight');
+    press('b');
+    // Focus moved on from the card just sent.
+    press('e');
+    expect(lanesOf()).toEqual([
+      'Forest:top',
+      'Giant Growth:bottom',
+      'Grizzly Bears:exile',
+    ]);
     expect(dispatch).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+    press('Enter');
     expect(dispatch).toHaveBeenCalledTimes(1);
-    expect(dispatch).toHaveBeenCalledWith({
-      type: 'arrangeTop',
-      playerId: 'p1',
-      top: ['p1:20'],
-      bottom: ['p1:22'],
-      graveyard: ['p1:21'],
-      hand: [],
-    });
+    expect(dispatch).toHaveBeenCalledWith(
+      arranged({ top: ['p1:21'], bottom: ['p1:22'], exile: ['p1:20'] })
+    );
     expect(screen.queryByTestId('look-at-top')).not.toBeInTheDocument();
     expect(setLibraryActivity).toHaveBeenLastCalledWith(null);
+  });
+
+  it('scries with only the top and bottom lanes', async () => {
+    renderHand(viewOf({ keptHand: true }));
+    await openLook('2', 'scry');
+    expect(screen.getByRole('dialog', { name: 'Scry 2' })).toBeVisible();
+    expect(screen.queryByTestId('look-lane-graveyard')).toBeNull();
+    press('g');
+    press('ArrowRight');
+    press('b');
+    expect(lanesOf()).toEqual(['Grizzly Bears:top', 'Forest:bottom']);
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+    expect(dispatch).toHaveBeenCalledWith(
+      arranged({ top: ['p1:20'], bottom: ['p1:21'] })
+    );
+  });
+
+  it('sends the cards not yet placed to the bottom', async () => {
+    renderHand(viewOf({ keptHand: true }));
+    await openLook('3', 'scry');
+    press('ArrowRight');
+    press('t');
+    press('r');
+    expect(lanesOf()).toEqual([
+      'Forest:top',
+      'Grizzly Bears:bottom',
+      'Giant Growth:bottom',
+    ]);
+  });
+
+  it('takes up to the set number into the hand, the rest to the bottom', async () => {
+    renderHand(viewOf({ keptHand: true }));
+    await openLook('3', 'take', '1');
+    expect(screen.getByRole('dialog', { name: 'Look at 3, take 1' }));
+    expect(lanesOf().every((lane) => lane.endsWith(':bottom'))).toBe(true);
+    press('h');
+    press('ArrowLeft');
+    // The hand is full, so this one stays put.
+    press('h');
+    expect(lanesOf()).toEqual([
+      'Forest:bottom',
+      'Giant Growth:bottom',
+      'Grizzly Bears:hand',
+    ]);
+    fireEvent.click(screen.getByLabelText('Bottom in random order'));
+    press('Enter');
+    expect(dispatch).toHaveBeenCalledWith(
+      arranged(
+        { bottom: ['p1:21', 'p1:22'], hand: ['p1:20'] },
+        { bottomRandom: true }
+      )
+    );
+  });
+
+  it('ponders, shuffling instead of keeping the order', async () => {
+    renderHand(viewOf({ keptHand: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Look at top…' }));
+    fireEvent.change(screen.getByLabelText('Effect'), {
+      target: { value: 'ponder' },
+    });
+    // Ponder looks at three unless told otherwise.
+    expect(screen.getByLabelText('How many cards?')).toHaveValue(3);
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    await screen.findAllByTestId('look-card');
+    press('s');
+    expect(screen.getByLabelText('Shuffle instead (S)')).toBeChecked();
+    press('Enter');
+    expect(dispatch).toHaveBeenCalledWith(
+      arranged({ top: ['p1:20', 'p1:21', 'p1:22'] }, { shuffleAfter: true })
+    );
+  });
+
+  it('applies a one-card look in one click or key', async () => {
+    renderHand(viewOf({ keptHand: true }));
+    await openLook('1', 'surveil');
+    fireEvent.click(screen.getByRole('button', { name: 'Graveyard (G)' }));
+    expect(dispatch).toHaveBeenCalledWith(arranged({ graveyard: ['p1:20'] }));
+    expect(screen.queryByTestId('look-at-top')).toBeNull();
+
+    await openLook('1', 'scry');
+    press('b');
+    expect(dispatch).toHaveBeenLastCalledWith(arranged({ bottom: ['p1:20'] }));
+  });
+
+  it('shows the bottom card when the board asks', async () => {
+    renderHand(viewOf({ keptHand: true }));
+    act(() => pushHandCommand('viewBottom'));
+    const bottom = await screen.findByTestId('bottom-card');
+    await waitFor(() =>
+      expect(within(bottom).getByTestId('card')).toHaveAttribute(
+        'data-card-name',
+        'Island'
+      )
+    );
+    expect(setLibraryActivity).toHaveBeenCalledWith({ kind: 'other' });
+  });
+
+  it('never opens the bottom card or help over an open look', async () => {
+    renderHand(viewOf({ keptHand: true }));
+    await openLook('3');
+    act(() => pushHandCommand('viewBottom'));
+    fireEvent.keyDown(window, { key: '?' });
+    expect(screen.queryByTestId('bottom-card')).toBeNull();
+    expect(screen.getByTestId('look-at-top')).toBeInTheDocument();
+    expect(setLibraryActivity).toHaveBeenLastCalledWith({
+      kind: 'look',
+      count: 3,
+    });
+  });
+
+  it('lists the cards as options grouped by lane', async () => {
+    renderHand(viewOf({ keptHand: true }));
+    await openLook('2', 'scry');
+    const list = screen.getByRole('listbox', { name: 'Looked-at cards' });
+    expect(list).toHaveFocus();
+    expect(
+      within(list).getByRole('group', { name: 'Top, left is the top card' })
+    ).toBeInTheDocument();
+    const [first, second] = within(list).getAllByRole('option');
+    expect(list).toHaveAttribute('aria-activedescendant', first.id);
+    press('ArrowRight');
+    expect(list).toHaveAttribute('aria-activedescendant', second.id);
+    expect(second).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('names the card in a one-card look', async () => {
+    renderHand(viewOf({ keptHand: true }));
+    await openLook('1', 'scry');
+    expect(screen.getByTestId('look-single-name')).toHaveTextContent(
+      'Grizzly Bears'
+    );
   });
 
   it('tells the table only while a library dialog is open', async () => {

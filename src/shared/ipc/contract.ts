@@ -18,6 +18,7 @@ import type { CardDataStatus } from '../types/cardData';
 import type {
   AppRoute,
   BoardMenuCommand,
+  HandCommand,
   PlayTestStatus,
 } from '../types/playTest';
 import type {
@@ -93,6 +94,9 @@ export const requests = {
   // Tells the table what the player is doing in their library (never
   // which cards); null when the dialog closes. Board or hand only.
   setLibraryActivity: request<[activity: LibraryActivity | null]>(),
+  // Opens a private dialog in whichever window shows the hand (the board
+  // itself when the hand is docked). Board or hand only.
+  openHandDialog: request<[command: HandCommand]>(),
   getCardDataStatus: request<[], CardDataStatus>(),
   // Starts a check-and-download; progress arrives as cardDataStatus.
   updateCardData: request<[], CardDataStatus>(),
@@ -160,6 +164,8 @@ export const events = {
   playTestStatus: event<PlayTestStatus>(),
   // From the Game menu, to the board window.
   boardMenuCommand: event<BoardMenuCommand>(),
+  // To the window that shows the hand.
+  handCommand: event<HandCommand>(),
   // To the app window.
   navigate: event<AppRoute>(),
   debugLog: event<DebugSnapshot>(),

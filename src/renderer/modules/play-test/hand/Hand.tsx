@@ -16,12 +16,13 @@ import {
 import Card from '../../../ui/Card';
 import type { ContextMenuSpec } from '../../../ui/ContextMenuStore';
 import { moveMenu, moveTo } from '../common/cardMenus';
-import { NumberPrompt } from '../common/Dialogs';
 import ShortcutHelp from '../common/ShortcutHelp';
 import UndoButtons from '../common/UndoButtons';
 import { useGameShortcuts } from '../common/useGameShortcuts';
 import { dispatch, useView, type ViewStore } from '../viewStore';
+import BottomCardDialog from './BottomCardDialog';
 import LookAtTopDialog from './LookAtTopDialog';
+import LookPrompt, { type LookChoice } from './LookPrompt';
 import SearchLibraryDialog from './SearchLibraryDialog';
 
 const play = (card: CardView) => moveTo(card, 'battlefield');
@@ -93,9 +94,14 @@ const revealTitles = {
   card: 'a card from your hand',
 };
 
-type Dialog = 'help' | 'lookCount' | 'look' | 'search';
+type Dialog = 'help' | 'lookCount' | 'look' | 'search' | 'bottom';
 
-const libraryDialogs: (Dialog | null)[] = ['lookCount', 'look', 'search'];
+const libraryDialogs: (Dialog | null)[] = [
+  'lookCount',
+  'look',
+  'search',
+  'bottom',
+];
 
 const mulliganButton =
   'rounded px-2 text-xs font-semibold disabled:opacity-40 [-webkit-app-region:no-drag]';
@@ -232,8 +238,22 @@ const Hand = ({ store, dock }: Props) => {
     onBusyChange.current?.(busy);
   }, [busy]);
   useEffect(() => () => onBusyChange.current?.(false), []);
-  const [lookCount, setLookCount] = useState(3);
+  const [look, setLook] = useState<LookChoice>({
+    preset: 'look',
+    count: 3,
+    take: 1,
+  });
   const close = useCallback(() => setDialog(null), []);
+  // The board's library menu asks for the bottom card here, since only
+  // this window may see it.
+  useEffect(
+    () =>
+      window.api.onHandCommand((command) => {
+        // Never over a dialog already open, which may be mid-look.
+        if (command === 'viewBottom') setDialog((open) => open ?? 'bottom');
+      }),
+    []
+  );
   // A look or search belongs to the game it started in.
   useEffect(
     () =>
@@ -248,7 +268,11 @@ const Hand = ({ store, dock }: Props) => {
   const [picked, setPicked] = useState<string[]>([]);
 
   const toggleHelp = useCallback(
-    () => setDialog((open) => (open === 'help' ? null : 'help')),
+    () =>
+      setDialog((open) => {
+        if (open === 'help') return null;
+        return open ?? 'help';
+      }),
     []
   );
   // Docked, the board window's own shortcuts already cover the keys.
@@ -409,14 +433,11 @@ const Hand = ({ store, dock }: Props) => {
       )}
       {dialog === 'help' && <ShortcutHelp onClose={close} />}
       {view && dialog === 'lookCount' && (
-        <NumberPrompt
-          title="Look at the top of your library"
-          label="How many cards?"
-          initial={Math.min(lookCount, view.libraryCount)}
-          min={1}
+        <LookPrompt
+          initial={{ ...look, count: Math.min(look.count, view.libraryCount) }}
           max={Math.max(1, view.libraryCount)}
-          onSubmit={(count) => {
-            setLookCount(count);
+          onSubmit={(choice) => {
+            setLook(choice);
             setDialog('look');
           }}
           // The prompt closes itself after a submit, which must not also
@@ -430,9 +451,15 @@ const Hand = ({ store, dock }: Props) => {
         <LookAtTopDialog
           playerId={view.playerId}
           seq={view.seq}
-          count={lookCount}
+          count={look.count}
+          preset={look.preset}
+          take={look.take}
+          onPresetChange={(preset) => setLook((was) => ({ ...was, preset }))}
           onClose={close}
         />
+      )}
+      {view && dialog === 'bottom' && (
+        <BottomCardDialog seq={view.seq} onClose={close} />
       )}
       {view && dialog === 'search' && (
         <SearchLibraryDialog

@@ -205,6 +205,8 @@ test('window.api is a narrow typed bridge', async () => {
       'onGameStarted',
       'getLibrary',
       'setLibraryActivity',
+      'openHandDialog',
+      'onHandCommand',
       'getSettings',
       'updateSettings',
       'onSettingsChanged',

@@ -8,6 +8,7 @@ import {
   updateZone,
 } from './core';
 import { untapAll } from './mtg';
+import { shuffle } from './rng';
 import type {
   ArrangeTopAction,
   GameState,
@@ -25,7 +26,7 @@ const moveAll = (
   state: GameState,
   rules: Rules,
   ids: InstanceId[],
-  to: 'graveyard' | 'hand'
+  to: 'graveyard' | 'exile' | 'hand'
 ) => ids.reduce((next, id) => moveCard(next, rules, id, to), state);
 
 const distinct = (ids: InstanceId[]) => new Set(ids).size === ids.length;
@@ -34,15 +35,16 @@ const sameIds = (a: InstanceId[], b: InstanceId[]) =>
   a.length === b.length && a.every((id, i) => id === b[i]);
 
 // Refused unless the lists name each of the top cards exactly once, so a
-// stale look (the library changed meanwhile) can't scramble it.
+// stale look (the library changed meanwhile) can't scramble it. Random
+// order comes from state.rng, so undo replays it exactly.
 const arrangeTop = (
   state: GameState,
   rules: Rules,
   player: PlayerState,
   action: ArrangeTopAction
 ): GameState => {
-  const { top, bottom, graveyard, hand } = action;
-  const all = [...top, ...bottom, ...graveyard, ...hand];
+  const { top, graveyard, exile, hand } = action;
+  const all = [...top, ...action.bottom, ...graveyard, ...exile, ...hand];
   const library = player.zones.library;
   const looked = new Set(library.slice(0, all.length));
   if (
@@ -54,18 +56,35 @@ const arrangeTop = (
     return state;
   }
 
+  const [bottom, rng] = action.bottomRandom
+    ? shuffle(action.bottom, state.rng)
+    : [action.bottom, state.rng];
   const rest = library.slice(all.length);
-  const order = [...top, ...graveyard, ...hand, ...rest, ...bottom];
-  const moves = graveyard.length + hand.length;
-  if (moves === 0 && sameIds(order, library)) return state;
+  const order = [...top, ...graveyard, ...exile, ...hand, ...rest, ...bottom];
+  const moves = graveyard.length + exile.length + hand.length;
+  // A random order or a shuffle is a change even if nothing moved.
+  const randomised =
+    action.shuffleAfter || (action.bottomRandom && bottom.length > 1);
+  if (moves === 0 && !randomised && sameIds(order, library)) {
+    return state;
+  }
 
-  const arranged = updateZone(state, player.id, 'library', () => order);
-  return moveAll(
-    moveAll(arranged, rules, graveyard, 'graveyard'),
+  const arranged = {
+    ...updateZone(state, player.id, 'library', () => order),
+    rng,
+  };
+  const placed = moveAll(
+    moveAll(
+      moveAll(arranged, rules, graveyard, 'graveyard'),
+      rules,
+      exile,
+      'exile'
+    ),
     rules,
     hand,
     'hand'
   );
+  return action.shuffleAfter ? shuffleLibrary(placed, player.id) : placed;
 };
 
 // Picks leave the library before the shuffle, so top and bottom picks

@@ -18,6 +18,7 @@ describe('ipc contract', () => {
       'onSettingsChanged',
       'onPlayTestStatus',
       'onBoardMenuCommand',
+      'onHandCommand',
       'onNavigate',
       'onDebugLog',
     ]);

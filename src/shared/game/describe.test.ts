@@ -188,6 +188,7 @@ describe('describeAction privacy', () => {
       top: [b],
       bottom: [a],
       graveyard: [c],
+      exile: [],
       hand: [d],
     });
     expect(text).toBe(
@@ -201,10 +202,43 @@ describe('describeAction privacy', () => {
       top: [b, a],
       bottom: [],
       graveyard: [],
+      exile: [],
       hand: [],
     });
     expect(scry.text).toBe(
       'looked at the top 2 cards of their library: 2 on top'
+    );
+  });
+
+  it('names exiled cards, and says when the bottom is random', () => {
+    const state = opening();
+    const [a, b, c, d] = ids(state, 'library');
+    const dig = step(state, {
+      type: 'arrangeTop',
+      playerId: P1,
+      top: [],
+      bottom: [a, b],
+      graveyard: [],
+      exile: [c],
+      hand: [d],
+      bottomRandom: true,
+    });
+    expect(dig.text).toBe(
+      'looked at the top 4 cards of their library: 2 on the bottom in a ' +
+        `random order, ${nameOf(state, c)} into exile, a card into their hand`
+    );
+    const ponder = step(state, {
+      type: 'arrangeTop',
+      playerId: P1,
+      top: [a, b, c],
+      bottom: [],
+      graveyard: [],
+      exile: [],
+      hand: [],
+      shuffleAfter: true,
+    });
+    expect(ponder.text).toBe(
+      'looked at the top 3 cards of their library and shuffled'
     );
   });
 
@@ -450,6 +484,7 @@ describe('describeAction privacy under random play', () => {
           top: top.slice(0, 1),
           bottom: top.slice(1, 2),
           graveyard: [],
+          exile: [],
           hand: top.slice(2),
         },
         {

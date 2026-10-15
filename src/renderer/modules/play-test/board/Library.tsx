@@ -35,6 +35,12 @@ const Library = ({
     if (playerId) dispatch({ type: 'draw', playerId, count: 1 });
   };
 
+  const viewBottom = () => {
+    window.api.openHandDialog('viewBottom').catch((err: unknown) => {
+      console.error('[play-test] failed to open the bottom card', err);
+    });
+  };
+
   const handleContextMenu = (e: MouseEvent) => {
     if (!playerId) return;
     e.preventDefault();
@@ -48,6 +54,11 @@ const Library = ({
           action: () => dispatch({ type: 'shuffle', playerId }),
         },
         { title: 'Mill N…', action: count > 0 ? onMill : null },
+        // Opens where the hand is, never on the shared board.
+        {
+          title: 'View bottom card',
+          action: count > 0 ? viewBottom : null,
+        },
         {
           title: 'Reveal the top card',
           action:

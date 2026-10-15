@@ -158,17 +158,27 @@ const describeArrange = (
     action.top.length +
     action.bottom.length +
     action.graveyard.length +
+    action.exile.length +
     action.hand.length;
+  const named = (zone: 'graveyard' | 'exile') =>
+    listNames(arrived(before, after, zone).map(nameOf));
+  const bottom =
+    action.bottomRandom && action.bottom.length > 1
+      ? 'on the bottom in a random order'
+      : 'on the bottom';
+  // A shuffle afterwards mixes whatever stayed in the library anyway.
+  const kept = !action.shuffleAfter;
   const parts = [
-    action.top.length > 0 && `${action.top.length} on top`,
-    action.bottom.length > 0 && `${action.bottom.length} on the bottom`,
-    action.graveyard.length > 0 &&
-      `${listNames(arrived(before, after, 'graveyard').map(nameOf))} into ` +
-        'their graveyard',
+    kept && action.top.length > 0 && `${action.top.length} on top`,
+    kept && action.bottom.length > 0 && `${action.bottom.length} ${bottom}`,
+    action.graveyard.length > 0 && `${named('graveyard')} into their graveyard`,
+    action.exile.length > 0 && `${named('exile')} into exile`,
     action.hand.length > 0 && `${cards(action.hand.length)} into their hand`,
   ].filter((part): part is string => typeof part === 'string');
   const looked = `looked at the top ${cards(total)} of their library`;
-  return parts.length > 0 ? `${looked}: ${parts.join(', ')}` : looked;
+  const line = parts.length > 0 ? `${looked}: ${parts.join(', ')}` : looked;
+  if (!action.shuffleAfter) return line;
+  return parts.length > 0 ? `${line}, then shuffled` : `${line} and shuffled`;
 };
 
 // "a, b and c"

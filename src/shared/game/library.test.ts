@@ -66,6 +66,7 @@ describe('arrangeTop', () => {
       top: [c, a],
       bottom: [b],
       graveyard: [d],
+      exile: [],
       hand: [e],
     });
     expect(names(next, library(next))).toEqual([
@@ -93,6 +94,7 @@ describe('arrangeTop', () => {
       top: [],
       bottom: [c, a],
       graveyard: [],
+      exile: [],
       hand: [b],
     });
     expect(library(next).slice(-2)).toEqual([c, a]);
@@ -109,6 +111,7 @@ describe('arrangeTop', () => {
         top: [a, b],
         bottom: [],
         graveyard: [],
+        exile: [],
         hand: [],
       })
     ).toBe(state);
@@ -119,18 +122,26 @@ describe('arrangeTop', () => {
     const [a, b, c] = library(state);
     const base = { type: 'arrangeTop', playerId: P1 } as const;
     const refused: GameAction[] = [
-      { ...base, top: [], bottom: [], graveyard: [], hand: [] },
+      { ...base, top: [], bottom: [], graveyard: [], exile: [], hand: [] },
       // Skips the second card, so it is not the top two.
-      { ...base, top: [c, a], bottom: [], graveyard: [], hand: [] },
-      { ...base, top: [a, a], bottom: [], graveyard: [], hand: [] },
-      { ...base, top: [a], bottom: [a], graveyard: [], hand: [] },
-      { ...base, top: [b, a, 'nope'], bottom: [], graveyard: [], hand: [] },
+      { ...base, top: [c, a], bottom: [], graveyard: [], exile: [], hand: [] },
+      { ...base, top: [a, a], bottom: [], graveyard: [], exile: [], hand: [] },
+      { ...base, top: [a], bottom: [a], graveyard: [], exile: [], hand: [] },
+      {
+        ...base,
+        top: [b, a, 'nope'],
+        bottom: [],
+        graveyard: [],
+        exile: [],
+        hand: [],
+      },
       {
         ...base,
         playerId: 'nobody',
         top: [b, a],
         bottom: [],
         graveyard: [],
+        exile: [],
         hand: [],
       },
     ];
@@ -146,9 +157,126 @@ describe('arrangeTop', () => {
       top: [],
       bottom: [],
       graveyard: [a],
+      exile: [],
       hand: [],
     });
     expect(zone(next, P1, 'graveyard')).toEqual([a]);
+  });
+});
+
+describe('arrangeTop exile, random bottom and shuffle after', () => {
+  const arrange = (
+    lists: Partial<
+      Record<'top' | 'bottom' | 'graveyard' | 'exile' | 'hand', string[]>
+    >,
+    flags: { bottomRandom?: boolean; shuffleAfter?: boolean } = {}
+  ): GameAction => ({
+    type: 'arrangeTop',
+    playerId: P1,
+    top: [],
+    bottom: [],
+    graveyard: [],
+    exile: [],
+    hand: [],
+    ...lists,
+    ...flags,
+  });
+
+  it('exiles cards in the order given', () => {
+    const state = fresh();
+    const [a, b, c] = library(state);
+    const next = reduce(state, arrange({ exile: [b, a], top: [c] }));
+    expect(zone(next, P1, 'exile')).toEqual([b, a]);
+    expect(library(next)[0]).toBe(c);
+    expect(library(next)).toHaveLength(8);
+  });
+
+  it('puts the bottom cards in an order drawn from state.rng', () => {
+    const state = fresh();
+    const looked = library(state).slice(0, 6);
+    const next = reduce(
+      state,
+      arrange({ bottom: looked }, { bottomRandom: true })
+    );
+    const bottom = library(next).slice(-6);
+    expect([...bottom].sort()).toEqual([...looked].sort());
+    expect(bottom).not.toEqual(looked);
+    expect(next.rng).not.toBe(state.rng);
+    // The same state and action always give the same order.
+    expect(
+      library(
+        reduce(state, arrange({ bottom: looked }, { bottomRandom: true }))
+      ).slice(-6)
+    ).toEqual(bottom);
+  });
+
+  it('replays a random bottom identically after an undo', () => {
+    const state = fresh();
+    const looked = library(state).slice(0, 5);
+    const arranged = applyAll(state, [
+      arrange({ bottom: looked }, { bottomRandom: true }),
+      { type: 'shuffle', playerId: P1 },
+      { type: 'draw', playerId: P1, count: 1 },
+    ]);
+    const undone = undoLast(arranged, P1, 1);
+    const once = applyAll(state, [
+      arrange({ bottom: looked }, { bottomRandom: true }),
+      { type: 'shuffle', playerId: P1 },
+    ]);
+    expect(undone?.state.players).toEqual(once.players);
+    expect(undone?.state.rng).toBe(once.rng);
+    // Undoing the shuffle too leaves the random bottom as it first was.
+    const back = undoLast(undone!.state, P1, 1);
+    const first = reduce(
+      state,
+      arrange({ bottom: looked }, { bottomRandom: true })
+    );
+    expect(library(back!.state)).toEqual(library(first));
+  });
+
+  it('a random bottom is a change even when the order comes out the same', () => {
+    // The whole library is looked at, so the bottom is the library.
+    const state = deepFreeze(startGame([player(P1, 2)]));
+    const both = library(state);
+    const next = reduce(
+      state,
+      arrange({ bottom: both }, { bottomRandom: true })
+    );
+    expect(next).not.toBe(state);
+    expect(next.log).toHaveLength(state.log.length + 1);
+    expect(next.rng).not.toBe(state.rng);
+  });
+
+  it('shuffles the library afterwards, even when nothing moved', () => {
+    const state = fresh();
+    const [a, b, c] = library(state);
+    const next = reduce(
+      state,
+      arrange({ top: [a, b, c] }, { shuffleAfter: true })
+    );
+    expect(next).not.toBe(state);
+    expect(library(next)).toHaveLength(10);
+    expect(library(next)).not.toEqual(library(state));
+    expect(next.log.at(-1)).toMatchObject({ shuffleAfter: true });
+  });
+
+  it('shuffles only after the hand and graveyard cards left', () => {
+    const state = fresh();
+    const [a, b, c] = library(state);
+    const next = reduce(
+      state,
+      arrange({ top: [a], hand: [b], graveyard: [c] }, { shuffleAfter: true })
+    );
+    expect(zone(next, P1, 'hand')).toContain(b);
+    expect(zone(next, P1, 'graveyard')).toEqual([c]);
+    expect(library(next)).toHaveLength(8);
+    expect(library(next)).toContain(a);
+  });
+
+  it('refuses an exile list that is not among the top cards', () => {
+    const state = fresh();
+    const [a, , c] = library(state);
+    expect(reduce(state, arrange({ top: [a], exile: [c] }))).toBe(state);
   });
 });
 
@@ -468,6 +596,7 @@ describe('parsing library and turn actions', () => {
         top: ['a'],
         bottom: [],
         graveyard: ['b'],
+        exile: [],
         hand: [],
       })
     ).toEqual({
@@ -476,7 +605,30 @@ describe('parsing library and turn actions', () => {
       top: ['a'],
       bottom: [],
       graveyard: ['b'],
+      exile: [],
       hand: [],
+    });
+    expect(
+      parsePlayerAction({
+        type: 'arrangeTop',
+        playerId: P1,
+        top: [],
+        bottom: ['a', 'b'],
+        graveyard: [],
+        exile: ['c'],
+        hand: [],
+        bottomRandom: true,
+        shuffleAfter: false,
+      })
+    ).toEqual({
+      type: 'arrangeTop',
+      playerId: P1,
+      top: [],
+      bottom: ['a', 'b'],
+      graveyard: [],
+      exile: ['c'],
+      hand: [],
+      bottomRandom: true,
     });
     expect(
       parsePlayerAction({
@@ -549,6 +701,7 @@ describe('parsing library and turn actions', () => {
         top: 'a',
         bottom: [],
         graveyard: [],
+        exile: [],
         hand: [],
       },
       {
@@ -557,7 +710,27 @@ describe('parsing library and turn actions', () => {
         top: [1],
         bottom: [],
         graveyard: [],
+        exile: [],
         hand: [],
+      },
+      // Older callers that leave out the exile list.
+      {
+        type: 'arrangeTop',
+        playerId: P1,
+        top: ['a'],
+        bottom: [],
+        graveyard: [],
+        hand: [],
+      },
+      {
+        type: 'arrangeTop',
+        playerId: P1,
+        top: ['a'],
+        bottom: [],
+        graveyard: [],
+        exile: [],
+        hand: [],
+        bottomRandom: 'yes',
       },
       {
         type: 'searchLibrary',

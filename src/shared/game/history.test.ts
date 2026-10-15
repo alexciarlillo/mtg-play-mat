@@ -132,6 +132,7 @@ const steps: Record<PlayerAction['type'], (s: GameState) => PlayerAction> = {
       top: [b],
       bottom: [a],
       graveyard: [c],
+      exile: [],
       hand: [],
     };
   },

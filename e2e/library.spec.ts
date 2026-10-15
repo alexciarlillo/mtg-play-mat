@@ -142,8 +142,10 @@ test('look at the top 3, reorder, and send one to the bottom', async () => {
   );
   await expect(board.getByTestId('look-at-top')).toHaveCount(0);
 
-  await look.nth(0).getByRole('button', { name: 'Move right' }).click();
-  await look.nth(2).getByLabel('Destination').selectOption('bottom');
+  // Swap the first two, then send the third to the bottom.
+  await hand.keyboard.press('Shift+ArrowRight');
+  await hand.keyboard.press('ArrowRight');
+  await hand.keyboard.press('b');
   await hand.getByRole('button', { name: 'Confirm' }).click();
   await expect(look).toHaveCount(0);
 

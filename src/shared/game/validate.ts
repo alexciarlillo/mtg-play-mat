@@ -109,6 +109,10 @@ const bool = (fields: Fields, key: string): boolean =>
     ? (fields[key] as boolean)
     : fail(`${key} must be a boolean`);
 
+// An optional boolean that is only kept when set.
+const flag = (fields: Fields, key: string): boolean =>
+  fields[key] === undefined ? false : bool(fields, key);
+
 // Counter names are free text typed by the player, so trim and bound them.
 const counterName = (fields: Fields, key: string): string => {
   const value = fields[key];
@@ -127,7 +131,7 @@ const searchPicks = (fields: Fields, key: string): SearchPick[] => {
   return value.map((pick: unknown) => {
     if (!isObject(pick)) return fail(`${key} must hold objects`);
     const to = oneOf(pick, 'to', searchDestinations);
-    const tapped = pick.tapped === undefined ? false : bool(pick, 'tapped');
+    const tapped = flag(pick, 'tapped');
     return {
       instanceId: string(pick, 'instanceId'),
       to,
@@ -308,7 +312,10 @@ export const parsePlayerAction = (input: unknown): PlayerAction => {
         top: strings(input, 'top', MAX_COUNT),
         bottom: strings(input, 'bottom', MAX_COUNT),
         graveyard: strings(input, 'graveyard', MAX_COUNT),
+        exile: strings(input, 'exile', MAX_COUNT),
         hand: strings(input, 'hand', MAX_COUNT),
+        ...(flag(input, 'bottomRandom') && { bottomRandom: true }),
+        ...(flag(input, 'shuffleAfter') && { shuffleAfter: true }),
       };
     case 'searchLibrary':
       return {

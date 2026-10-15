@@ -279,6 +279,34 @@ test('look at the top two and keep them in order', async () => {
   await expect(pile('library-activity')).toHaveCount(0);
 });
 
+test('scry 2 by keyboard and view the bottom card, docked', async () => {
+  const [a, b] = me(await gameState()).zones.library;
+  await tray().getByRole('button', { name: 'Look at top…' }).click();
+  await board.getByLabel('Effect').selectOption('scry');
+  await board.getByLabel('How many cards?').fill('2');
+  await board.keyboard.press('Enter');
+  const look = board.getByTestId('look-card');
+  await expect(look).toHaveCount(2);
+  await board.keyboard.press('b');
+  await board.keyboard.press('Enter');
+  await expect(look).toHaveCount(0);
+  await expect
+    .poll(async () => me(await gameState()).zones.library.slice(0, 1))
+    .toEqual([b]);
+  expect(me(await gameState()).zones.library.at(-1)).toBe(a);
+
+  // Docked, the board hosts the hand, so the bottom card opens here.
+  await pile('library').click({ button: 'right' });
+  await board
+    .getByRole('menuitem', { name: 'View bottom card', exact: true })
+    .click();
+  await expect(
+    board.getByTestId('bottom-card').getByTestId('card')
+  ).toHaveAttribute('data-instance-id', a);
+  await board.keyboard.press('Escape');
+  await expect(board.getByTestId('bottom-card')).toHaveCount(0);
+});
+
 test('a new game closes an open search', async () => {
   await tray().getByRole('button', { name: 'Search library…' }).click();
   await expect(board.getByLabel('Search the library')).toBeVisible();
