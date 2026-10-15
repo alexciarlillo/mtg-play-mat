@@ -10,6 +10,7 @@ import type {
   PrivateView,
   PublicView,
   RevealRequest,
+  SeenEntry,
   ShownToYou,
   UndoState,
 } from '../game';
@@ -117,6 +118,11 @@ export const requests = {
   getShownToYou: request<[], ShownToYou[]>(),
   dismissShown: request<[key: string | null]>(),
   getPrivateLog: request<[], PrivateLogEntry[]>(),
+  // Other players' cards seen this game: those shown to the whole table,
+  // which the board may have, and those shown to this player alone,
+  // which only the window that shows the hand may ask for.
+  getSeenList: request<[], SeenEntry[]>(),
+  getSeenByYou: request<[], SeenEntry[]>(),
   getCardDataStatus: request<[], CardDataStatus>(),
   // Starts a check-and-download; progress arrives as cardDataStatus.
   updateCardData: request<[], CardDataStatus>(),
@@ -192,6 +198,10 @@ export const events = {
   // Only to the window that shows the hand, never a shared board.
   shownToYou: event<ShownToYou[]>(),
   privateLog: event<PrivateLogEntry[]>(),
+  // To the board only.
+  seenList: event<SeenEntry[]>(),
+  // Only to the window that shows the hand, never a shared board.
+  seenByYou: event<SeenEntry[]>(),
   // To the app window.
   navigate: event<AppRoute>(),
   debugLog: event<DebugSnapshot>(),

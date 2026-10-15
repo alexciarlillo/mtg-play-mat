@@ -256,7 +256,13 @@ picked in a search (**Reveal picked cards**), or your own face-down permanent �
 everyone or to one other player. A reveal to one player lands in their hand window under
 **Shown to you** until they dismiss it, with a line in their **Private log**; the table sees
 "Alice is showing Bob 2 cards" and a log line that names no cards. It ends at your next
-action, and it is not part of undo. A life total that just changed flashes too — red for damage, green for life
+action, and it is not part of undo.
+What others revealed to everyone stays listed in the table panel's **Revealed** tab after
+the reveal ends (pick one player to narrow it); what was shown to you alone stays under
+**Shown to you** in the **Private log**. Both start over with each new game or table. Your
+hand window also shows a **Known top · bottom** strip: the cards you scried, put back,
+tutored or drew-and-undid to either end of your library. It follows draws and undo, a
+shuffle clears it, and it never leaves the hand window. A life total that just changed flashes too — red for damage, green for life
 gained — and fades back over a second, on your own counter and on every opponent's,
 so a hit lands visibly even with the log folded away.
 Each opponent's seat carries its own log under their command zone: just that

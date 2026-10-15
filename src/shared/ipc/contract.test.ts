@@ -23,6 +23,8 @@ describe('ipc contract', () => {
       'onRevealTargets',
       'onShownToYou',
       'onPrivateLog',
+      'onSeenList',
+      'onSeenByYou',
       'onNavigate',
       'onDebugLog',
     ]);

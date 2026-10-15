@@ -1,4 +1,4 @@
-import type { CardView, PublicView } from '@shared/game';
+import type { CardView, PublicView, SeenEntry } from '@shared/game';
 import type { OpponentState } from '@shared/net/remoteViews';
 import type { RevealTarget } from '@shared/net/revealTargets';
 import {
@@ -67,6 +67,7 @@ let pushUndoState: (next: { canUndo: boolean; canRedo: boolean }) => void;
 let api: Record<string, ReturnType<typeof vi.fn>>;
 let revealTargets: RevealTarget[] = [];
 let pushRevealTargets: (next: RevealTarget[]) => void;
+const seenList: SeenEntry[] = [];
 
 // A store whose view can be replaced, as main and peers push new ones.
 const pushable = <V,>(initial: V) => {
@@ -106,6 +107,8 @@ const renderBoard = (
       return () => {};
     }),
     revealTo: vi.fn(async () => {}),
+    getSeenList: vi.fn(async () => seenList),
+    onSeenList: vi.fn(() => () => {}),
   };
   Object.assign(window, {
     api: {

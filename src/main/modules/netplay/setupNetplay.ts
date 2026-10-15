@@ -165,9 +165,17 @@ export const setupNetplay = ({
     receiveReveal: playTest.receiveReveal,
     features: announcedFeatures(testHooks),
     peerGone: playTest.peerGone,
+    tableReset: playTest.forgetSeen,
     pushOpponent: (state) => {
       growForTable(playTest.boardWindow, state.peers.length);
       sendEvent(playTest.boardWindow, 'opponentView', state);
+      playTest.notePeers(
+        state.peers.map(({ info, view }) => ({
+          playerId: info.playerId,
+          name: info.name,
+          view,
+        }))
+      );
       const targets = netplay.revealTargets();
       if (!sameRevealTargets(targets, lastTargets)) {
         lastTargets = targets;

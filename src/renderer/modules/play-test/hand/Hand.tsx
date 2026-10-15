@@ -38,8 +38,10 @@ import {
   revealTo,
   stopShowing,
   usePrivateLog,
+  useSeenByYou,
   useRevealTargets,
 } from '../common/targetedReveal';
+import KnownStrip from './KnownStrip';
 import PrivateLogDialog from './PrivateLogDialog';
 import ShownToYouTray from './ShownToYouTray';
 import BottomCardDialog from './BottomCardDialog';
@@ -488,6 +490,7 @@ const Hand = ({ store, dock }: Props) => {
   const lookAtTop = useLookAtTop();
   const revealTargets = useRevealTargets();
   const privateLog = usePrivateLog();
+  const seenByYou = useSeenByYou();
   // The latest refused reveal stays up until the player closes it.
   const notice = privateLog.findLast((entry) => entry.notice);
   const [closedNotice, setClosedNotice] = useState<number | null>(null);
@@ -629,7 +632,7 @@ const Hand = ({ store, dock }: Props) => {
           >
             Reveal hand
           </button>
-          {privateLog.length > 0 && (
+          {(privateLog.length > 0 || seenByYou.length > 0) && (
             <button
               type="button"
               className={titleButton}
@@ -706,6 +709,7 @@ const Hand = ({ store, dock }: Props) => {
           {dock?.controls}
         </div>
       </div>
+      {!dock?.collapsed && <KnownStrip known={view?.known} />}
       {!dock?.collapsed && (
         <div
           data-testid="hand"
@@ -758,7 +762,11 @@ const Hand = ({ store, dock }: Props) => {
       )}
       {dialog === 'help' && <ShortcutHelp onClose={close} />}
       {dialog === 'privateLog' && (
-        <PrivateLogDialog entries={privateLog} onClose={close} />
+        <PrivateLogDialog
+          entries={privateLog}
+          seen={seenByYou}
+          onClose={close}
+        />
       )}
       {dialog === 'restart' && <RestartDialog onClose={close} />}
       {view && placing && (

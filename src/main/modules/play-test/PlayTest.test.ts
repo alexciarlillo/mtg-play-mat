@@ -421,3 +421,169 @@ describe('PlayTest reveal ids', () => {
     expect(idOf(one.send)).not.toBe(idOf(two.send));
   });
 });
+
+describe('PlayTest known cards', () => {
+  const lib = (playTest: InstanceType<typeof PlayTest>) =>
+    playTest.gameState.players[0].zones.library;
+  const nameOf = (playTest: InstanceType<typeof PlayTest>, id: string) =>
+    playTest.gameState.cards[id].ref.name;
+  const known = (playTest: InstanceType<typeof PlayTest>) => {
+    const view = playTest.handlers.getHandView() as {
+      known?: { top: { ref: { name: string } }[]; bottom: unknown[] };
+    } | null;
+    return view?.known?.top.map((card) => card.ref.name);
+  };
+  const scry1 = (playTest: InstanceType<typeof PlayTest>, keep: boolean) => {
+    const [top] = lib(playTest);
+    playTest.handlers.dispatch({
+      type: 'arrangeTop',
+      playerId: 'p1',
+      top: keep ? [top] : [],
+      bottom: keep ? [] : [top],
+      graveyard: [],
+      exile: [],
+      hand: [],
+    });
+  };
+
+  it('learns from a look, keeps it through undo, and forgets on a shuffle', async () => {
+    const { playTest, hand, board } = await openForReveals();
+    const [first, second] = lib(playTest);
+    expect(known(playTest)).toEqual([]);
+
+    // Keeping the card on top changes nothing, but it was seen.
+    scry1(playTest, true);
+    expect(known(playTest)).toEqual([nameOf(playTest, first)]);
+
+    playTest.handlers.dispatch({ type: 'draw', playerId: 'p1', count: 1 });
+    expect(known(playTest)).toEqual([]);
+    playTest.handlers.undo();
+    expect(known(playTest)).toEqual([nameOf(playTest, first)]);
+
+    playTest.handlers.dispatch({
+      type: 'arrangeTop',
+      playerId: 'p1',
+      top: [second, first],
+      bottom: [],
+      graveyard: [],
+      exile: [],
+      hand: [],
+    });
+    expect(known(playTest)).toEqual([
+      nameOf(playTest, second),
+      nameOf(playTest, first),
+    ]);
+
+    playTest.handlers.dispatch({ type: 'shuffle', playerId: 'p1' });
+    expect(known(playTest)).toEqual([]);
+    playTest.handlers.undo();
+    expect(known(playTest)).toHaveLength(2);
+
+    // Only the hand window hears it; the board view never carries it.
+    const handViews = sentOn(hand, 'handView');
+    expect(handViews.at(-1)?.[1]).toHaveProperty('known');
+    expect(sentOn(board, 'handView')).toEqual([]);
+    expect(JSON.stringify(sentOn(board, 'boardView'))).not.toContain('"known"');
+    expect(playTest.currentPublicView()).not.toHaveProperty('known');
+  });
+
+  it('goes to the board only when it hosts the hand', async () => {
+    const { playTest, board } = await openForReveals({ docked: true });
+    scry1(playTest, false);
+    expect(sentOn(board, 'handView').at(-1)?.[1]).toHaveProperty('known');
+  });
+
+  it('learns the top card the player always looks at', async () => {
+    const { playTest } = await openForReveals();
+    const [first] = lib(playTest);
+    playTest.handlers.setLookAtTop(true);
+    expect(known(playTest)).toEqual([nameOf(playTest, first)]);
+    playTest.handlers.setLookAtTop(false);
+    expect(known(playTest)).toEqual([nameOf(playTest, first)]);
+  });
+
+  it('learns the top cards shown to one player', async () => {
+    const { playTest } = await openForReveals();
+    const [first, second] = lib(playTest);
+    playTest.handlers.revealTo({ to: 'bob', source: 'libraryTop', count: 2 });
+    expect(known(playTest)).toEqual([
+      nameOf(playTest, first),
+      nameOf(playTest, second),
+    ]);
+  });
+
+  it('starts empty in a new game', async () => {
+    const { playTest } = await openForReveals();
+    scry1(playTest, true);
+    playTest.handlers.restartPlayTest();
+    expect(known(playTest)).toEqual([]);
+  });
+});
+
+describe('PlayTest seen list', () => {
+  const bear = borrowed.ref;
+  // Bob's view, built from the local one, showing cards or nothing.
+  const bob = (
+    playTest: InstanceType<typeof PlayTest>,
+    cards: (typeof bear)[] | null
+  ) => {
+    const base = playTest.currentPublicView();
+    return {
+      playerId: 'bob',
+      name: 'Bob',
+      view: base && {
+        ...base,
+        playerId: 'bob',
+        revealed: cards && { source: 'hand' as const, cards },
+      },
+    };
+  };
+
+  it('keeps public reveals for the board after they end, and clears on a new game', async () => {
+    const { playTest, board, hand } = await openForReveals();
+    playTest.notePeers([bob(playTest, [bear])]);
+    playTest.notePeers([bob(playTest, [bear])]);
+    playTest.notePeers([bob(playTest, null)]);
+    expect(playTest.handlers.getSeenList()).toEqual([
+      expect.objectContaining({
+        player: 'bob',
+        playerName: 'Bob',
+        to: 'everyone',
+        source: 'hand',
+        cards: [bear],
+      }),
+    ]);
+    expect(sentOn(board, 'seenList')).toHaveLength(1);
+    expect(sentOn(hand, 'seenList')).toEqual([]);
+
+    playTest.handlers.restartPlayTest();
+    expect(playTest.handlers.getSeenList()).toEqual([]);
+    expect(sentOn(board, 'seenList').at(-1)?.[1]).toEqual([]);
+  });
+
+  it('lists cards shown to this player only where the hand is', async () => {
+    const { playTest, board, hand } = await openForReveals();
+    playTest.receiveReveal('bob', 'Bob', {
+      op: 'show',
+      id: 3,
+      source: 'card',
+      cards: [bear],
+    });
+    playTest.handlers.dismissShown('bob:3');
+    expect(playTest.handlers.getSeenByYou()).toEqual([
+      expect.objectContaining({ to: 'you', source: 'card', cards: [bear] }),
+    ]);
+    expect(playTest.handlers.getSeenList()).toEqual([]);
+    expect(sentOn(hand, 'seenByYou')).toHaveLength(1);
+    expect(JSON.stringify(board.webContents.send.mock.calls)).not.toContain(
+      'Borrowed Bear'
+    );
+  });
+
+  it('clears when the table changes', async () => {
+    const { playTest } = await openForReveals();
+    playTest.notePeers([bob(playTest, [bear])]);
+    playTest.forgetSeen();
+    expect(playTest.handlers.getSeenList()).toEqual([]);
+  });
+});

@@ -1,7 +1,9 @@
 import type {
+  CardRef,
   CardView,
   PrivateLogEntry,
   PrivateView,
+  SeenEntry,
   ShownToYou,
 } from '@shared/game';
 import type { RevealTarget } from '@shared/net/revealTargets';
@@ -126,6 +128,7 @@ let revealTargets: RevealTarget[] = [];
 let pushRevealTargets: (targets: RevealTarget[]) => void;
 let pushShownToYou: (entries: ShownToYou[]) => void;
 let pushPrivateLog: (entries: PrivateLogEntry[]) => void;
+let pushSeenByYou: (entries: SeenEntry[]) => void;
 const revealTo = vi.fn(() => Promise.resolve());
 const stopShowing = vi.fn(() => Promise.resolve());
 const dismissShown = vi.fn(() => Promise.resolve());
@@ -167,6 +170,11 @@ beforeEach(() => {
         return () => {};
       },
       getPrivateLog: () => Promise.resolve([]),
+      getSeenByYou: () => Promise.resolve([]),
+      onSeenByYou: (listener: typeof pushSeenByYou) => {
+        pushSeenByYou = listener;
+        return () => {};
+      },
       onPrivateLog: (listener: typeof pushPrivateLog) => {
         pushPrivateLog = listener;
         return () => {};
@@ -1436,5 +1444,83 @@ describe('Hand reveals to one player', () => {
     expect(screen.getByTestId('private-log')).toHaveTextContent(
       'Bob showed you a card from their hand: Card 40'
     );
+  });
+});
+
+describe('Hand known cards and seen list', () => {
+  const refOf = (n: number): CardRef => ({
+    id: `id-${n}`,
+    name: `Card ${n}`,
+    typeLine: 'Creature',
+    faces: [{ name: `Card ${n}`, typeLine: 'Creature' }],
+  });
+  const known = (n: number, random = false) => ({
+    instanceId: `p1:${n}`,
+    ref: refOf(n),
+    ...(random && { random: true as const }),
+  });
+
+  it('shows the known ends of the library, and nothing when none', () => {
+    const { unmount } = renderHand(viewOf({ known: { top: [], bottom: [] } }));
+    expect(screen.queryByTestId('known-cards')).toBeNull();
+    unmount();
+
+    renderHand(
+      viewOf({
+        known: {
+          top: [known(10), known(11)],
+          bottom: [known(12, true), known(13, true), known(14)],
+        },
+      })
+    );
+    const strip = screen.getByTestId('known-cards');
+    expect(strip).toHaveTextContent('Known top:');
+    const names = (testId: string) =>
+      within(screen.getByTestId(testId))
+        .getAllByTestId('card-pill')
+        .map((pill) => pill.textContent);
+    expect(names('known-top')).toEqual(['Card 10', 'Card 11']);
+    expect(names('known-bottom')).toEqual(['Card 12', 'Card 13', 'Card 14']);
+    const pills = within(screen.getByTestId('known-bottom')).getAllByTestId(
+      'card-pill'
+    );
+    expect(pills[0]).toHaveAttribute('title', 'In a random order');
+    expect(pills[2]).not.toHaveAttribute('title');
+  });
+
+  it('counts known cards past the first few', () => {
+    renderHand(
+      viewOf({
+        known: {
+          top: Array.from({ length: 9 }, (_, i) => known(20 + i)),
+          bottom: [],
+        },
+      })
+    );
+    expect(screen.getByTestId('known-top')).toHaveTextContent('… +3');
+  });
+
+  it('lists the cards shown to the player in the private log', () => {
+    renderHand(viewOf());
+    expect(screen.queryByRole('button', { name: 'Private log' })).toBeNull();
+    act(() =>
+      pushSeenByYou([
+        {
+          id: 1,
+          player: 'bob',
+          playerName: 'Bob',
+          to: 'you',
+          source: 'card',
+          cards: [refOf(40)],
+          at: 0,
+        },
+      ])
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Private log' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Shown to you (1)' }));
+    expect(screen.getByTestId('seen-by-you')).toHaveTextContent(
+      'Bob showed you a card from their hand'
+    );
+    expect(screen.getByTestId('seen-by-you')).toHaveTextContent('Card 40');
   });
 });

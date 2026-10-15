@@ -32,6 +32,19 @@ export {
 } from './control';
 export { cascadePosition, emptyGame, getPlayer } from './core';
 export {
+  type KnownCard,
+  type KnownCards,
+  knownCards,
+  type KnownLedger,
+  learnFromAction,
+  learnFromChange,
+  learnFromUndo,
+  learnTop,
+  NO_KNOWLEDGE,
+  type Slot,
+  truthful,
+} from './knownCards';
+export {
   describeLibraryActivity,
   type LibraryActivity,
   MAX_LOOK_COUNT,
@@ -51,6 +64,14 @@ export {
   type ShowingView,
   type ShownToYou,
 } from './showing';
+export {
+  describeSeen,
+  MAX_SEEN,
+  type SeenEntry,
+  SeenList,
+  type SeenPeer,
+  type SeenSource,
+} from './seen';
 export { redoAction, type Undone, undoLast, type UndoState } from './history';
 export {
   ATTACH_OFFSET,

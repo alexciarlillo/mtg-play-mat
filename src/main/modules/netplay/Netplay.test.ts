@@ -91,6 +91,7 @@ const setup = (me = 'alice') => {
   const control: [string, string, ControlChange][] = [];
   const reveals: [string, string, RevealChange][] = [];
   const gone: string[] = [];
+  const tableResets = { count: 0 };
   const netplay = new Netplay({
     transports: { p2p: transport, relay },
     config: { iceServers: [], recordWire: false },
@@ -114,6 +115,9 @@ const setup = (me = 'alice') => {
     receiveControl: (from, name, change) => control.push([from, name, change]),
     receiveReveal: (from, name, change) => reveals.push([from, name, change]),
     peerGone: (playerId, name) => gone.push(`${playerId} ${name}`),
+    tableReset: () => {
+      tableResets.count += 1;
+    },
     connectTimeoutMs: 50,
     randomInt: (max) => {
       rolls.push(max);
@@ -128,6 +132,7 @@ const setup = (me = 'alice') => {
       .map((c) => JSON.parse(c.data) as NetMessage);
   return {
     netplay,
+    tableResets,
     transport,
     relay,
     commands,
@@ -565,7 +570,12 @@ describe('Netplay host', () => {
   it('says goodbye to everyone and retires the transport on leave', async () => {
     const t = await hostWith({ 2: 'bob', 3: 'carol' });
     t.transport.retire.mockClear();
+    const resets = t.tableResets.count;
+    // Starting the session was a new table too.
+    expect(resets).toBeGreaterThan(0);
     t.netplay.leave();
+    // A new table: what was seen at this one is forgotten.
+    expect(t.tableResets.count).toBe(resets + 1);
     const bye = t.sends().at(-1);
     expect(bye?.seats).toEqual([2, 3]);
     expect(JSON.parse(bye?.data ?? '{}')).toMatchObject({ kind: 'bye' });

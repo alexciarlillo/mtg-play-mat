@@ -18,10 +18,15 @@ import {
   type GameAction,
   type GameState,
   isBatchAction,
+  knownCards,
+  type KnownLedger,
+  learnFromChange,
+  learnTop,
   lentCard,
   lentTo,
   libraryView,
   MAX_REVEALED_CARDS,
+  NO_KNOWLEDGE,
   OPENING_HAND_SIZE,
   parseLibraryActivity,
   parsePlayerAction,
@@ -37,6 +42,8 @@ import {
   redoAction,
   reduce,
   type RevealRequest,
+  SeenList,
+  type SeenPeer,
   type ShowingSource,
   type ShowingView,
   type ShownToYou,
@@ -131,6 +138,8 @@ type PlayTestHandlers = Pick<
   | 'getShownToYou'
   | 'dismissShown'
   | 'getPrivateLog'
+  | 'getSeenList'
+  | 'getSeenByYou'
 >;
 
 const badActivity = (message: string): never => {
@@ -213,6 +222,14 @@ export default class PlayTest {
   private privateLog: PrivateLogEntry[] = [];
 
   private privateLogId = 0;
+
+  // Other players' cards seen this game, kept after their reveals end.
+  private readonly seen = new SeenList();
+
+  // What the player knows of their own library. It is not game state,
+  // so undo can't make the player forget what they saw, and it is only
+  // ever shown where the hand is.
+  private known: KnownLedger = NO_KNOWLEDGE;
 
   constructor({ cardDb, deckDb, playerId, playerName, handInBoard }: Deps) {
     this.cardDb = cardDb;
@@ -386,6 +403,8 @@ export default class PlayTest {
       this.pushPrivate('shownToYou', rest);
     },
     getPrivateLog: () => this.privateLog,
+    getSeenList: () => this.seen.everyone,
+    getSeenByYou: () => this.seen.you,
     getLookAtTop: () => this.lookAtTop,
     setLookAtTop: (on: unknown) => {
       if (!this.isOpen) return;
@@ -401,6 +420,14 @@ export default class PlayTest {
     this.lookAtTop = on;
     sendEvent(this.board, 'lookAtTop', on);
     sendEvent(this.hand, 'lookAtTop', on);
+    if (on) this.learn(this.lookedAtTop(this.known));
+  };
+
+  // The top card the player always looks at is one they know.
+  private lookedAtTop = (known: KnownLedger): KnownLedger => {
+    const top = this.player()?.zones.library[0];
+    if (!this.lookAtTop || top === undefined) return known;
+    return learnTop(known, this.state, this.playerId, [top]);
   };
 
   private isPlayTestSender = (sender: WebContents) =>
@@ -427,6 +454,8 @@ export default class PlayTest {
     getShownToYou: (sender) => mayReadLibrary(this.senders(), sender),
     dismissShown: (sender) => mayReadLibrary(this.senders(), sender),
     getPrivateLog: (sender) => mayReadLibrary(this.senders(), sender),
+    getSeenList: (sender) => this.isPlayTestSender(sender),
+    getSeenByYou: (sender) => mayReadLibrary(this.senders(), sender),
   };
 
   // A fixed seed is only passed by end-to-end tests, which may also ask
@@ -467,7 +496,10 @@ export default class PlayTest {
   private dispatch = (action: PlayerAction, keepShowing = false) => {
     if (actionPlayer(this.state, action) !== this.playerId) return;
     const next = reduce(this.state, action);
-    if (next === this.state) return;
+    if (next === this.state) {
+      this.learnUnchangedLook(action);
+      return;
+    }
     if (!keepShowing) this.endShowing(false);
     const left = departures(this.state, action, next);
     if (left.length > 0) {
@@ -485,6 +517,28 @@ export default class PlayTest {
     this.redoStack = [];
     this.apply(next);
     if (text) this.addLogEntry(text);
+  };
+
+  // A look that put every card back as it was changes nothing, but the
+  // player still saw those cards.
+  private learnUnchangedLook = (action: PlayerAction) => {
+    if (action.type !== 'arrangeTop') return;
+    const elsewhere = [
+      action.bottom,
+      action.graveyard,
+      action.exile,
+      action.hand,
+      action.battlefield ?? [],
+    ];
+    if (elsewhere.some((ids) => ids.length > 0)) return;
+    this.learn(learnTop(this.known, this.state, this.playerId, action.top));
+  };
+
+  // Pushes the hand view only when the player learned something new.
+  private learn = (next: KnownLedger) => {
+    if (next === this.known) return;
+    this.known = next;
+    this.pushViews();
   };
 
   linkControl = (link: ControlLink) => {
@@ -634,7 +688,7 @@ export default class PlayTest {
 
   // Only to the window showing the hand: the board is screenshared
   // unless the hand is docked in it.
-  private pushPrivate = <C extends 'shownToYou' | 'privateLog'>(
+  private pushPrivate = <C extends 'shownToYou' | 'privateLog' | 'seenByYou'>(
     channel: C,
     payload: EventPayload<C>
   ) => {
@@ -657,7 +711,7 @@ export default class PlayTest {
   // The cards a request names, read from the game rather than trusted
   // from the window; none if any of them isn't where it should be.
   private revealedCards = (request: RevealRequest): CardRef[] => {
-    const player = this.state.players.find((p) => p.id === this.playerId);
+    const player = this.player();
     if (!player) return [];
     const { cards } = this.state;
     const refs = (ids: string[]) => ids.map((id) => cards[id].ref);
@@ -732,8 +786,15 @@ export default class PlayTest {
       `You showed ${target.name} ${describeShowingSource(source, cards.length)}: ` +
         cards.map((ref) => ref.name).join(', ')
     );
+    if (request.source === 'libraryTop') {
+      const library = this.player()?.zones.library ?? [];
+      const ids = library.slice(0, request.count);
+      this.known = learnTop(this.known, this.state, this.playerId, ids);
+    }
     this.pushViews();
   };
+
+  private player = () => this.state.players.find((p) => p.id === this.playerId);
 
   // Tells the player shown the cards that they are no longer shown,
   // unless the player is gone. Pushes unless the caller pushes anyway.
@@ -750,6 +811,28 @@ export default class PlayTest {
     this.endShowing(false);
     this.shownToYou = [];
     this.privateLog = [];
+    this.seen.clear();
+  };
+
+  // The other players as the board shows them; their reveals feed the
+  // seen list, which only ever holds what the whole table saw.
+  notePeers = (peers: SeenPeer[]) => {
+    if (!this.isOpen) return;
+    if (this.seen.notePeers(peers)) this.pushSeenList();
+  };
+
+  // The table changed: what was seen at the old one is gone.
+  forgetSeen = () => {
+    if (this.seen.clear()) this.pushSeen();
+  };
+
+  private pushSeenList = () => {
+    sendEvent(this.board, 'seenList', this.seen.everyone);
+  };
+
+  private pushSeen = () => {
+    this.pushSeenList();
+    this.pushPrivate('seenByYou', this.seen.you);
   };
 
   // Another player showed this one cards, or stopped showing them.
@@ -779,6 +862,9 @@ export default class PlayTest {
       entry,
     ].slice(-MAX_SHOWN_TO_YOU);
     this.pushPrivate('shownToYou', this.shownToYou);
+    if (this.seen.noteShown(from, fromName, change)) {
+      this.pushPrivate('seenByYou', this.seen.you);
+    }
     this.addPrivateLine(
       `${fromName} showed you ${describeShowingSource(change.source, change.cards.length)}: ` +
         change.cards.map((ref) => ref.name).join(', ')
@@ -847,6 +933,9 @@ export default class PlayTest {
   private apply = (next: GameState) => {
     const before = this.state;
     this.state = next;
+    this.known = this.lookedAtTop(
+      learnFromChange(this.known, before, next, this.playerId)
+    );
     this.updateCommanderPrompts(before);
     this.pushViews();
   };
@@ -911,7 +1000,13 @@ export default class PlayTest {
   // The player's own side of a showing is theirs to see and stop.
   private handView = () => {
     const view = privateView(this.state, this.playerId);
-    return view && { ...view, showing: this.publicShowing() };
+    return (
+      view && {
+        ...view,
+        showing: this.publicShowing(),
+        known: knownCards(this.state, this.playerId, this.known),
+      }
+    );
   };
 
   private pushViews = () => {
@@ -954,6 +1049,8 @@ export default class PlayTest {
     this.undoFloor = this.state.log.length;
     this.redoStack = [];
     this.commanderPrompts = [];
+    this.known = NO_KNOWLEDGE;
+    this.forgetSeen();
     this.libraryActivity.reset();
     this.setLookAtTop(false);
     this.endShowing(false);

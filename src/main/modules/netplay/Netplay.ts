@@ -118,6 +118,8 @@ export interface NetplayDeps {
   // A player with a game open no longer has one here: they left, or
   // closed it. Whatever changed hands with them has to come home.
   peerGone?(playerId: PlayerId, name: string): void;
+  // Every new session, and leaving: the table this player sat at is gone.
+  tableReset?(): void;
   // Where the networked paths narrate themselves, for the debug log.
   log?: DebugSink;
   // How long the host waits for a channel after pasting a reply.
@@ -1353,6 +1355,7 @@ export default class Netplay {
     });
     if (mode) this.mode = mode;
     this.session += 1;
+    this.deps.tableReset?.();
     this.hostOpen = false;
     this.hostId = null;
     this.seq = 0;

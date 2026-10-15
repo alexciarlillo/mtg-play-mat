@@ -1,4 +1,5 @@
 import { getPlayer } from './core';
+import type { KnownCards } from './knownCards';
 import type { LibraryActivity } from './libraryActivity';
 import type { ShowingView } from './showing';
 import type {
@@ -69,6 +70,9 @@ export interface PublicView {
 // What the player themselves may see: the public view plus their hand.
 export interface PrivateView extends PublicView {
   hand: CardView[];
+  // The player's own known cards at either end of their library. Added
+  // by main, which keeps that knowledge outside the game.
+  known?: KnownCards;
 }
 
 const publicZones: PublicZoneId[] = [

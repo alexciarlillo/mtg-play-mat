@@ -2,6 +2,7 @@ import type {
   PlayerAction,
   PrivateLogEntry,
   RevealRequest,
+  SeenEntry,
   ShownToYou,
 } from '@shared/game';
 import type { Api } from '@shared/ipc/contract';
@@ -74,6 +75,24 @@ export const usePrivateLog = (): PrivateLogEntry[] =>
     (listener) => api().onPrivateLog(listener),
     NONE,
     'the private log'
+  );
+
+// Other players' cards the whole table saw this game. The board's.
+export const useSeenList = (): SeenEntry[] =>
+  useMainValue(
+    () => api().getSeenList(),
+    (listener) => api().onSeenList(listener),
+    NONE,
+    'the seen list'
+  );
+
+// Cards other players showed this one alone. Only the hand's window.
+export const useSeenByYou = (): SeenEntry[] =>
+  useMainValue(
+    () => api().getSeenByYou(),
+    (listener) => api().onSeenByYou(listener),
+    NONE,
+    'the cards shown to you'
   );
 
 const logError = (what: string) => (err: unknown) => {

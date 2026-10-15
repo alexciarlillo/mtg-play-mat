@@ -1,3 +1,4 @@
+import type { SeenEntry } from '@shared/game';
 import type { TableEntry } from '@shared/net/remoteViews';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -118,5 +119,51 @@ describe('TableLog', () => {
   it('says so when there is nothing yet', () => {
     renderLog([]);
     expect(list()).toHaveTextContent('Nothing has happened yet.');
+  });
+});
+
+describe('TableLog revealed tab', () => {
+  const seen = (id: number, playerName: string, name: string): SeenEntry => ({
+    id,
+    player: playerName.toLowerCase(),
+    playerName,
+    to: 'everyone',
+    source: 'hand',
+    cards: [{ id: `id-${name}`, name, typeLine: 'Instant', faces: [] }],
+    at: 0,
+  });
+
+  it('lists what others revealed, newest first, filtered by player', async () => {
+    const user = userEvent.setup();
+    render(
+      <TableLog
+        log={[]}
+        seen={[seen(1, 'Alice', 'Shock'), seen(2, 'Bob', 'Opt')]}
+        onCustomDie={() => {}}
+      />
+    );
+    await user.click(screen.getByRole('tab', { name: 'Revealed' }));
+    const list = screen.getByTestId('seen-list');
+    const entries = () =>
+      within(list)
+        .getAllByTestId('seen-entry')
+        .map((entry) => entry.dataset.by);
+    expect(entries()).toEqual(['Bob', 'Alice']);
+    expect(list).toHaveTextContent('Alice revealed their hand (a card)');
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: 'Whose cards' }),
+      'Alice'
+    );
+    expect(entries()).toEqual(['Alice']);
+  });
+
+  it('says when nothing was revealed', async () => {
+    const user = userEvent.setup();
+    render(<TableLog log={[]} onCustomDie={() => {}} />);
+    await user.click(screen.getByRole('tab', { name: 'Revealed' }));
+    expect(screen.getByTestId('seen-list')).toHaveTextContent(
+      'Nobody has revealed anything yet.'
+    );
+    expect(screen.queryByRole('combobox')).toBeNull();
   });
 });

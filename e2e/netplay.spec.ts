@@ -879,6 +879,27 @@ test('a reveal and the turn number reach the other board', async () => {
   await hostBoard.getByRole('button', { name: 'Next turn' }).click();
   await expect(turn).toContainText(`Turn ${before + 1}`);
   await expect(panel).toHaveCount(0);
+
+  // The guest's table panel keeps the reveal after it ended.
+  const table = guestBoard.getByTestId('table-panel');
+  await table.getByRole('tab', { name: 'Revealed' }).click();
+  const entry = table
+    .getByTestId('seen-entry')
+    .and(guestBoard.locator('[data-source="card"]'));
+  await expect(entry).toHaveCount(1);
+  await expect(entry).toHaveAttribute('data-by', 'Alice');
+  await expect(entry).toContainText('Alice revealed a card from their hand');
+  await expect(entry.getByTestId('card-pill')).toHaveText(name!);
+  // The host's own reveal isn't something it saw from someone else.
+  const hostTable = hostBoard.getByTestId('table-panel');
+  await hostTable.getByRole('tab', { name: 'Revealed' }).click();
+  await expect(hostTable.getByTestId('seen-entry')).toHaveCount(0);
+  for (const board of [guestBoard, hostBoard]) {
+    await board
+      .getByTestId('table-panel')
+      .getByRole('tab', { name: 'Log' })
+      .click();
+  }
 });
 
 test('library activity shows on both boards and always clears', async () => {

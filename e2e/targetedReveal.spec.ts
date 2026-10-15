@@ -346,6 +346,24 @@ test('search picks can be shown to one player, which ends the last showing', asy
       .getByTestId('log-entry')
       .filter({ hasText: 'revealed a card they searched for to Carol' })
   ).toHaveCount(1);
+  // Dismissed from the tray, but still listed as seen in Bob's hand
+  // window; his board's Revealed tab only lists reveals to everyone.
+  await bobHand.getByRole('button', { name: 'Private log' }).click();
+  await bobHand.getByRole('tab', { name: /^Shown to you/ }).click();
+  const seen = bobHand.getByTestId('seen-by-you').getByTestId('seen-entry');
+  await expect(seen.and(bobHand.locator('[data-by="Alice"]'))).toContainText(
+    'Alice showed you a card from their hand'
+  );
+  await expect(seen.and(bobHand.locator('[data-by="Carol"]'))).toContainText(
+    'Carol showed you their hand (7 cards)'
+  );
+  await bobHand.keyboard.press('Escape');
+  const bobTable = bobBoard.getByTestId('table-panel');
+  await bobTable.getByRole('tab', { name: 'Revealed' }).click();
+  await expect(bobTable.getByTestId('seen-list')).not.toContainText(
+    'showed you'
+  );
+  await bobTable.getByRole('tab', { name: 'Log' }).click();
 });
 
 test('no renderer console errors', () => {

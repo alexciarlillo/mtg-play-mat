@@ -1,14 +1,17 @@
+import type { SeenEntry } from '@shared/game';
 import type { TableEntry } from '@shared/net/remoteViews';
 import classNames from 'classnames';
 import { type UIEvent, useLayoutEffect, useRef, useState } from 'react';
 
+import SeenEntries from '../common/SeenEntries';
 import { describeEvent, requestRoll } from './pod';
 
-type Tab = 'log' | 'dice';
+type Tab = 'log' | 'dice' | 'revealed';
 
 const tabs: { id: Tab; label: string }[] = [
   { id: 'log', label: 'Log' },
   { id: 'dice', label: 'Dice' },
+  { id: 'revealed', label: 'Revealed' },
 ];
 
 const button =
@@ -59,14 +62,16 @@ const Entry = ({ entry }: { entry: TableEntry }) => {
   );
 };
 
-// What happens at the table: every player's actions and every roll, in
-// one history everyone at the table sees. Dice are rolled by the host, so
-// rolls read the same on every board.
+// What happens at the table: every action and roll (rolled by the host,
+// so they read the same on every board), and the cards others revealed
+// to the whole table this game, kept after their reveals end.
 const TableLog = ({
   log,
+  seen = [],
   onCustomDie,
 }: {
   log: TableEntry[];
+  seen?: SeenEntry[];
   onCustomDie(): void;
 }) => {
   const [tab, setTab] = useState<Tab>('log');
@@ -146,7 +151,16 @@ const TableLog = ({
           </button>
         ))}
       </div>
-      <div className="relative">
+      {tab === 'revealed' && (
+        <div className="flex max-h-56 flex-col">
+          <SeenEntries
+            entries={seen}
+            empty="Nobody has revealed anything yet."
+            testId="seen-list"
+          />
+        </div>
+      )}
+      <div className={classNames('relative', tab === 'revealed' && 'hidden')}>
         <ol
           ref={list}
           aria-label="Table log"

@@ -28,7 +28,7 @@ import {
   type LibraryDialog,
   useGameShortcuts,
 } from '../common/useGameShortcuts';
-import { useRevealTargets } from '../common/targetedReveal';
+import { useRevealTargets, useSeenList } from '../common/targetedReveal';
 import { useUndoState } from '../common/useUndoState';
 import { dispatch, redo, undo, useView, type ViewStore } from '../viewStore';
 import AttachDialog from './AttachDialog';
@@ -302,6 +302,7 @@ const Board = ({ store, opponent, hand }: Props) => {
   const log = remote?.log ?? [];
   const giveTo = controlTargets(peers);
   const revealTargets = useRevealTargets();
+  const seen = useSeenList();
   const owners = ownerLabels(peers, playerId);
   const names: Record<string, string> = {
     ...Object.fromEntries(peers.map(({ info }) => [info.playerId, info.name])),
@@ -403,6 +404,7 @@ const Board = ({ store, opponent, hand }: Props) => {
                 >
                   <TableLog
                     log={log}
+                    seen={seen}
                     onCustomDie={() => setDialog('rollDie')}
                   />
                 </FloatingPanel>
