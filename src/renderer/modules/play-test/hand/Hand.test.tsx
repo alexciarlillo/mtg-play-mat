@@ -1,6 +1,13 @@
 import type { CardView, PrivateView } from '@shared/game';
 import { defaultSettings } from '@shared/settings';
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ContextMenuProvider } from '../../../ui/ContextMenuProvider';
@@ -413,11 +420,87 @@ describe('Hand', () => {
     expect(dispatch).toHaveBeenCalledWith({
       type: 'searchLibrary',
       playerId: 'p1',
-      instanceIds: ['p1:23'],
-      to: 'battlefield',
+      picks: [{ instanceId: 'p1:23', to: 'battlefield' }],
       shuffle: true,
     });
     expect(setLibraryActivity).toHaveBeenLastCalledWith(null);
+  });
+
+  it('sends each picked card to its own destination in one action', async () => {
+    renderHand(viewOf({ keptHand: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Search library…' }));
+    const tile = async (name: string) =>
+      within(
+        (await screen.findAllByTestId('search-card')).find(
+          (el) => within(el).getByTestId('card').dataset.cardName === name
+        )!
+      ).getByTestId('card');
+    fireEvent.click(await tile('Forest'));
+    fireEvent.click(await tile('Island'));
+    fireEvent.click(await tile('Grizzly Bears'));
+    expect(screen.getAllByTestId('search-pick')).toHaveLength(3);
+
+    // "All to" changes every pick; a pick's own choice overrides it.
+    fireEvent.change(screen.getByLabelText('Destination'), {
+      target: { value: 'top' },
+    });
+    expect(
+      (screen.getByLabelText('Destination for 2. Island') as HTMLSelectElement)
+        .value
+    ).toBe('top');
+    fireEvent.change(screen.getByLabelText('Destination for 1. Forest'), {
+      target: { value: 'battlefieldTapped' },
+    });
+    fireEvent.change(screen.getByLabelText('Destination for 2. Island'), {
+      target: { value: 'hand' },
+    });
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Unpick 3. Grizzly Bears' })
+    );
+    fireEvent.click(screen.getByLabelText('Shuffle afterwards'));
+    fireEvent.click(screen.getByRole('button', { name: 'Move 2' }));
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect(dispatch).toHaveBeenCalledWith({
+      type: 'searchLibrary',
+      playerId: 'p1',
+      picks: [
+        { instanceId: 'p1:21', to: 'battlefield', tapped: true },
+        { instanceId: 'p1:23', to: 'hand' },
+      ],
+      shuffle: false,
+    });
+  });
+
+  it('forgets a pick that leaves the library, even if it comes back', async () => {
+    const { rerender } = renderHand(viewOf({ keptHand: true }));
+    const again = (seq: number) =>
+      rerender(
+        <ContextMenuProvider>
+          <Hand store={storeOf(viewOf({ keptHand: true, seq }))} />
+        </ContextMenuProvider>
+      );
+    fireEvent.click(screen.getByRole('button', { name: 'Search library…' }));
+    const forest = (await screen.findAllByTestId('search-card')).find(
+      (el) => within(el).getByTestId('card').dataset.cardName === 'Forest'
+    )!;
+    fireEvent.click(within(forest).getByTestId('card'));
+    fireEvent.change(screen.getByLabelText('Destination for 1. Forest'), {
+      target: { value: 'exile' },
+    });
+
+    getLibrary.mockResolvedValueOnce(
+      library.filter((card) => card.instanceId !== 'p1:21')
+    );
+    again(2);
+    await waitFor(() =>
+      expect(screen.getAllByTestId('search-card')).toHaveLength(3)
+    );
+    expect(screen.queryAllByTestId('search-pick')).toHaveLength(0);
+    again(3);
+    await waitFor(() =>
+      expect(screen.getAllByTestId('search-card')).toHaveLength(4)
+    );
+    expect(screen.queryAllByTestId('search-pick')).toHaveLength(0);
   });
 
   it('searches rules text and advanced syntax once facts arrive', async () => {

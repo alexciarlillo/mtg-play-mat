@@ -5,6 +5,7 @@ import type {
   InstanceId,
   Phase,
   PlayerId,
+  SearchDestination,
   ZoneId,
 } from './types';
 import {
@@ -170,27 +171,47 @@ const describeArrange = (
   return parts.length > 0 ? `${looked}: ${parts.join(', ')}` : looked;
 };
 
+// "a, b and c"
+const joinParts = (parts: string[]) =>
+  parts.length < 2
+    ? parts.join('')
+    : `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}`;
+
 const describeSearch = (
   before: PublicView,
   after: PublicView,
   action: Extract<GameAction, { type: 'searchLibrary' }>
 ) => {
-  const count = action.instanceIds.length;
-  const shuffled = action.shuffle ? ', then shuffled' : '';
-  if (count === 0) {
+  const count = (to: SearchDestination) =>
+    action.picks.filter((pick) => pick.to === to).length;
+  if (action.picks.length === 0) {
     return `searched their library${action.shuffle ? ' and shuffled it' : ''}`;
   }
-  let found: string;
-  if (action.to === 'hand') found = `${cards(count)} into their hand`;
-  else if (action.to === 'library') {
-    found = `${cards(count)} on top of their library`;
-  } else {
-    const shown = arrived(before, after, action.to).map(nameOf);
-    found = `${listNames(shown)} ${into[action.to]}`;
-  }
-  return action.to === 'library'
-    ? `searched their library${shuffled}, and put ${found}`
-    : `searched their library and put ${found}${shuffled}`;
+  const entered = arrived(before, after, 'battlefield');
+  const named = (shown: CardView[], where: string) =>
+    shown.length > 0 && `${joinParts(shown.map(nameOf))} ${where}`;
+  const counted = (n: number, where: string) => n > 0 && `${cards(n)} ${where}`;
+  const parts = [
+    named(
+      entered.filter((card) => !card.tapped),
+      into.battlefield
+    ),
+    named(
+      entered.filter((card) => card.tapped),
+      `${into.battlefield} tapped`
+    ),
+    named(arrived(before, after, 'graveyard'), into.graveyard),
+    named(arrived(before, after, 'exile'), into.exile),
+    counted(count('hand'), into.hand),
+    counted(count('top'), 'on top of their library'),
+    counted(count('bottom'), 'on the bottom of their library'),
+  ].filter((part): part is string => typeof part === 'string');
+  const found = joinParts(parts);
+  // The shuffle comes before placing, which matters for library picks.
+  if (!action.shuffle) return `searched their library and put ${found}`;
+  return count('top') + count('bottom') > 0
+    ? `searched their library, then shuffled, and put ${found}`
+    : `searched their library and put ${found}, then shuffled`;
 };
 
 const describeReveal = (

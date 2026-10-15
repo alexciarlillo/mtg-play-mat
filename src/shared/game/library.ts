@@ -68,26 +68,43 @@ const arrangeTop = (
   );
 };
 
+// Picks leave the library before the shuffle, so top and bottom picks
+// land around a shuffled library rather than being shuffled into it.
 const searchLibrary = (
   state: GameState,
   rules: Rules,
   player: PlayerState,
   action: SearchLibraryAction
 ): GameState => {
-  const { instanceIds: ids, to } = action;
+  const ids = action.picks.map((pick) => pick.instanceId);
   const library = new Set(player.zones.library);
   if (!distinct(ids) || !ids.every((id) => library.has(id))) return state;
   if (ids.length === 0 && !action.shuffle) return state;
 
-  if (to === 'library') {
-    const shuffled = action.shuffle ? shuffleLibrary(state, player.id) : state;
-    return ids.reduce(
-      (next, id, i) => moveCard(next, rules, id, 'library', { index: i }),
-      shuffled
-    );
-  }
-  const moved = ids.reduce((next, id) => moveCard(next, rules, id, to), state);
-  return action.shuffle ? shuffleLibrary(moved, player.id) : moved;
+  const picked = new Set(ids);
+  const removed = updateZone(state, player.id, 'library', (zone) =>
+    zone.filter((id) => !picked.has(id))
+  );
+  const shuffled = action.shuffle
+    ? shuffleLibrary(removed, player.id)
+    : removed;
+
+  let top = 0;
+  return action.picks.reduce((next, { instanceId, to, tapped }) => {
+    if (to === 'top') {
+      return moveCard(next, rules, instanceId, 'library', { index: top++ });
+    }
+    if (to === 'bottom') return moveCard(next, rules, instanceId, 'library');
+    const moved = moveCard(next, rules, instanceId, to);
+    const card = moved.cards[instanceId];
+    if (to !== 'battlefield' || !tapped || card?.zone !== 'battlefield') {
+      return moved;
+    }
+    return {
+      ...moved,
+      cards: { ...moved.cards, [instanceId]: { ...card, tapped: true } },
+    };
+  }, shuffled);
 };
 
 const revealedIds = (

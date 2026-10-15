@@ -138,8 +138,10 @@ const steps: Record<PlayerAction['type'], (s: GameState) => PlayerAction> = {
   searchLibrary: (s) => ({
     type: 'searchLibrary',
     playerId: P1,
-    instanceIds: [lib(s)[3]],
-    to: 'hand',
+    picks: [
+      { instanceId: lib(s)[3], to: 'battlefield', tapped: true },
+      { instanceId: lib(s)[4], to: 'top' },
+    ],
     shuffle: true,
   }),
   reveal: () => ({ type: 'reveal', playerId: P1, source: 'hand' }),

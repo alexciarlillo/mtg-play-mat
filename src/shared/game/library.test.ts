@@ -9,7 +9,8 @@ import {
   startGame,
   zone,
 } from './testFixtures';
-import type { GameAction, GameState } from './types';
+import { undoLast } from './history';
+import type { GameAction, GameState, SearchPick } from './types';
 import { parsePlayerAction } from './validate';
 import { publicView } from './views';
 
@@ -152,16 +153,19 @@ describe('arrangeTop', () => {
 });
 
 describe('searchLibrary', () => {
+  const search = (
+    state: GameState,
+    picks: SearchPick[],
+    shuffle = true
+  ): GameState =>
+    reduce(state, { type: 'searchLibrary', playerId: P1, picks, shuffle });
+  const to = (dest: SearchPick['to'], ...ids: string[]): SearchPick[] =>
+    ids.map((instanceId) => ({ instanceId, to: dest }));
+
   it('moves the picks and shuffles the rest', () => {
     const state = fresh();
     const picks = [library(state)[4], library(state)[7]];
-    const next = reduce(state, {
-      type: 'searchLibrary',
-      playerId: P1,
-      instanceIds: picks,
-      to: 'hand',
-      shuffle: true,
-    });
+    const next = search(state, to('hand', ...picks));
     expect(zone(next, P1, 'hand')).toEqual(picks);
     expect(library(next)).toHaveLength(8);
     expect(library(next)).not.toEqual(
@@ -173,14 +177,9 @@ describe('searchLibrary', () => {
   it('can skip the shuffle', () => {
     const state = fresh();
     const pick = library(state)[3];
-    const next = reduce(state, {
-      type: 'searchLibrary',
-      playerId: P1,
-      instanceIds: [pick],
-      to: 'battlefield',
-      shuffle: false,
-    });
+    const next = search(state, to('battlefield', pick), false);
     expect(next.cards[pick].zone).toBe('battlefield');
+    expect(next.cards[pick].tapped).toBe(false);
     expect(next.cards[pick].position).not.toBeNull();
     expect(library(next)).toEqual(library(state).filter((id) => id !== pick));
     expect(next.rng).toBe(state.rng);
@@ -189,50 +188,94 @@ describe('searchLibrary', () => {
   it('puts cards on top after the shuffle, first pick topmost', () => {
     const state = fresh();
     const [, , x, , y] = library(state);
-    const next = reduce(state, {
-      type: 'searchLibrary',
-      playerId: P1,
-      instanceIds: [y, x],
-      to: 'library',
-      shuffle: true,
-    });
+    const next = search(state, to('top', y, x));
     expect(library(next).slice(0, 2)).toEqual([y, x]);
     expect(library(next)).toHaveLength(10);
   });
 
+  it('puts bottom picks under the shuffled rest, in pick order', () => {
+    const state = fresh();
+    const [x, , y] = library(state);
+    const next = search(state, to('bottom', y, x));
+    expect(library(next).slice(-2)).toEqual([y, x]);
+    expect(library(next)).toHaveLength(10);
+  });
+
+  it('sends each pick to its own destination in one step', () => {
+    const state = fresh();
+    const [a, b, c, d, e, f, g] = library(state).slice(1);
+    const next = search(state, [
+      { instanceId: a, to: 'battlefield', tapped: true },
+      { instanceId: b, to: 'hand' },
+      { instanceId: c, to: 'graveyard' },
+      { instanceId: d, to: 'exile' },
+      { instanceId: e, to: 'top' },
+      { instanceId: f, to: 'bottom' },
+      { instanceId: g, to: 'battlefield' },
+    ]);
+    expect(next.log).toHaveLength(state.log.length + 1);
+    expect(zone(next, P1, 'battlefield')).toEqual([a, g]);
+    expect(next.cards[a].tapped).toBe(true);
+    expect(next.cards[g].tapped).toBe(false);
+    expect(zone(next, P1, 'hand')).toEqual([b]);
+    expect(zone(next, P1, 'graveyard')).toEqual([c]);
+    expect(zone(next, P1, 'exile')).toEqual([d]);
+    expect(library(next)[0]).toBe(e);
+    expect(library(next).at(-1)).toBe(f);
+    expect(library(next)).toHaveLength(5);
+  });
+
+  it('is the same shuffle whatever the destinations', () => {
+    const state = fresh();
+    const [a, b] = library(state);
+    const rest = (next: GameState) =>
+      library(next).filter((id) => id !== a && id !== b);
+    const placed = search(state, [
+      { instanceId: a, to: 'top' },
+      { instanceId: b, to: 'bottom' },
+    ]);
+    const taken = search(state, to('hand', a, b));
+    expect(rest(placed)).toEqual(rest(taken));
+  });
+
+  it('ignores tapped off the battlefield', () => {
+    const state = fresh();
+    const [a] = library(state);
+    const next = search(state, [{ instanceId: a, to: 'hand', tapped: true }]);
+    expect(next.cards[a].tapped).toBe(false);
+  });
+
   it('finding nothing still shuffles, and nothing at all is a no-op', () => {
     const state = fresh();
-    const shuffled = reduce(state, {
-      type: 'searchLibrary',
-      playerId: P1,
-      instanceIds: [],
-      to: 'hand',
-      shuffle: true,
-    });
-    expect(shuffled.rng).not.toBe(state.rng);
+    expect(search(state, []).rng).not.toBe(state.rng);
+    expect(search(state, [], false)).toBe(state);
+  });
+
+  it('refuses cards that are not in the library, or picked twice', () => {
+    const state = reduce(fresh(), { type: 'draw', playerId: P1, count: 1 });
+    const [inHand] = zone(state, P1, 'hand');
+    const [a] = library(state);
+    expect(search(state, to('graveyard', a, inHand))).toBe(state);
     expect(
-      reduce(state, {
-        type: 'searchLibrary',
-        playerId: P1,
-        instanceIds: [],
-        to: 'hand',
-        shuffle: false,
-      })
+      search(state, [
+        { instanceId: a, to: 'top' },
+        { instanceId: a, to: 'hand' },
+      ])
     ).toBe(state);
   });
 
-  it('refuses cards that are not in the library', () => {
-    const state = reduce(fresh(), { type: 'draw', playerId: P1, count: 1 });
-    const [inHand] = zone(state, P1, 'hand');
-    expect(
-      reduce(state, {
-        type: 'searchLibrary',
-        playerId: P1,
-        instanceIds: [inHand],
-        to: 'graveyard',
-        shuffle: true,
-      })
-    ).toBe(state);
+  it('a Cultivate is undone in one step', () => {
+    const state = fresh();
+    const [a, b] = library(state).slice(5);
+    const next = search(state, [
+      { instanceId: a, to: 'battlefield', tapped: true },
+      { instanceId: b, to: 'hand' },
+    ]);
+    const undone = undoLast(next, P1, 1);
+    expect(undone?.action.type).toBe('searchLibrary');
+    expect(undone?.state.players).toEqual(state.players);
+    expect(undone?.state.cards).toEqual(state.cards);
+    expect(undone?.state.rng).toEqual(state.rng);
   });
 });
 
@@ -439,15 +482,23 @@ describe('parsing library and turn actions', () => {
       parsePlayerAction({
         type: 'searchLibrary',
         playerId: P1,
-        instanceIds: ['a'],
-        to: 'library',
+        picks: [
+          { instanceId: 'a', to: 'top', x: 1 },
+          { instanceId: 'b', to: 'battlefield', tapped: true },
+          { instanceId: 'c', to: 'hand', tapped: true },
+          { instanceId: 'd', to: 'bottom', tapped: false },
+        ],
         shuffle: true,
       })
     ).toEqual({
       type: 'searchLibrary',
       playerId: P1,
-      instanceIds: ['a'],
-      to: 'library',
+      picks: [
+        { instanceId: 'a', to: 'top' },
+        { instanceId: 'b', to: 'battlefield', tapped: true },
+        { instanceId: 'c', to: 'hand' },
+        { instanceId: 'd', to: 'bottom' },
+      ],
       shuffle: true,
     });
     expect(
@@ -511,11 +562,30 @@ describe('parsing library and turn actions', () => {
       {
         type: 'searchLibrary',
         playerId: P1,
-        instanceIds: [],
-        to: 'command',
+        picks: [{ instanceId: 'a', to: 'command' }],
         shuffle: true,
       },
-      { type: 'searchLibrary', playerId: P1, instanceIds: [], to: 'hand' },
+      {
+        type: 'searchLibrary',
+        playerId: P1,
+        picks: [{ instanceId: 'a', to: 'library' }],
+        shuffle: true,
+      },
+      {
+        type: 'searchLibrary',
+        playerId: P1,
+        picks: [{ instanceId: 'a', to: 'hand', tapped: 'yes' }],
+        shuffle: true,
+      },
+      {
+        type: 'searchLibrary',
+        playerId: P1,
+        instanceIds: ['a'],
+        to: 'hand',
+        shuffle: true,
+      },
+      { type: 'searchLibrary', playerId: P1, picks: ['a'], shuffle: true },
+      { type: 'searchLibrary', playerId: P1, picks: [] },
       { type: 'reveal', playerId: P1, source: 'graveyard' },
       { type: 'reveal', playerId: P1, source: 'libraryTop' },
       { type: 'reveal', playerId: P1, source: 'card' },

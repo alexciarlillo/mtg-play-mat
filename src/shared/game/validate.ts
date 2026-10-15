@@ -9,6 +9,7 @@ import type {
   PlayerId,
   Position,
   SearchDestination,
+  SearchPick,
   ZoneId,
 } from './types';
 import { MAX_TOKENS } from './mtg';
@@ -95,7 +96,8 @@ const searchDestinations: readonly SearchDestination[] = [
   'battlefield',
   'graveyard',
   'exile',
-  'library',
+  'top',
+  'bottom',
 ];
 
 const MAX_COUNT = 1000;
@@ -115,6 +117,23 @@ const counterName = (fields: Fields, key: string): string => {
     return fail(`${key} must be 1-${MAX_COUNTER_NAME} chars`);
   }
   return name;
+};
+
+const searchPicks = (fields: Fields, key: string): SearchPick[] => {
+  const value = fields[key];
+  if (!Array.isArray(value) || value.length > MAX_COUNT) {
+    return fail(`${key} must be an array of at most ${MAX_COUNT} picks`);
+  }
+  return value.map((pick: unknown) => {
+    if (!isObject(pick)) return fail(`${key} must hold objects`);
+    const to = oneOf(pick, 'to', searchDestinations);
+    const tapped = pick.tapped === undefined ? false : bool(pick, 'tapped');
+    return {
+      instanceId: string(pick, 'instanceId'),
+      to,
+      ...(tapped && to === 'battlefield' && { tapped }),
+    };
+  });
 };
 
 const parseReveal = (input: Fields): PlayerAction => {
@@ -295,8 +314,7 @@ export const parsePlayerAction = (input: unknown): PlayerAction => {
       return {
         type: 'searchLibrary',
         playerId: string(input, 'playerId'),
-        instanceIds: strings(input, 'instanceIds', MAX_COUNT),
-        to: oneOf(input, 'to', searchDestinations),
+        picks: searchPicks(input, 'picks'),
         shuffle: bool(input, 'shuffle'),
       };
     case 'reveal':

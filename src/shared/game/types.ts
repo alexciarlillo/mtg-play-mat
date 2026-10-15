@@ -308,15 +308,22 @@ export interface ArrangeTopAction {
 }
 
 export type SearchDestination =
-  'hand' | 'battlefield' | 'graveyard' | 'exile' | 'library';
+  'hand' | 'battlefield' | 'graveyard' | 'exile' | 'top' | 'bottom';
 
-// Takes cards out of the library, optionally shuffles, then puts them in
-// place; 'library' means the top, after the shuffle.
+export interface SearchPick {
+  instanceId: InstanceId;
+  to: SearchDestination;
+  // Only meaningful for the battlefield.
+  tapped?: boolean;
+}
+
+// Takes the picked cards out of the library, optionally shuffles, then
+// puts each where it goes. Top picks go on in pick order, the first one
+// topmost; bottom picks go under the rest, the last one lowest.
 export interface SearchLibraryAction {
   type: 'searchLibrary';
   playerId: PlayerId;
-  instanceIds: InstanceId[];
-  to: SearchDestination;
+  picks: SearchPick[];
   shuffle: boolean;
 }
 

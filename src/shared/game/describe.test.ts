@@ -90,8 +90,10 @@ describe('describeAction privacy', () => {
     const toHand = step(state, {
       type: 'searchLibrary',
       playerId: P1,
-      instanceIds: [a, b],
-      to: 'hand',
+      picks: [
+        { instanceId: a, to: 'hand' },
+        { instanceId: b, to: 'hand' },
+      ],
       shuffle: true,
     });
     expect(toHand.text).toBe(
@@ -100,8 +102,7 @@ describe('describeAction privacy', () => {
     const toTop = step(state, {
       type: 'searchLibrary',
       playerId: P1,
-      instanceIds: [a],
-      to: 'library',
+      picks: [{ instanceId: a, to: 'top' }],
       shuffle: true,
     });
     expect(toTop.text).toBe(
@@ -116,13 +117,65 @@ describe('describeAction privacy', () => {
     const { text } = step(state, {
       type: 'searchLibrary',
       playerId: P1,
-      instanceIds: [found],
-      to: 'battlefield',
+      picks: [{ instanceId: found, to: 'battlefield' }],
       shuffle: true,
     });
     expect(text).toBe(
       `searched their library and put ${nameOf(state, found)} onto the ` +
         'battlefield, then shuffled'
+    );
+  });
+
+  it('describes a mixed search in one line, naming only public picks', () => {
+    const state = opening();
+    const [land, kept, top, bottom, gone] = ids(state, 'library').slice(2);
+    const cultivate = step(state, {
+      type: 'searchLibrary',
+      playerId: P1,
+      picks: [
+        { instanceId: land, to: 'battlefield', tapped: true },
+        { instanceId: kept, to: 'hand' },
+      ],
+      shuffle: true,
+    });
+    expect(cultivate.text).toBe(
+      `searched their library and put ${nameOf(state, land)} onto the ` +
+        'battlefield tapped and a card into their hand, then shuffled'
+    );
+    const placed = step(state, {
+      type: 'searchLibrary',
+      playerId: P1,
+      picks: [
+        { instanceId: top, to: 'top' },
+        { instanceId: bottom, to: 'bottom' },
+        { instanceId: gone, to: 'exile' },
+      ],
+      shuffle: false,
+    });
+    expect(placed.text).toBe(
+      `searched their library and put ${nameOf(state, gone)} into exile, ` +
+        'a card on top of their library and a card on the bottom of ' +
+        'their library'
+    );
+  });
+
+  it('joins names within a destination with "and"', () => {
+    const state = opening();
+    const [a, b, c] = ids(state, 'library').slice(2);
+    const { text } = step(state, {
+      type: 'searchLibrary',
+      playerId: P1,
+      picks: [
+        { instanceId: a, to: 'battlefield' },
+        { instanceId: b, to: 'battlefield' },
+        { instanceId: c, to: 'exile' },
+      ],
+      shuffle: false,
+    });
+    expect(text).toBe(
+      `searched their library and put ${nameOf(state, a)} and ` +
+        `${nameOf(state, b)} onto the battlefield and ` +
+        `${nameOf(state, c)} into exile`
     );
   });
 
@@ -402,8 +455,13 @@ describe('describeAction privacy under random play', () => {
         {
           type: 'searchLibrary',
           playerId: P1,
-          instanceIds: library.slice(pick(4), 1 + pick(4)),
-          to: (['hand', 'library', 'battlefield', 'exile'] as const)[pick(4)],
+          picks: library.slice(pick(4), 1 + pick(4)).map((instanceId) => ({
+            instanceId,
+            to: (['hand', 'top', 'bottom', 'battlefield', 'exile'] as const)[
+              pick(5)
+            ],
+            tapped: pick(2) === 0,
+          })),
           shuffle: pick(2) === 0,
         },
         { type: 'reveal', playerId: P1, source: 'hand' },

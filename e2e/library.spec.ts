@@ -307,8 +307,13 @@ test('query syntax narrows the library search', async () => {
     .poll(shownCount)
     .toBe(countOf([...cheapCreatures, 'Colossal Dreadmaw']));
 
-  // Chips build the same query and AND with the text.
+  // Chips build the same query and AND with the text. A short hand
+  // window starts with the filters folded.
   await query.fill('mv<=1');
+  const filters = hand.getByRole('button', { name: /^Filters/ });
+  if ((await filters.getAttribute('aria-expanded')) === 'false') {
+    await filters.click();
+  }
   await hand.getByRole('button', { name: 'Creature', exact: true }).click();
   await expect
     .poll(shownCount)
@@ -348,7 +353,7 @@ test('copies stack into one tile and each click picks one more', async () => {
   await expect(tile.getByTestId('stack-count')).toHaveText(
     `2/${forests.length}`
   );
-  await hand.getByLabel('Destination').selectOption('library');
+  await hand.getByLabel('Destination', { exact: true }).selectOption('top');
   await hand.getByLabel('Shuffle afterwards').uncheck();
   await hand.getByRole('button', { name: 'Move 2', exact: true }).click();
   await expect(tile).toHaveCount(0);
@@ -369,6 +374,68 @@ test('copies stack into one tile and each click picks one more', async () => {
     hand.getByLabel('Presets').locator('optgroup[label="Recent"] option')
   ).toHaveText(['t:basic t:land', 't:land']);
   await hand.keyboard.press('Escape');
+});
+
+test('a Cultivate-style search is one log line and one undo', async () => {
+  const before = await gameState();
+  const lines = board.getByTestId('log-entry');
+  const linesBefore = await lines.count();
+  const forests = me(before).zones.library.filter(
+    (id) => before.cards[id].ref.name === 'Forest'
+  );
+  expect(forests.length).toBeGreaterThan(1);
+
+  await hand.getByRole('button', { name: 'Search library…' }).click();
+  await hand.getByLabel('Presets').selectOption({ label: 'Basic land' });
+  const tile = hand.getByTestId('search-card');
+  await tile.getByTestId('card').click();
+  await tile.getByTestId('card').click();
+  const picks = hand.getByTestId('search-pick');
+  await expect(picks).toHaveCount(2);
+  const [land, kept] = await picks.evaluateAll((els) =>
+    els.map((el) => (el as HTMLElement).dataset.instanceId!)
+  );
+  await hand
+    .getByLabel('Destination for 1. Forest')
+    .selectOption('battlefieldTapped');
+  await hand.getByLabel('Destination for 2. Forest').selectOption('hand');
+  await expect(hand.getByLabel('Shuffle afterwards')).toBeChecked();
+  await hand.getByRole('button', { name: 'Move 2 and shuffle' }).click();
+
+  await expect
+    .poll(async () => (await gameState()).log.length)
+    .toBe(before.log.length + 1);
+  const after = await gameState();
+  expect(after.log.at(-1)?.type).toBe('searchLibrary');
+  expect(after.cards[land].zone).toBe('battlefield');
+  expect(after.cards[land].tapped).toBe(true);
+  expect(after.cards[kept].zone).toBe('hand');
+  expect(after.rng).not.toEqual(before.rng);
+  await expect(
+    fieldCards().and(board.locator(`[data-instance-id="${land}"]`))
+  ).toHaveClass(/rotate-90/);
+  await expect(lines).toHaveCount(linesBefore + 1);
+  await expect(
+    lines.filter({
+      hasText:
+        'searched their library and put Forest onto the battlefield ' +
+        'tapped and a card into their hand, then shuffled',
+    })
+  ).toHaveCount(1);
+
+  await hand.getByRole('button', { name: 'Undo' }).click();
+  await expect
+    .poll(async () => (await gameState()).log.length)
+    .toBe(before.log.length);
+  const undone = await gameState();
+  expect(undone.players).toEqual(before.players);
+  expect(undone.cards).toEqual(before.cards);
+  expect(undone.rng).toEqual(before.rng);
+  // The log keeps the line and says it was undone.
+  await expect(lines).toHaveCount(linesBefore + 2);
+  await expect(
+    lines.filter({ hasText: 'undid: searched their library and put Forest' })
+  ).toHaveCount(1);
 });
 
 test('a revealed hand card shows on the board until the next action', async () => {
