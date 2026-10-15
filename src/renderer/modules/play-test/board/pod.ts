@@ -75,10 +75,30 @@ export const ownerLabel = (
 
 // What was rolled, without saying by whom: a seat's own log is already
 // under their name.
-export const describeRoll = (roll: RollResult) =>
-  roll.type === 'coin'
-    ? `flipped a coin: ${roll.result}`
-    : `rolled a d${roll.sides}: ${roll.result}`;
+export const describeRoll = (roll: RollResult): string => {
+  switch (roll.type) {
+    case 'coin':
+      return `flipped a coin: ${roll.result}`;
+    case 'die':
+      return `rolled a d${roll.sides}: ${roll.result}`;
+    case 'dice':
+      return `rolled ${roll.results.length}d${roll.sides}: ${roll.results.join(
+        ' + '
+      )} = ${rollTotal(roll)}`;
+    case 'planar':
+      return `rolled the planar die: ${roll.result}`;
+  }
+};
+
+// The single value a roll came to, for tests and screen readers.
+export const rollTotal = (roll: RollResult): string => {
+  switch (roll.type) {
+    case 'dice':
+      return String(roll.results.reduce((sum, n) => sum + n, 0));
+    default:
+      return String(roll.result);
+  }
+};
 
 export const describeEvent = ({ byName, roll }: TableEvent) =>
   `${byName} ${describeRoll(roll)}`;

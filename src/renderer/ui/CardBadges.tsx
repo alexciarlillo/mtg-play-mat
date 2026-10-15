@@ -1,9 +1,15 @@
 import type { CardView } from '@shared/game';
+import classNames from 'classnames';
 
 import { loyalty, otherCounters, powerToughness } from './cardStats';
 
-const chip =
-  'rounded bg-slate-900/85 px-1.5 text-xs font-semibold text-white shadow ring-1 ring-white/40 tabular-nums';
+// Sentence case, so "first strike" reads as a badge, not a sentence.
+const abilityLabel = (ability: string) =>
+  ability.charAt(0).toUpperCase() + ability.slice(1);
+
+const chipBase =
+  'rounded px-1.5 text-xs font-semibold text-white shadow ring-1 ring-white/40 tabular-nums';
+const chip = `${chipBase} bg-slate-900/85`;
 
 // Counters and derived stats drawn over a card, from its view alone, so
 // the same badges show on the owner's board and the opponent's. owner
@@ -18,6 +24,8 @@ const CardBadges = ({
   const pt = powerToughness(card);
   const walker = loyalty(card);
   const counters = otherCounters(card);
+  const abilities = card.abilities ?? [];
+  const marks = card.doesntUntap || abilities.length > 0;
 
   return (
     <>
@@ -44,6 +52,39 @@ const CardBadges = ({
           Token
         </span>
       )}
+      {marks && (
+        <div
+          data-testid="ability-badges"
+          className="pointer-events-none absolute right-1 top-[14%] flex max-w-[70%] flex-col items-end gap-0.5"
+        >
+          {card.doesntUntap && (
+            <span
+              data-testid="doesnt-untap-badge"
+              title="Doesn't untap"
+              className={classNames(chipBase, 'bg-rose-800/90')}
+            >
+              No untap
+            </span>
+          )}
+          {abilities.map((ability) => (
+            <span
+              key={ability}
+              data-testid="ability-badge"
+              data-ability={ability}
+              title={ability}
+              className={classNames(
+                chipBase,
+                'max-w-full truncate',
+                ability.toLowerCase() === 'goaded'
+                  ? 'bg-orange-700/90'
+                  : 'bg-indigo-800/90'
+              )}
+            >
+              {abilityLabel(ability)}
+            </span>
+          ))}
+        </div>
+      )}
       {owner && (
         <span
           data-testid="owner-badge"
@@ -66,7 +107,16 @@ const CardBadges = ({
           {pt !== null && (
             <span
               data-testid="pt-badge"
-              className="rounded bg-white px-1.5 text-base font-black text-slate-900 shadow ring-2 ring-slate-900 tabular-nums"
+              data-set={card.ptOverride ? true : undefined}
+              title={
+                card.ptOverride
+                  ? `Base set to ${card.ptOverride.power}/${card.ptOverride.toughness}`
+                  : undefined
+              }
+              className={classNames(
+                'rounded bg-white px-1.5 text-base font-black text-slate-900 shadow ring-2 tabular-nums',
+                card.ptOverride ? 'ring-amber-500' : 'ring-slate-900'
+              )}
             >
               {pt}
             </span>

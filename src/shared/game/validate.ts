@@ -9,11 +9,19 @@ import type {
   PlayerAction,
   PlayerId,
   Position,
+  PtOverride,
   SearchDestination,
+  SetCardStateAction,
   SearchPick,
   ZoneId,
 } from './types';
 import { MAX_TOKENS } from './mtg';
+import {
+  MAX_ABILITIES,
+  MAX_ABILITY_LENGTH,
+  MAX_ABILITY_REMOVALS,
+  MAX_PT,
+} from './cardState';
 import { hiddenZones, phases, zoneIds } from './types';
 import { MAX_REVEALED_CARDS } from './views';
 
@@ -267,6 +275,78 @@ const parseReveal = (input: Fields): PlayerAction => {
   }
 };
 
+// Power and toughness the player typed, within a sane range.
+export const parsePtOverride = (
+  value: unknown,
+  failWith: (message: string) => never = fail
+): PtOverride => {
+  const ok = (n: unknown) =>
+    Number.isInteger(n) && Math.abs(n as number) <= MAX_PT;
+  if (!isObject(value) || !ok(value.power) || !ok(value.toughness)) {
+    return failWith(`ptOverride must be whole numbers within ±${MAX_PT}`);
+  }
+  return { power: value.power as number, toughness: value.toughness as number };
+};
+
+// Ability names are free text too: trimmed, short, and few.
+// Control and bidi-override characters could garble a badge or the log.
+const UNPRINTABLE = /[\p{Cc}\u200e\u200f\u202a-\u202e\u2066-\u2069]/gu;
+
+export const parseAbilities = (
+  value: unknown,
+  key: string,
+  failWith: (message: string) => never = fail,
+  max = MAX_ABILITIES
+): string[] => {
+  if (!Array.isArray(value) || value.length > max) {
+    return failWith(`${key} must be an array of at most ${max}`);
+  }
+  const names = value.map((item: unknown) => {
+    const name =
+      typeof item === 'string' ? item.replace(UNPRINTABLE, '').trim() : '';
+    return name.length > 0 && name.length <= MAX_ABILITY_LENGTH
+      ? name
+      : failWith(`${key} must hold 1-${MAX_ABILITY_LENGTH} chars each`);
+  });
+  return names.filter(
+    (name, i) =>
+      names.findIndex((other) => other.toLowerCase() === name.toLowerCase()) ===
+      i
+  );
+};
+
+const parseSetCardState = (input: Fields): PlayerAction => {
+  const action: SetCardStateAction = {
+    type: 'setCardState',
+    playerId: string(input, 'playerId'),
+    instanceIds: cardIds(input, 'instanceIds'),
+    ...(input.doesntUntap !== undefined && {
+      doesntUntap: bool(input, 'doesntUntap'),
+    }),
+    ...(input.ptOverride !== undefined && {
+      ptOverride:
+        input.ptOverride === null ? null : parsePtOverride(input.ptOverride),
+    }),
+    ...(input.addAbilities !== undefined && {
+      addAbilities: parseAbilities(input.addAbilities, 'addAbilities'),
+    }),
+    ...(input.removeAbilities !== undefined && {
+      // A selection's abilities together can be more than one card holds.
+      removeAbilities: parseAbilities(
+        input.removeAbilities,
+        'removeAbilities',
+        fail,
+        MAX_ABILITY_REMOVALS
+      ),
+    }),
+  };
+  const { type, playerId, instanceIds, ...change } = action;
+  if (Object.keys(change).length === 0) {
+    return fail('setCardState must change something');
+  }
+  return { type, playerId, instanceIds, ...change };
+};
+
 // Actions arrive from renderers, so check their shape and rebuild them from
 // known fields only; nothing unexpected reaches the reducer or the log.
 export const parsePlayerAction = (input: unknown): PlayerAction => {
@@ -484,13 +564,19 @@ export const parsePlayerAction = (input: unknown): PlayerAction => {
         playerId: string(input, 'playerId'),
         untap: bool(input, 'untap'),
         draw: bool(input, 'draw'),
+        ...(flag(input, 'emptyMana') && { emptyMana: true }),
       };
     case 'setPhase':
       return {
         type: 'setPhase',
         playerId: string(input, 'playerId'),
         phase: oneOf<Phase>(input, 'phase', phases),
+        ...(flag(input, 'emptyMana') && { emptyMana: true }),
       };
+    case 'setCardState':
+      return parseSetCardState(input);
+    case 'emptyManaPool':
+      return { type: 'emptyManaPool', playerId: string(input, 'playerId') };
     default:
       return fail(`unknown type ${JSON.stringify(input.type)}`);
   }

@@ -1,4 +1,5 @@
 import { canTransform, currentFace } from './cardRefs';
+import { withoutCardState } from './cardState';
 import {
   attachmentsOf,
   createOnBattlefield,
@@ -50,7 +51,8 @@ const entryCounters = (
 };
 
 export const mtgRules: Rules = {
-  onZoneChange: (card, from, to) => {
+  onZoneChange: (entering, from, to) => {
+    const card = withoutCardState(entering);
     // Counters don't follow a card to a new zone (suspend's time counters
     // in exile are gone once it is cast).
     if (from !== 'battlefield') {
@@ -225,10 +227,11 @@ const reduceCard = (state: GameState, action: MtgCardAction): GameState => {
   }
 };
 
+// Permanents marked as not untapping stay tapped.
 export const untapAll = (state: GameState, player: PlayerState): GameState => {
   const tapped = player.zones.battlefield
     .map((id) => state.cards[id])
-    .filter((card) => card?.tapped);
+    .filter((card) => card?.tapped && !card.doesntUntap);
   if (tapped.length === 0) return state;
 
   const cards = { ...state.cards };

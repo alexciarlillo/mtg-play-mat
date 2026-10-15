@@ -7,7 +7,9 @@ import {
   type DummyOpponent,
   type LentCard,
   MAX_REVEALED_CARDS,
+  parseAbilities,
   parseCardRef,
+  parsePtOverride,
   type PermanentState,
   parseLibraryActivity,
   type Phase,
@@ -51,9 +53,14 @@ export const FEATURE_CONTROL = 'control';
 // Cards shown to one player only, in their hand window.
 export const FEATURE_REVEAL = 'reveal';
 
+// Several dice at once, and the planar die. Older hosts refuse these
+// rolls, and older guests drop their results.
+export const FEATURE_DICE = 'dice';
+
 export const localFeatures: readonly string[] = [
   FEATURE_CONTROL,
   FEATURE_REVEAL,
+  FEATURE_DICE,
 ];
 
 const MAX_FEATURES = 20;
@@ -81,11 +88,35 @@ export interface RosterEntry {
   seat: number;
 }
 
-export type RollRequest = { type: 'die'; sides: number } | { type: 'coin' };
+export const MAX_DICE = 10;
+
+export type RollRequest =
+  | { type: 'die'; sides: number }
+  | { type: 'coin' }
+  | { type: 'dice'; count: number; sides: number }
+  | { type: 'planar' };
+
+// A planar die has one chaos face, one planeswalker face and four blanks.
+export const planarFaces = [
+  'chaos',
+  'planeswalk',
+  'blank',
+  'blank',
+  'blank',
+  'blank',
+] as const;
+
+export type PlanarFace = (typeof planarFaces)[number];
 
 export type RollResult =
   | { type: 'die'; sides: number; result: number }
-  | { type: 'coin'; result: 'heads' | 'tails' };
+  | { type: 'coin'; result: 'heads' | 'tails' }
+  | { type: 'dice'; sides: number; results: number[] }
+  | { type: 'planar'; result: PlanarFace };
+
+// Rolls only a host announcing FEATURE_DICE can make.
+export const needsDiceFeature = (roll: { type: string }) =>
+  roll.type === 'dice' || roll.type === 'planar';
 
 // Shared randomness: only the host rolls, for whoever asked.
 export interface TableEvent {
@@ -231,6 +262,19 @@ const attachedTo = (fields: Fields, zone: PublicZoneId): string | null => {
   return zone === 'battlefield' ? host : null;
 };
 
+// Hand-set permanent state, added within v2: older builds rebuild cards
+// from the fields they know, so they simply never see it.
+const cardState = (fields: Fields) => ({
+  ...(fields.doesntUntap !== undefined &&
+    bool(fields, 'doesntUntap') && { doesntUntap: true as const }),
+  ...(fields.ptOverride !== undefined && {
+    ptOverride: parsePtOverride(fields.ptOverride, fail),
+  }),
+  ...(fields.abilities !== undefined && {
+    abilities: parseAbilities(fields.abilities, 'abilities', fail),
+  }),
+});
+
 const cardView = (value: unknown, zone: PublicZoneId): CardView => {
   const fields = object(value, 'card');
   if (fields.zone !== zone) fail(`card in ${zone} claims another zone`);
@@ -255,6 +299,7 @@ const cardView = (value: unknown, zone: PublicZoneId): CardView => {
         isCommander: true,
         commanderCasts: int(fields, 'commanderCasts', 0, MAX_COUNT),
       }),
+    ...(zone === 'battlefield' && cardState(fields)),
   };
 };
 
@@ -355,6 +400,7 @@ const permanentState = (fields: Fields): PermanentState => {
     ...(fields.commanderCasts !== undefined && {
       commanderCasts: int(fields, 'commanderCasts', 0, MAX_COUNT),
     }),
+    ...cardState(fields),
   };
 };
 
@@ -496,6 +542,14 @@ export const parseRollRequest = (value: unknown): RollRequest => {
       return { type: 'die', sides: dieSides(fields) };
     case 'coin':
       return { type: 'coin' };
+    case 'dice':
+      return {
+        type: 'dice',
+        count: int(fields, 'count', 2, MAX_DICE),
+        sides: dieSides(fields),
+      };
+    case 'planar':
+      return { type: 'planar' };
     default:
       return fail('unknown roll');
   }
@@ -513,6 +567,20 @@ const rollResult = (value: unknown): RollResult => {
         return fail('a coin lands heads or tails');
       }
       return { type: 'coin', result: fields.result };
+    case 'dice': {
+      const sides = dieSides(fields);
+      const results = list(fields.results, 'results', MAX_DICE).map((n) =>
+        Number.isInteger(n) && (n as number) >= 1 && (n as number) <= sides
+          ? (n as number)
+          : fail(`results must be integers in 1..${sides}`)
+      );
+      if (results.length < 2) fail('dice need at least two results');
+      return { type: 'dice', sides, results };
+    }
+    case 'planar':
+      return (planarFaces as readonly unknown[]).includes(fields.result)
+        ? { type: 'planar', result: fields.result as PlanarFace }
+        : fail('a planar die lands chaos, planeswalk or blank');
     default:
       return fail('unknown roll');
   }

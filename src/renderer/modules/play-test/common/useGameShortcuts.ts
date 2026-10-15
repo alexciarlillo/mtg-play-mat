@@ -1,10 +1,12 @@
 import type { PublicView } from '@shared/game';
+import type { RollRequest } from '@shared/net/protocol';
 import { useEffect, useRef } from 'react';
 
 import { useCardPreview } from '../../../ui/CardPreview';
 import { hoverKeyOf, letterOf } from '../../../ui/hoverKeys';
+import { requestRoll } from '../board/pod';
 import { dispatch, redo, undo } from '../viewStore';
-import { loadTurnSettings } from './turnSettings';
+import { loadTurnSettings, nextTurnAction } from './turnSettings';
 
 export interface Shortcut {
   key: string;
@@ -20,6 +22,10 @@ export const shortcutList: Shortcut[] = [
   { key: 'V', description: 'Search your library' },
   { key: '⇧V', description: 'Look at the top of your library' },
   { key: 'R', description: 'Restart the game (not over a hand card)' },
+  { key: '1', description: 'Flip a coin' },
+  { key: '2', description: 'Roll a d6' },
+  { key: '3', description: 'Roll two d6' },
+  { key: '4', description: 'Roll a d20' },
   { key: '↑ / +', description: 'Gain 1 life' },
   { key: '↓ / −', description: 'Lose 1 life' },
   { key: '⌘/Ctrl+Z', description: 'Undo your last action' },
@@ -43,6 +49,14 @@ export const hoverShortcutList: Shortcut[] = [
   { key: 'C', description: 'Move a commander to the command zone' },
   { key: 'R', description: 'Reveal a card in your hand to everyone' },
 ];
+
+// Rolled by the host in a pod, like the table panel's buttons.
+const diceKeys: Record<string, RollRequest | undefined> = {
+  '1': { type: 'coin' },
+  '2': { type: 'die', sides: 6 },
+  '3': { type: 'dice', count: 2, sides: 6 },
+  '4': { type: 'die', sides: 20 },
+};
 
 // Checkboxes and buttons take no text, so game keys still work on them.
 const nonTextInputs = ['checkbox', 'radio', 'button', 'submit', 'range'];
@@ -140,6 +154,12 @@ export const useGameShortcuts = (view: PublicView | null, options: Options) => {
         return;
       }
       if (e.repeat) return;
+      const roll = !e.shiftKey && diceKeys[e.key];
+      if (roll) {
+        e.preventDefault();
+        requestRoll(roll);
+        return;
+      }
       const letter = letterOf(e);
       // Shift picks a variant of V and L only; other Shift combos are spare.
       if (e.shiftKey && letter !== 'v' && letter !== 'l') return;
@@ -167,7 +187,7 @@ export const useGameShortcuts = (view: PublicView | null, options: Options) => {
           break;
         case 'n':
           if (opts.turnTracking) {
-            dispatch({ type: 'nextTurn', playerId, ...loadTurnSettings() });
+            dispatch(nextTurnAction(playerId, loadTurnSettings()));
           }
           break;
         case 'v':

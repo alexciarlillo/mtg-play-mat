@@ -41,6 +41,9 @@ export interface OpponentState {
   // Every player's actions and every roll, in the order they arrived
   // here; newest last.
   log: TableEntry[];
+  // Set for a guest: what the host's build can do, which decides the
+  // rolls on offer; null until the host has said hello.
+  hostFeatures?: string[] | null;
 }
 
 interface Peer {

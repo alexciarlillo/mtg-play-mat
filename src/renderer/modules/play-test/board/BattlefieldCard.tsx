@@ -88,6 +88,7 @@ const BattlefieldCard = ({
   scale = 1,
   offsetX = 0,
   onAddCounter,
+  onCardState,
   onAttach,
   onPutInLibrary,
   giveTo,
@@ -239,6 +240,7 @@ const BattlefieldCard = ({
   const together = selected ? selection?.groupOf(card) : null;
   const single = battlefieldMenu(card, {
     onAddCounter,
+    onCardState,
     onAttach,
     onPutInLibrary,
     giveTo,
@@ -249,7 +251,7 @@ const BattlefieldCard = ({
   const menu =
     together && selection
       ? [
-          ...selectionMenu(together, () => selection.clear()),
+          ...selectionMenu(together, () => selection.clear(), onCardState),
           { title: 'This card', action: null, heading: true },
           ...single,
         ]

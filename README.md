@@ -204,6 +204,17 @@ Card manipulation (right-click a permanent unless noted):
   (which enter with their printed loyalty), or any named counter via "Add counter…".
   Hovering a permanent shows small ± steppers. A P/T badge appears when counters change
   a creature's stats. Poison, energy, and experience sit under the life total.
+- **Card state:** "Doesn't untap" keeps a permanent tapped through Untap all and the
+  next turn (it can still be untapped by hand). "Set base P/T…" sets new base power and
+  toughness, with counters still on top; on a land or artifact it reads "Becomes a
+  creature…". "Abilities…" adds keyword badges (flying, trample, goaded and so on) or
+  any short text. All of it is public, shows on every board, and is gone once the card
+  leaves the battlefield, like counters. A selection of permanents gets the same
+  entries, each one a single action.
+- **Mana pool:** a row of W/U/B/R/G/C pips under the life total. Click adds one,
+  right-click takes one away, **Empty** clears it; with turn tracking on, **empty
+  mana** in the turn panel clears it whenever the step or turn changes. Older versions
+  show the pool as plain counters named `mana:W` and so on.
 - **Tokens:** right-click the battlefield (or use **Token…**) to search token printings
   in the card database, pick one and a quantity, or make a custom token (name, type,
   P/T; drawn as a plain frame). Before you search, the dialog lists **This deck's
@@ -313,10 +324,13 @@ whatever room the opponents row has left over, so dragging the row taller buys m
 history without taking anything from the counts above it, and **Log** folds it away
 (for every seat at once) when it is more noise than context.
 
-**d6, d20, Coin, dN** ask the host to roll; the result and
-who asked for it appear on every board. **Resend state** re-sends
-yours. **Leave** disconnects: when a guest leaves, only their seat is removed and the
-host can invite that seat again. When the host leaves, the pod ends for everyone.
+**d4, d6, d8, d12, d20, 2d6, Planar, Coin, dN** ask the host to roll (or press **1**
+coin, **2** d6, **3** 2d6, **4** d20); the result and who asked for it appear on every
+board. A host on an older version rolls 2d6 as two separate d6 and can't roll the
+planar die, so that button is greyed out for its guests (and until the host has said
+hello); older guests don't see 2d6 or planar rolls. **Resend state** re-sends yours.
+**Leave** disconnects: when a guest leaves, only their seat is removed and the host can
+invite that seat again. When the host leaves, the pod ends for everyone.
 Players on a different protocol version get a "version mismatch" message.
 
 Connections use public STUN servers (Google, Twilio) and no TURN relay, so some

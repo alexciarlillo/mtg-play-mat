@@ -78,9 +78,10 @@ const steps: Record<PlayerAction['type'], (s: GameState) => PlayerAction> = {
   adjustPlayerCounter: () => ({
     type: 'adjustPlayerCounter',
     playerId: P1,
-    counter: 'poison',
+    counter: 'mana:G',
     delta: 1,
   }),
+  emptyManaPool: () => ({ type: 'emptyManaPool', playerId: P1 }),
   createTokens: () => ({
     type: 'createTokens',
     playerId: P1,
@@ -181,6 +182,14 @@ const steps: Record<PlayerAction['type'], (s: GameState) => PlayerAction> = {
         position: { x: 40 + i * 120, y: 300 },
       })),
   }),
+  setCardState: (s) => ({
+    type: 'setCardState',
+    playerId: P1,
+    instanceIds: field(s).slice(0, 2),
+    doesntUntap: true,
+    ptOverride: { power: 4, toughness: 5 },
+    addAbilities: ['flying', 'goaded'],
+  }),
   moveCards: (s) => ({
     type: 'moveCards',
     playerId: P1,
@@ -213,6 +222,7 @@ const order: PlayerAction['type'][] = [
   'setLife',
   'adjustCounter',
   'adjustPlayerCounter',
+  'emptyManaPool',
   'createTokens',
   'copyCard',
   'attach',
@@ -234,6 +244,7 @@ const order: PlayerAction['type'][] = [
   'setPhase',
   'setTapped',
   'setPositions',
+  'setCardState',
   'moveCards',
   'moveAll',
 ];

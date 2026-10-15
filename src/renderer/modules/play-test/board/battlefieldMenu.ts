@@ -1,8 +1,10 @@
 import {
+  becomesCreature,
   canTransform,
   type CardView,
   counterNames,
   currentFace,
+  type SetCardStateAction,
   type ZoneId,
 } from '@shared/game';
 
@@ -25,8 +27,64 @@ export const adjustCounter = (card: CardView, counter: string, delta: number) =>
     delta,
   });
 
+export type CardStateDialog = 'pt' | 'abilities';
+
+type CardStatePatch = Omit<
+  SetCardStateAction,
+  'type' | 'playerId' | 'instanceIds'
+>;
+
+export const setCardState = (cards: CardView[], patch: CardStatePatch) =>
+  cards.length > 0 &&
+  dispatch({
+    type: 'setCardState',
+    playerId: cards[0].controller,
+    instanceIds: cards.map((card) => card.instanceId),
+    ...patch,
+  });
+
+// Doesn't untap, base P/T and abilities, for one card or a selection.
+const cardStateMenu = (
+  cards: CardView[],
+  onCardState: ((cards: CardView[], kind: CardStateDialog) => void) | undefined,
+  label: (title: string) => string
+): ContextMenuSpec[] => {
+  const marked = cards.every((card) => card.doesntUntap);
+  const set = cards.filter((card) => card.ptOverride);
+  return [
+    {
+      title: label(marked ? 'Untap normally' : "Doesn't untap"),
+      action: () => setCardState(cards, { doesntUntap: !marked }),
+    },
+    ...(onCardState
+      ? [
+          {
+            title: label(
+              becomesCreature(cards) ? 'Becomes a creature…' : 'Set base P/T…'
+            ),
+            action: () => onCardState(cards, 'pt'),
+          },
+          {
+            title: label('Abilities…'),
+            action: () => onCardState(cards, 'abilities'),
+          },
+        ]
+      : []),
+    ...(set.length > 0
+      ? [
+          {
+            title: label('Reset P/T'),
+            action: () => setCardState(set, { ptOverride: null }),
+          },
+        ]
+      : []),
+  ];
+};
+
 export interface BattlefieldMenuOptions {
   onAddCounter?(card: CardView): void;
+  // Opens the base P/T or abilities dialog for these permanents.
+  onCardState?(cards: CardView[], kind: CardStateDialog): void;
   onAttach?(card: CardView): void;
   onPutInLibrary?(card: CardView): void;
   // Players this permanent may be handed to.
@@ -82,7 +140,8 @@ const groupMoves: { title: string; to: ZoneId; index?: number }[] = [
 // action. Only a group of commanders may go to the command zone.
 export const selectionMenu = (
   cards: CardView[],
-  onClear: () => void
+  onClear: () => void,
+  onCardState?: (cards: CardView[], kind: CardStateDialog) => void
 ): ContextMenuSpec[] => {
   const n = cards.length;
   const playerId = cards[0]?.controller ?? '';
@@ -119,6 +178,7 @@ export const selectionMenu = (
           ...(index !== undefined && { index }),
         }),
     })),
+    ...cardStateMenu(cards, onCardState, (title) => `${title} (${n})`),
     { title: 'Clear selection', action: onClear },
   ];
 };
@@ -129,6 +189,7 @@ export const battlefieldMenu = (
   card: CardView,
   {
     onAddCounter,
+    onCardState,
     onAttach,
     onPutInLibrary,
     giveTo = [],
@@ -199,6 +260,7 @@ export const battlefieldMenu = (
     ...(onAddCounter
       ? [{ title: 'Add counter…', action: () => onAddCounter(card) }]
       : []),
+    ...cardStateMenu([card], onCardState, (title) => title),
     {
       title: 'Create copy',
       action: () => dispatch({ type: 'copyCard', instanceId }),

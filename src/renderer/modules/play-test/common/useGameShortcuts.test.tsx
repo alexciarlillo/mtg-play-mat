@@ -29,6 +29,7 @@ const redo = vi.fn(() => Promise.resolve());
 const onHelp = vi.fn();
 const onRestart = vi.fn();
 const onLibraryDialog = vi.fn();
+const netRoll = vi.fn((_request: unknown) => Promise.resolve());
 
 interface HarnessProps {
   enabled?: boolean;
@@ -78,7 +79,7 @@ const Hovered = ({ onHoverKey }: { onHoverKey?: HoverKeyHandler }) => (
 );
 
 beforeEach(() => {
-  Object.assign(window, { api: { dispatch, undo, redo } });
+  Object.assign(window, { api: { dispatch, undo, redo, netRoll } });
 });
 
 afterEach(() => {
@@ -88,6 +89,7 @@ afterEach(() => {
   onHelp.mockClear();
   onRestart.mockClear();
   onLibraryDialog.mockClear();
+  netRoll.mockClear();
   localStorage.clear();
 });
 
@@ -104,6 +106,22 @@ describe('useGameShortcuts', () => {
       { type: 'untapAll', playerId: 'p1' },
       { type: 'shuffle', playerId: 'p1' },
     ]);
+  });
+
+  it('rolls with 1 to 4, not while typing or held', () => {
+    render(<Harness />);
+    ['1', '2', '3', '4'].forEach((key) => fireEvent.keyDown(window, { key }));
+    fireEvent.keyDown(window, { key: '5' });
+    fireEvent.keyDown(window, { key: '2', repeat: true });
+    fireEvent.keyDown(window, { key: '!', shiftKey: true });
+    fireEvent.keyDown(screen.getByLabelText('text'), { key: '1' });
+    expect(netRoll.mock.calls.map(([request]) => request)).toEqual([
+      { type: 'coin' },
+      { type: 'die', sides: 6 },
+      { type: 'dice', count: 2, sides: 6 },
+      { type: 'die', sides: 20 },
+    ]);
+    expect(dispatch).not.toHaveBeenCalled();
   });
 
   it('leaves modified keys alone so reload still works', () => {

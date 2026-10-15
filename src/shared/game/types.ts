@@ -68,6 +68,18 @@ export interface CardInstance {
   commanderCasts?: number;
   // The permanent this aura or equipment is attached to.
   attachedTo: InstanceId | null;
+  // Battlefield-only state the player sets by hand; gone when the card
+  // leaves. Optional so older states, saves and peers still fit.
+  doesntUntap?: true;
+  ptOverride?: PtOverride;
+  abilities?: string[];
+}
+
+// Base power and toughness set by an effect, or given to a permanent
+// that becomes a creature. Counters still apply on top.
+export interface PtOverride {
+  power: number;
+  toughness: number;
 }
 
 export const phases = [
@@ -443,12 +455,15 @@ export interface NextTurnAction {
   playerId: PlayerId;
   untap: boolean;
   draw: boolean;
+  // Also empties the mana pool; optional so older saves stay valid.
+  emptyMana?: boolean;
 }
 
 export interface SetPhaseAction {
   type: 'setPhase';
   playerId: PlayerId;
   phase: Phase;
+  emptyMana?: boolean;
 }
 
 export type LibraryAction =
@@ -480,6 +495,28 @@ export type MtgPlayerAction =
   | CreateTokensAction;
 
 export type MtgAction = MtgCardAction | MtgPlayerAction;
+
+// Changes the hand-set state of several of a player's permanents in one
+// step; each field left out is left alone. Refused whole unless every
+// card is on the player's battlefield.
+export interface SetCardStateAction {
+  type: 'setCardState';
+  playerId: PlayerId;
+  instanceIds: InstanceId[];
+  doesntUntap?: boolean;
+  // null goes back to the printed power and toughness.
+  ptOverride?: PtOverride | null;
+  addAbilities?: string[];
+  removeAbilities?: string[];
+}
+
+// Sets every mana counter of the player's pool to zero.
+export interface EmptyManaPoolAction {
+  type: 'emptyManaPool';
+  playerId: PlayerId;
+}
+
+export type CardStateAction = SetCardStateAction | EmptyManaPoolAction;
 
 // Commander tax: changes a commander's cast count by delta (not below 0).
 export interface AdjustCommanderCastsAction {
@@ -532,6 +569,9 @@ export interface PermanentState {
   faceIndex: number;
   counters: Record<string, number>;
   commanderCasts?: number;
+  doesntUntap?: true;
+  ptOverride?: PtOverride;
+  abilities?: string[];
 }
 
 // Everything another game needs to put a lent permanent on its board.
@@ -587,6 +627,7 @@ export type GameAction =
   | CoreAction
   | BatchAction
   | MtgAction
+  | CardStateAction
   | CommanderAction
   | LibraryAction
   | ControlAction;

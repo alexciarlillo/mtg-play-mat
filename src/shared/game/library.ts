@@ -7,6 +7,7 @@ import {
   updatePlayer,
   updateZone,
 } from './core';
+import { emptyPool } from './cardState';
 import { untapAll } from './mtg';
 import { shuffle } from './rng';
 import { isHiddenSearchPick } from './showing';
@@ -291,7 +292,8 @@ export const reduceLibrary = (
     case 'setTopRevealed':
       return setTopRevealed(state, player, action.revealed);
     case 'nextTurn': {
-      const untapped = action.untap ? untapAll(state, player) : state;
+      const emptied = action.emptyMana ? emptyPool(state, player) : state;
+      const untapped = action.untap ? untapAll(emptied, player) : emptied;
       const drawn = action.draw
         ? drawCards(untapped, rules, player.id, 1)
         : untapped;
@@ -301,8 +303,11 @@ export const reduceLibrary = (
       });
     }
     case 'setPhase':
-      return action.phase === player.phase
-        ? state
-        : updatePlayer(state, player.id, { phase: action.phase });
+      if (action.phase === player.phase) return state;
+      return updatePlayer(
+        action.emptyMana ? emptyPool(state, player) : state,
+        player.id,
+        { phase: action.phase }
+      );
   }
 };

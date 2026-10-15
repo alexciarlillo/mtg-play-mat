@@ -104,6 +104,9 @@ const toView = (card: CardInstance, hideFaceDown: boolean): CardView => ({
     commanderCasts: card.commanderCasts ?? 0,
   }),
   attachedTo: card.attachedTo,
+  ...(card.doesntUntap && { doesntUntap: true }),
+  ...(card.ptOverride && { ptOverride: { ...card.ptOverride } }),
+  ...(card.abilities && { abilities: [...card.abilities] }),
 });
 
 const copyDamage = (entries: CommanderDamage[] = []) =>

@@ -7,10 +7,12 @@ import type { CardRef, GameAction, GameState } from '../game/types';
 import {
   cleanLogText,
   encodeNetMessage,
+  FEATURE_DICE,
   FEATURE_REVEAL,
   localFeatures,
   MAX_MESSAGE_BYTES,
   namespaceView,
+  needsDiceFeature,
   type NetMessage,
   parseNetMessage,
   parsePublicView,
@@ -1139,5 +1141,129 @@ describe('who a player is showing cards to', () => {
       parsePublicView({ ...base(), revealed: { ...revealed, search: 1 } })
         .revealed
     ).toEqual({ source: 'card', cards: [deck[1], deck[2]] });
+  });
+});
+
+describe('hand-set card state over the wire', () => {
+  const stated = (): PublicView => {
+    let state = game();
+    const [bear] = zone(state, 'alice', 'battlefield');
+    state = applyAll(state, [
+      {
+        type: 'setCardState',
+        playerId: 'alice',
+        instanceIds: [bear],
+        doesntUntap: true,
+        ptOverride: { power: -1, toughness: 4 },
+        addAbilities: ['flying', 'goaded', 'protection from red'],
+      },
+    ]);
+    return publicView(state, 'alice')!;
+  };
+
+  it('round-trips doesnt-untap, a set base and abilities', () => {
+    const sent = stated();
+    const parsed = parsePublicView(JSON.parse(JSON.stringify(sent)));
+    expect(parsed).toEqual(sent);
+    expect(parsed.zones.battlefield[0]).toMatchObject({
+      doesntUntap: true,
+      ptOverride: { power: -1, toughness: 4 },
+      abilities: ['flying', 'goaded', 'protection from red'],
+    });
+  });
+
+  it('accepts cards without them, from older builds', () => {
+    const parsed = parsePublicView(JSON.parse(JSON.stringify(view())));
+    expect(Object.keys(parsed.zones.battlefield[0])).not.toContain('abilities');
+  });
+
+  it('keeps them on the battlefield only, and drops a false flag', () => {
+    const wire = JSON.parse(JSON.stringify(stated()));
+    wire.zones.graveyard[0].abilities = ['flying'];
+    wire.zones.battlefield[0].doesntUntap = false;
+    const parsed = parsePublicView(wire);
+    expect(parsed.zones.graveyard[0]).not.toHaveProperty('abilities');
+    expect(parsed.zones.battlefield[0]).not.toHaveProperty('doesntUntap');
+  });
+
+  it('rejects malformed values', () => {
+    const bad = [
+      { ptOverride: { power: '3', toughness: 3 } },
+      { ptOverride: { power: 1, toughness: 10_000 } },
+      { abilities: 'flying' },
+      { abilities: ['x'.repeat(31)] },
+      { abilities: Array(13).fill('flying') },
+      { doesntUntap: 'yes' },
+    ];
+    bad.forEach((fields) => {
+      const wire = JSON.parse(JSON.stringify(stated()));
+      Object.assign(wire.zones.battlefield[0], fields);
+      expect(() => parsePublicView(wire)).toThrow(/bad message/);
+    });
+  });
+
+  it('travels with a permanent that changes hands', () => {
+    const card = {
+      instanceId: 'alice:3',
+      ref: deck[3],
+      isToken: false,
+      tapped: true,
+      faceDown: false,
+      faceIndex: 0,
+      counters: {},
+      doesntUntap: true,
+      ptOverride: { power: 1, toughness: 1 },
+      abilities: ['haste'],
+    };
+    const parsed = parseNetMessage(
+      message({ kind: 'control', to: 'bob', change: { op: 'give', card } })
+    );
+    expect(parsed).toMatchObject({ change: { op: 'give', card } });
+  });
+});
+
+describe('more dice', () => {
+  const roll = (request: unknown) =>
+    parseNetMessage(message({ kind: 'roll', request }));
+  const event = (result: unknown) =>
+    parseNetMessage(
+      message({
+        kind: 'event',
+        id: 1,
+        by: 'alice',
+        byName: 'Alice',
+        roll: result,
+      })
+    );
+
+  it('round-trips several dice and the planar die', () => {
+    expect(roll({ type: 'dice', count: 2, sides: 6 })).toMatchObject({
+      request: { type: 'dice', count: 2, sides: 6 },
+    });
+    expect(roll({ type: 'planar', extra: 1 })).toMatchObject({
+      request: { type: 'planar' },
+    });
+    expect(event({ type: 'dice', sides: 6, results: [3, 5] })).toMatchObject({
+      roll: { type: 'dice', sides: 6, results: [3, 5] },
+    });
+    expect(event({ type: 'planar', result: 'chaos' })).toMatchObject({
+      roll: { type: 'planar', result: 'chaos' },
+    });
+  });
+
+  it('rejects malformed rolls', () => {
+    expect(() => roll({ type: 'dice', count: 1, sides: 6 })).toThrow();
+    expect(() => roll({ type: 'dice', count: 11, sides: 6 })).toThrow();
+    expect(() => event({ type: 'dice', sides: 6, results: [7, 1] })).toThrow();
+    expect(() => event({ type: 'dice', sides: 6, results: [1] })).toThrow();
+    expect(() => event({ type: 'planar', result: 'blank-ish' })).toThrow();
+  });
+
+  it('says which rolls need a host that announces them', () => {
+    expect(localFeatures).toContain(FEATURE_DICE);
+    expect(needsDiceFeature({ type: 'dice' })).toBe(true);
+    expect(needsDiceFeature({ type: 'planar' })).toBe(true);
+    expect(needsDiceFeature({ type: 'die' })).toBe(false);
+    expect(needsDiceFeature({ type: 'coin' })).toBe(false);
   });
 });

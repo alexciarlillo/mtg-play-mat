@@ -627,7 +627,7 @@ describe('Netplay guest', () => {
       playerId: 'bob',
       name: 'Bob',
       appVersion: '9.9.9',
-      features: ['control', 'reveal'],
+      features: ['control', 'reveal', 'dice'],
     });
     expect(pub).toMatchObject({ seq: 2, kind: 'public', view: view('bob') });
     expect(t.state()).toMatchObject({
@@ -1700,5 +1700,101 @@ describe('Netplay fake reveals', () => {
     const before = t.commands.length;
     t.netplay.sendReveal('fake-desmond', { op: 'end', id: 1 });
     expect(t.commands.length).toBe(before);
+  });
+});
+
+describe('Netplay dice that need the host to know them', () => {
+  const helloWith = (from: string, features: string[], seq = 1) =>
+    raw(from, seq, {
+      kind: 'hello',
+      playerId: from,
+      name: names[from],
+      appVersion: '2',
+      features,
+    });
+
+  it('rolls 2d6 and the planar die, sent only to guests that can read them', async () => {
+    const t = setup();
+    await t.netplay.host();
+    for (const [seat, id, features] of [
+      [2, 'bob', ['dice']],
+      [3, 'carol', []],
+    ] as const) {
+      if (seat !== 2) await t.netplay.invite(seat);
+      t.netplay.handleReport({ type: 'invite', seat, code: `MPM1:i${seat}` });
+      t.netplay.handleReport({ type: 'open', seat });
+      say(t, seat, helloWith(id, [...features]));
+    }
+    say(
+      t,
+      2,
+      raw('bob', 2, {
+        kind: 'roll',
+        request: { type: 'dice', count: 2, sides: 6 },
+      })
+    );
+    expect(t.rolls).toEqual([6, 6]);
+    expect(t.sends().at(-1)?.seats).toEqual([2]);
+    expect(t.sentTo(2).at(-1)).toMatchObject({
+      kind: 'event',
+      by: 'bob',
+      roll: { type: 'dice', sides: 6, results: [6, 6] },
+    });
+
+    t.netplay.roll({ type: 'planar' });
+    expect(t.opponent()?.log.at(-1)).toMatchObject({
+      event: { byName: 'Alice', roll: { type: 'planar', result: 'blank' } },
+    });
+    expect(t.sends().at(-1)?.seats).toEqual([2]);
+
+    // A plain die still goes to everyone.
+    t.netplay.roll({ type: 'die', sides: 4 });
+    expect(t.sends().at(-1)?.seats).toEqual([2, 3]);
+  });
+
+  it('a guest rolls 2d6 one die at a time on an older host, and no planar die', async () => {
+    const old = setup('bob');
+    const invite = await packDescription({ type: 'offer', sdp: 'v=0' });
+    await old.netplay.join(invite);
+    await flush();
+    old.netplay.handleReport({ type: 'reply', seat: 1, code: 'MPM1:r' });
+    old.netplay.handleReport({ type: 'open', seat: 1 });
+    expect(
+      (await old.netplay.handlers.getOpponentView()).hostFeatures
+    ).toBeNull();
+    say(old, 1, hello('alice'));
+    expect(old.opponent()?.hostFeatures).toEqual([]);
+    const before = old.sends().length;
+    old.netplay.roll({ type: 'dice', count: 2, sides: 6 });
+    expect(
+      old
+        .sentTo(1)
+        .slice(-2)
+        .map((m) => (m.kind === 'roll' ? m.request : null))
+    ).toEqual([
+      { type: 'die', sides: 6 },
+      { type: 'die', sides: 6 },
+    ]);
+    old.netplay.roll({ type: 'planar' });
+    expect(old.sends()).toHaveLength(before + 2);
+    expect(old.logged.at(-1)).toMatch(/cannot make that roll/);
+    expect(old.opponent()?.log.at(-1)).toMatchObject({
+      kind: 'action',
+      playerId: 'bob',
+      text: expect.stringMatching(/couldn't roll the planar die/),
+    });
+
+    const t = setup('bob');
+    await t.netplay.join(invite);
+    await flush();
+    t.netplay.handleReport({ type: 'reply', seat: 1, code: 'MPM1:r' });
+    t.netplay.handleReport({ type: 'open', seat: 1 });
+    say(t, 1, helloWith('alice', ['control', 'reveal', 'dice']));
+    expect(t.opponent()?.hostFeatures).toContain('dice');
+    t.netplay.roll({ type: 'planar' });
+    expect(t.sentTo(1).at(-1)).toMatchObject({
+      kind: 'roll',
+      request: { type: 'planar' },
+    });
   });
 });

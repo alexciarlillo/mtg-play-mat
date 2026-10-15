@@ -4,6 +4,7 @@ import { useState } from 'react';
 
 import {
   loadTurnSettings,
+  nextTurnAction,
   saveTurnSettings,
   type TurnSettings,
 } from '../common/turnSettings';
@@ -70,11 +71,22 @@ const TurnPanel = ({ view, compact }: Props) => {
             />
             draw 1
           </label>
+          <label
+            className="flex items-center gap-1"
+            title="Changing step or turn empties your mana pool"
+          >
+            <input
+              type="checkbox"
+              checked={settings.emptyMana}
+              onChange={() => toggle('emptyMana')}
+            />
+            empty mana
+          </label>
         </div>
         <button
           type="button"
           className="rounded bg-emerald-700 px-3 py-1 text-sm font-semibold text-white hover:bg-emerald-600"
-          onClick={() => dispatch({ type: 'nextTurn', playerId, ...settings })}
+          onClick={() => dispatch(nextTurnAction(playerId, settings))}
         >
           Next turn
         </button>
@@ -92,7 +104,14 @@ const TurnPanel = ({ view, compact }: Props) => {
                 ? 'bg-amber-300 text-slate-900'
                 : 'bg-slate-700 text-slate-200 hover:bg-slate-600'
             )}
-            onClick={() => dispatch({ type: 'setPhase', playerId, phase })}
+            onClick={() =>
+              dispatch({
+                type: 'setPhase',
+                playerId,
+                phase,
+                ...(settings.emptyMana && { emptyMana: true }),
+              })
+            }
           >
             {phaseLabels[phase]}
           </button>

@@ -4,7 +4,7 @@ import {
   type PrivateView,
   type PublicView,
 } from '@shared/game';
-import { MAX_DIE_SIDES } from '@shared/net/protocol';
+import { FEATURE_DICE, MAX_DIE_SIDES } from '@shared/net/protocol';
 import type { OpponentState } from '@shared/net/remoteViews';
 import type { TokenSearchResult } from '@shared/types/cards';
 import type { BoardMenuCommand } from '@shared/types/playTest';
@@ -35,6 +35,7 @@ import { dispatch, redo, undo, useView, type ViewStore } from '../viewStore';
 import AttachDialog from './AttachDialog';
 import { useRelatedTokens } from '../common/relatedTokens';
 import BattlefieldCard from './BattlefieldCard';
+import type { CardStateDialog } from './battlefieldMenu';
 import BulkMoveDialog from './BulkMoveDialog';
 import CommanderPrompt from './CommanderPrompt';
 import {
@@ -71,6 +72,7 @@ import ShowingBadge from './ShowingBadge';
 import ScaledField from './ScaledField';
 import { SelectionContext, SelectionStore } from './selection';
 import TableLog from './TableLog';
+import { AbilitiesDialog, PowerToughnessDialog } from './CardStateDialogs';
 import { designationMenu } from './designations';
 import TokenDialog from './TokenDialog';
 import TurnPanel from './TurnPanel';
@@ -175,6 +177,16 @@ const Board = ({ store, opponent, hand }: Props) => {
     (card: CardView) => setCardDialog({ kind: 'counter', card }),
     []
   );
+  const [stateDialog, setStateDialog] = useState<{
+    kind: CardStateDialog;
+    cards: CardView[];
+  } | null>(null);
+  const closeStateDialog = useCallback(() => setStateDialog(null), []);
+  const onCardState = useCallback(
+    (cards: CardView[], kind: CardStateDialog) =>
+      setStateDialog({ kind, cards }),
+    []
+  );
   const onAttach = useCallback(
     (card: CardView) => setCardDialog({ kind: 'attach', card }),
     []
@@ -236,6 +248,7 @@ const Board = ({ store, opponent, hand }: Props) => {
     enabled:
       dialog === null &&
       cardDialog === null &&
+      stateDialog === null &&
       prompts.length === 0 &&
       savedGame === null &&
       !handBusy,
@@ -423,6 +436,10 @@ const Board = ({ store, opponent, hand }: Props) => {
                     log={log}
                     seen={seen}
                     onCustomDie={() => setDialog('rollDie')}
+                    planarDie={
+                      remote?.hostFeatures === undefined ||
+                      (remote.hostFeatures?.includes(FEATURE_DICE) ?? false)
+                    }
                   />
                 </FloatingPanel>
               )}
@@ -446,6 +463,7 @@ const Board = ({ store, opponent, hand }: Props) => {
                             scale={scale}
                             offsetX={bounds.offsetX}
                             onAddCounter={onAddCounter}
+                            onCardState={onCardState}
                             onAttach={onAttach}
                             onPutInLibrary={onPutInLibrary}
                             giveTo={giveTo}
@@ -715,6 +733,18 @@ const Board = ({ store, opponent, hand }: Props) => {
             playerId={view.playerId}
             docked={hand !== undefined}
             onClose={close}
+          />
+        )}
+        {stateDialog?.kind === 'pt' && (
+          <PowerToughnessDialog
+            cards={stateDialog.cards}
+            onClose={closeStateDialog}
+          />
+        )}
+        {stateDialog?.kind === 'abilities' && (
+          <AbilitiesDialog
+            cards={stateDialog.cards}
+            onClose={closeStateDialog}
           />
         )}
         {cardDialog?.kind === 'counter' && (

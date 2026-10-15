@@ -38,17 +38,20 @@ import {
   cleanLogText,
   encodeNetMessage,
   FEATURE_CONTROL,
+  FEATURE_DICE,
   FEATURE_REVEAL,
   hasFeature,
   HOST_SEAT,
   localFeatures,
   MAX_MESSAGE_BYTES,
   MAX_SEATS,
+  needsDiceFeature,
   type NetMessage,
   type NetPayload,
   type PeerInfo,
   parseNetMessage,
   parseRollRequest,
+  planarFaces,
   PROTOCOL_VERSION,
   type RollRequest,
   type RevealChange,
@@ -189,17 +192,35 @@ const emptySeat = (seat: number): Seat => ({
   timer: null,
 });
 
-const roll = (request: RollRequest, random: (max: number) => number) =>
-  (request.type === 'die'
-    ? {
+const roll = (
+  request: RollRequest,
+  random: (max: number) => number
+): RollResult => {
+  switch (request.type) {
+    case 'die':
+      return {
         type: 'die',
         sides: request.sides,
         result: random(request.sides) + 1,
-      }
-    : {
-        type: 'coin',
-        result: random(2) === 0 ? 'heads' : 'tails',
-      }) as RollResult;
+      };
+    case 'coin':
+      return { type: 'coin', result: random(2) === 0 ? 'heads' : 'tails' };
+    case 'dice':
+      return {
+        type: 'dice',
+        sides: request.sides,
+        results: Array.from(
+          { length: request.count },
+          () => random(request.sides) + 1
+        ),
+      };
+    case 'planar':
+      return {
+        type: 'planar',
+        result: planarFaces[random(planarFaces.length)],
+      };
+  }
+};
 
 const listNames = (names: string[]) => names.join(', ');
 
@@ -467,10 +488,7 @@ export default class Netplay {
   // Everyone else at the table, each marked with whether they can be
   // shown cards right now.
   revealTargets = (): RevealTarget[] => {
-    const host =
-      this.state.role === 'guest' && this.hostId
-        ? this.remote.peer(this.hostId)
-        : null;
+    const host = this.hostInfo();
     const oldHost =
       host && !hasFeature(host, FEATURE_REVEAL) ? host.playerId : undefined;
     return revealTargets(this.opponentState().peers, oldHost);
@@ -744,7 +762,29 @@ export default class Netplay {
       return;
     }
     if (this.state.role === 'guest') {
-      if (this.hostOpen) this.send({ kind: 'roll', request });
+      if (!this.hostOpen) return;
+      if (!needsDiceFeature(request) || this.hostHas(FEATURE_DICE)) {
+        this.send({ kind: 'roll', request });
+        return;
+      }
+      // An older host still rolls plain dice one at a time.
+      if (request.type === 'dice') {
+        for (let i = 0; i < request.count; i += 1) {
+          this.send({
+            kind: 'roll',
+            request: { type: 'die', sides: request.sides },
+          });
+        }
+        return;
+      }
+      this.log.warn('the host cannot make that roll', { type: request.type });
+      const { playerId, displayName } = this.deps.profile();
+      this.remote.addAction(
+        playerId,
+        displayName,
+        "couldn't roll the planar die: the host's version of the app can't"
+      );
+      this.pushOpponent();
       return;
     }
     const { playerId, displayName } = this.deps.profile();
@@ -1164,7 +1204,28 @@ export default class Netplay {
     };
     this.remote.addEvent(event);
     this.pushOpponent();
-    if (this.state.role === 'host') this.send({ kind: 'event', ...event });
+    if (this.state.role !== 'host') return;
+    // Older guests would drop a result they can't read anyway.
+    const seats = needsDiceFeature(event.roll)
+      ? this.boundSeats()
+          .filter((s) => {
+            const info = s.playerId && this.remote.peer(s.playerId);
+            return info && hasFeature(info, FEATURE_DICE);
+          })
+          .map((s) => s.seat)
+      : undefined;
+    this.send({ kind: 'event', ...event }, seats);
+  };
+
+  // A guest's host, once it has said hello; null otherwise.
+  private hostInfo = (): PeerInfo | null =>
+    this.state.role === 'guest' && this.hostId
+      ? this.remote.peer(this.hostId)
+      : null;
+
+  private hostHas = (feature: string) => {
+    const host = this.hostInfo();
+    return host !== null && hasFeature(host, feature);
   };
 
   // Seats that have said hello; they are the pod.
@@ -1470,14 +1531,22 @@ export default class Netplay {
     // The offset outlives the fakes themselves: both halves only grow, so
     // the board never sees seq go backwards and drop an update.
     const seq = snapshot.seq + this.fakeRev;
-    if (this.fakes.length === 0) return { ...snapshot, seq };
+    const base = { ...snapshot, seq, ...this.hostFeatures() };
+    if (this.fakes.length === 0) return base;
     return {
-      ...snapshot,
-      seq,
+      ...base,
       // Fakes sit in guest seats, so the local player holds the host's.
       selfSeat: snapshot.selfSeat ?? HOST_SEAT,
       peers: [...snapshot.peers, ...this.fakes],
     };
+  };
+
+  // A guest's host's features, or null while the host hasn't said hello;
+  // left out for a host or a solo game, which roll for themselves.
+  private hostFeatures = (): Pick<OpponentState, 'hostFeatures'> => {
+    if (this.state.role !== 'guest') return {};
+    const host = this.hostInfo();
+    return { hostFeatures: host ? (host.features ?? []) : null };
   };
 
   private pushOpponent = () => {

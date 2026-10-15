@@ -1066,6 +1066,56 @@ test('a selection on the board survives the other player’s updates', async () 
   await expect(guestBoard.locator('[data-selected]')).toHaveCount(0);
 });
 
+test('card state, the mana pool and new dice reach the other board', async () => {
+  const [hostBoard, guestBoard] = await Promise.all([
+    page(host, 'board.html'),
+    page(guest, 'board.html'),
+  ]);
+  const item = (name: string | RegExp) =>
+    hostBoard.getByRole('menuitem', { name, exact: typeof name === 'string' });
+  // The two cards are still selected, so each entry acts on both.
+  const first = ownField(hostBoard).first();
+  await first.click({ button: 'right', position: { x: 8, y: 8 } });
+  await item("Doesn't untap (2)").click();
+  await first.click({ button: 'right', position: { x: 8, y: 8 } });
+  await item(/^(Set base P\/T…|Becomes a creature…) \(2\)$/).click();
+  const pt = hostBoard.getByTestId('pt-dialog');
+  await pt.getByLabel('Power').fill('7');
+  await pt.getByLabel('Toughness').fill('6');
+  await pt.getByRole('button', { name: 'OK' }).click();
+  await first.click({ button: 'right', position: { x: 8, y: 8 } });
+  await item('Abilities… (2)').click();
+  const abilities = hostBoard.getByTestId('abilities-dialog');
+  await abilities.getByRole('button', { name: 'trample', exact: true }).click();
+  await abilities.getByRole('button', { name: 'Apply' }).click();
+
+  const theirs = opponentField(guestBoard);
+  await expect(theirs.getByTestId('doesnt-untap-badge')).toHaveCount(2);
+  await expect(theirs.getByTestId('pt-badge')).toHaveText(['7/6', '7/6']);
+  await expect(theirs.getByTestId('ability-badge')).toHaveText([
+    'Trample',
+    'Trample',
+  ]);
+
+  await hostBoard.getByTestId('mana-pool').locator('[data-mana="R"]').click();
+  await expect(
+    guestBoard.getByTestId('opponent-mana-pool').locator('[data-mana]')
+  ).toHaveCount(1);
+  await expect(
+    guestBoard.getByTestId('opponent-mana-pool').locator('[data-mana="R"]')
+  ).toHaveAttribute('data-count', '1');
+
+  await guestBoard
+    .getByTestId('table-panel')
+    .getByRole('button', { name: 'Roll two d6' })
+    .click();
+  for (const board of [hostBoard, guestBoard]) {
+    await expect(
+      board.getByTestId('table-event').filter({ hasText: 'Bob rolled 2d6' })
+    ).toHaveCount(1);
+  }
+});
+
 test('no renderer console errors in either instance', () => {
   expect([...host.errors, ...guest.errors]).toEqual([]);
 });

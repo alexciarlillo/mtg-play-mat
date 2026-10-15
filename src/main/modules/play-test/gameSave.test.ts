@@ -144,6 +144,49 @@ describe('restoreSave', () => {
     );
   });
 
+  it('replays hand-set card state and the mana pool', () => {
+    let state = midGame();
+    const [permanent] = state.players[0].zones.battlefield;
+    const steps: PlayerAction[] = [
+      {
+        type: 'setCardState',
+        playerId: 'p1',
+        instanceIds: [permanent],
+        doesntUntap: true,
+        ptOverride: { power: 3, toughness: 3 },
+        addAbilities: ['flying', 'goaded'],
+      },
+      {
+        type: 'adjustPlayerCounter',
+        playerId: 'p1',
+        counter: 'mana:R',
+        delta: 2,
+      },
+      { type: 'setPhase', playerId: 'p1', phase: 'combat', emptyMana: true },
+      { type: 'emptyManaPool', playerId: 'p1' },
+      {
+        type: 'nextTurn',
+        playerId: 'p1',
+        untap: true,
+        draw: false,
+        emptyMana: true,
+      },
+    ];
+    // The pool is already empty for the last two.
+    steps.slice(0, 3).forEach((action) => {
+      state = reduce(state, action);
+    });
+    state = reduce(state, steps[4]);
+    const restored = roundTrip(saveOf(state, { redo: [steps[3]] }));
+    expect(withoutSeq(restored.state)).toEqual(withoutSeq(state));
+    expect(restored.state.cards[permanent]).toMatchObject({
+      tapped: true,
+      doesntUntap: true,
+      abilities: ['flying', 'goaded'],
+    });
+    expect(restored.redo).toEqual([steps[3]]);
+  });
+
   it('keeps the player’s current name', () => {
     const restored = restoreSave(
       JSON.parse(JSON.stringify(saveOf(midGame()))) as unknown,

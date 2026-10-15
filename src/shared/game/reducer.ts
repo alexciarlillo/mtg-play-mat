@@ -1,4 +1,5 @@
 import { isBatchAction, reduceBatch } from './batch';
+import { isCardStateAction, reduceCardState } from './cardState';
 import {
   markCommanders,
   reduceCommander,
@@ -74,6 +75,7 @@ const reduceAny = (state: GameState, action: GameAction): GameState => {
   if (isLibraryAction(action)) return reduceLibrary(state, action, rules);
   if (isControlAction(action)) return reduceControl(state, action, rules);
   if (isBatchAction(action)) return reduceBatch(state, action, rules);
+  if (isCardStateAction(action)) return reduceCardState(state, action);
   if (action.type === 'newGame') {
     return markCommanders(reduceCore(state, action, rules), action);
   }

@@ -1,4 +1,5 @@
 import { currentFace } from './cardRefs';
+import { withoutCardState } from './cardState';
 import { ordinal } from './describe';
 import {
   cascadePosition,
@@ -83,6 +84,13 @@ export const lentTo = (
       (controller === undefined || card.controller === controller)
   );
 
+// Copies, so no two games ever share an array or object.
+const handSetState = (card: PermanentState) => ({
+  ...(card.doesntUntap && { doesntUntap: true as const }),
+  ...(card.ptOverride && { ptOverride: { ...card.ptOverride } }),
+  ...(card.abilities && { abilities: [...card.abilities] }),
+});
+
 export const permanentState = (
   card: PermanentState & Pick<CardInstance, 'isCommander'>
 ): PermanentState => ({
@@ -91,6 +99,7 @@ export const permanentState = (
   faceIndex: card.faceIndex,
   counters: { ...card.counters },
   ...(card.isCommander && { commanderCasts: card.commanderCasts ?? 0 }),
+  ...handSetState(card),
 });
 
 export const lentCard = (card: CardInstance): LentCard => ({
@@ -111,7 +120,8 @@ const validFace = (card: LentCard | CardInstance, faceIndex: number) =>
   faceIndex < card.ref.faces.length ? faceIndex : 0;
 
 const withState = (card: CardInstance, state: PermanentState) => ({
-  ...card,
+  ...withoutCardState(card),
+  ...handSetState(state),
   tapped: state.tapped,
   faceDown: state.faceDown,
   faceIndex: validFace(card, state.faceIndex),
@@ -186,6 +196,7 @@ const gainControl = (
       commanderCasts: card.commanderCasts ?? 0,
     }),
     attachedTo: null,
+    ...handSetState(card),
   };
   const placed = updateZone(state, playerId, 'battlefield', (ids) => [
     ...ids,

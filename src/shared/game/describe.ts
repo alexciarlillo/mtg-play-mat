@@ -1,4 +1,5 @@
 import { currentFace } from './cardRefs';
+import { becomesCreature, isManaCounter } from './cardState';
 import type {
   CardRef,
   CardTypeFilter,
@@ -483,6 +484,94 @@ const describeReveal = (
   }
 };
 
+const sameAbility = (a: string, b: string) =>
+  a.toLowerCase() === b.toLowerCase();
+
+// Abilities in one list but not the other, each named once.
+const missingFrom = (from: string[], other: string[]) =>
+  from.filter((ability) => !other.some((o) => sameAbility(o, ability)));
+
+const uniqueAbilities = (names: string[]) =>
+  names.filter(
+    (name, i) => names.findIndex((other) => sameAbility(other, name)) === i
+  );
+
+// Told from what changed between the views, not from the request, so a
+// card that already had a flag or ability isn't counted again.
+const describeCardState = (
+  before: PublicView,
+  after: PublicView,
+  action: Extract<GameAction, { type: 'setCardState' }>
+) => {
+  const pairs = action.instanceIds
+    .map((id) => ({ id, was: findCard(before, id), now: findCard(after, id) }))
+    .filter(
+      (pair): pair is { id: string; was: CardView; now: CardView } =>
+        pair.was !== undefined && pair.now !== undefined
+    );
+  const which = (group: typeof pairs) =>
+    group.length === 1
+      ? bestName(before, after, group[0].id)
+      : plural(group.length, 'permanent');
+  const parts: string[] = [];
+
+  const marked = pairs.filter(
+    ({ was, now }) => !was.doesntUntap && now.doesntUntap
+  );
+  const freed = pairs.filter(
+    ({ was, now }) => was.doesntUntap && !now.doesntUntap
+  );
+  if (marked.length > 0) parts.push(`marked ${which(marked)} as not untapping`);
+  if (freed.length > 0) parts.push(`let ${which(freed)} untap again`);
+
+  const samePt = (a?: CardView['ptOverride'], b?: CardView['ptOverride']) =>
+    a?.power === b?.power && a?.toughness === b?.toughness;
+  const changedPt = pairs.filter(
+    ({ was, now }) => !samePt(was.ptOverride, now.ptOverride)
+  );
+  const reset = changedPt.filter(({ now }) => !now.ptOverride);
+  const set = changedPt.filter(({ now }) => now.ptOverride);
+  if (set.length > 0) {
+    const { power, toughness } = set[0].now.ptOverride!;
+    const size = `${power}/${toughness}`;
+    parts.push(
+      becomesCreature(set.map(({ was }) => was))
+        ? set.length === 1
+          ? `made ${which(set)} a ${size} creature`
+          : `made ${which(set)} ${size} creatures`
+        : `set ${which(set)} to base ${size}`
+    );
+  }
+  if (reset.length > 0) {
+    parts.push(`reset ${which(reset)} to printed power and toughness`);
+  }
+
+  // Cards that changed the same way share one part of the line.
+  const byChange = (change: (pair: (typeof pairs)[number]) => string[]) => {
+    const groups = new Map<string, { names: string[]; group: typeof pairs }>();
+    pairs.forEach((pair) => {
+      const names = uniqueAbilities(change(pair));
+      if (names.length === 0) return;
+      const key = names.map((n) => n.toLowerCase()).join('\n');
+      const entry = groups.get(key) ?? { names, group: [] };
+      entry.group.push(pair);
+      groups.set(key, entry);
+    });
+    return [...groups.values()];
+  };
+  byChange(({ was, now }) =>
+    missingFrom(now.abilities ?? [], was.abilities ?? [])
+  ).forEach(({ names, group }) =>
+    parts.push(`gave ${which(group)} ${joinParts(names)}`)
+  );
+  byChange(({ was, now }) =>
+    missingFrom(was.abilities ?? [], now.abilities ?? [])
+  ).forEach(({ names, group }) =>
+    parts.push(`removed ${joinParts(names)} from ${which(group)}`)
+  );
+  return parts.length > 0 ? joinParts(parts) : null;
+};
+
 const dummyName = (view: PublicView, id: string | undefined) =>
   view.dummies.find((dummy) => dummy.id === id)?.name ?? 'a placeholder';
 
@@ -549,7 +638,9 @@ export const describeAction = (
       );
       return change && `${name(action.instanceId)}: ${change}`;
     }
+    // The pool is on every board already; a line per pip is just noise.
     case 'adjustPlayerCounter':
+      if (isManaCounter(action.counter)) return null;
       return counterChange(
         action.counter,
         before.counters[action.counter] ?? 0,
@@ -607,6 +698,10 @@ export const describeAction = (
     }
     case 'setPhase':
       return after.phase ? `moved to the ${phaseNames[after.phase]}` : null;
+    case 'setCardState':
+      return describeCardState(before, after, action);
+    case 'emptyManaPool':
+      return 'emptied their mana pool';
     case 'adjustCommanderCasts': {
       const now = findCard(after, action.instanceId);
       return `set ${nameOf(now)}'s cast count to ${now?.commanderCasts ?? 0}`;
