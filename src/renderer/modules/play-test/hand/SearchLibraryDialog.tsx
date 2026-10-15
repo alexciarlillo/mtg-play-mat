@@ -1,16 +1,7 @@
-import {
-  type CardFacts,
-  matchesQuery,
-  parseQuery,
-  type QueryNode,
-  toSearchable,
-} from '@shared/cardQuery';
-import type { CardView, PlayerId, SearchDestination } from '@shared/game';
-import classNames from 'classnames';
-import { useMemo, useState } from 'react';
+import type { PlayerId, SearchDestination } from '@shared/game';
+import { useState } from 'react';
 
-import Card from '../../../ui/Card';
-import { useCardFacts } from '../common/cardFacts';
+import CardBrowser from '../common/CardBrowser';
 import { Modal } from '../common/Dialogs';
 import { useLibraryActivity } from '../common/useLibraryActivity';
 import { dispatch } from '../viewStore';
@@ -24,22 +15,6 @@ const destinations: { value: SearchDestination; label: string }[] = [
   { value: 'library', label: 'Top of library' },
 ];
 
-const matches = (
-  card: CardView,
-  node: QueryNode | null,
-  facts: (id: string) => CardFacts | undefined
-) => {
-  if (node === null) return true;
-  return (
-    card.ref !== null &&
-    matchesQuery(node, toSearchable(card.ref, facts(card.ref.id)))
-  );
-};
-
-// Sorted by name so the search itself shows nothing of the library order.
-const byName = (a: CardView, b: CardView) =>
-  (a.ref?.name ?? '').localeCompare(b.ref?.name ?? '');
-
 const button =
   'rounded px-3 py-1 text-sm font-medium ring-1 ring-slate-400 disabled:opacity-40';
 
@@ -52,28 +27,12 @@ interface Props {
 const SearchLibraryDialog = ({ playerId, seq, onClose }: Props) => {
   useLibraryActivity({ kind: 'search' });
   const library = useLibrary(seq);
-  const [query, setQuery] = useState('');
   const [picked, setPicked] = useState<string[]>([]);
   const [to, setTo] = useState<SearchDestination>('hand');
   const [shuffle, setShuffle] = useState(true);
 
-  const facts = useCardFacts(
-    library?.flatMap((card) => (card.ref ? [card.ref.id] : [])) ?? []
-  );
-  const parsed = useMemo(() => parseQuery(query), [query]);
-
   const inLibrary = new Set(library?.map((card) => card.instanceId));
   const chosen = picked.filter((id) => inLibrary.has(id));
-  const shown = (library ?? [])
-    .filter((card) => matches(card, parsed.node, facts))
-    .sort(byName);
-
-  const toggle = (card: CardView) =>
-    setPicked((current) =>
-      current.includes(card.instanceId)
-        ? current.filter((id) => id !== card.instanceId)
-        : [...current, card.instanceId]
-    );
 
   const confirm = () => {
     dispatch({
@@ -94,77 +53,50 @@ const SearchLibraryDialog = ({ playerId, seq, onClose }: Props) => {
   }
 
   return (
-    <Modal title="Search your library" onClose={onClose} wide>
-      <div className="mb-2 flex flex-wrap items-center gap-2 text-sm">
-        <input
-          type="search"
-          autoFocus
-          aria-label="Search the library"
-          placeholder="Name, type or text, or t:creature mv<=3"
-          className="min-w-40 flex-1 rounded px-2 py-1 ring-1 ring-slate-400"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-        <label className="flex items-center gap-1">
-          To
-          <select
-            aria-label="Destination"
-            className="rounded bg-white px-1 py-1 ring-1 ring-slate-400"
-            value={to}
-            onChange={(e) => setTo(e.target.value as SearchDestination)}
-          >
-            {destinations.map(({ value, label }) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="flex items-center gap-1">
-          <input
-            type="checkbox"
-            checked={shuffle}
-            onChange={(e) => setShuffle(e.target.checked)}
-          />
-          Shuffle afterwards
-        </label>
-        <button
-          type="button"
-          className={`${button} bg-slate-800 text-white`}
-          onClick={chosen.length > 0 || shuffle ? confirm : onClose}
-        >
-          {confirmLabel}
-        </button>
-      </div>
-      {parsed.errors.length > 0 && (
-        <p
-          role="alert"
-          data-testid="query-error"
-          className="mb-2 text-sm text-red-700"
-        >
-          {parsed.errors.map((error) => error.message).join('. ')}
-        </p>
-      )}
-      <div
-        data-testid="library-search"
-        className="flex flex-wrap gap-2 text-center"
-      >
-        {shown.map((card) => (
-          <div
-            key={card.instanceId}
-            data-testid="search-card"
-            data-picked={chosen.includes(card.instanceId) || undefined}
-            className={classNames('rounded-lg', {
-              'outline-4 outline-sky-500': chosen.includes(card.instanceId),
-            })}
-          >
-            <Card card={card} size="sm" onClick={toggle} />
-          </div>
-        ))}
-        {library && shown.length === 0 && (
-          <p className="text-sm text-slate-600">No matching cards.</p>
-        )}
-      </div>
+    <Modal title="Search your library" onClose={onClose} wide column>
+      <CardBrowser
+        zone="library"
+        cards={library}
+        label="Search the library"
+        testId="library-search"
+        tileTestId="search-card"
+        picked={chosen}
+        onPickedChange={setPicked}
+        actions={
+          <span className="ml-auto flex flex-wrap items-center gap-2">
+            <label className="flex items-center gap-1">
+              To
+              <select
+                aria-label="Destination"
+                className="rounded bg-white px-1 py-1 ring-1 ring-slate-400"
+                value={to}
+                onChange={(e) => setTo(e.target.value as SearchDestination)}
+              >
+                {destinations.map(({ value, label }) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex items-center gap-1">
+              <input
+                type="checkbox"
+                checked={shuffle}
+                onChange={(e) => setShuffle(e.target.checked)}
+              />
+              Shuffle afterwards
+            </label>
+            <button
+              type="button"
+              className={`${button} bg-slate-800 text-white`}
+              onClick={chosen.length > 0 || shuffle ? confirm : onClose}
+            >
+              {confirmLabel}
+            </button>
+          </span>
+        }
+      />
     </Modal>
   );
 };

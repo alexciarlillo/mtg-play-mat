@@ -1,3 +1,9 @@
+import {
+  BROWSER_GROUPS,
+  BROWSER_SORTS,
+  type BrowserGroup,
+  type BrowserSort,
+} from './cardQuery/organize';
 import { isMatId } from './mat';
 
 // App-wide preferences, persisted by main and pushed to every window.
@@ -133,6 +139,60 @@ const opponentRowHeight: Parse<number> = (input) =>
 const matId: Parse<string> = (input) =>
   input === '' || isMatId(input) ? (input as string) : undefined;
 
+// How a card browser lays out each kind of zone. Only the view is kept;
+// queries and filters start fresh every time a browser opens.
+export const BROWSER_ZONES = ['library', 'graveyard', 'exile'] as const;
+export type BrowserZone = (typeof BROWSER_ZONES)[number];
+
+export interface BrowserView {
+  layout: 'grid' | 'list';
+  sort: BrowserSort;
+  group: BrowserGroup;
+  stack: boolean;
+}
+
+export type BrowserViews = Record<BrowserZone, BrowserView>;
+
+export const defaultBrowserViews: BrowserViews = {
+  library: { layout: 'grid', sort: 'name', group: 'none', stack: true },
+  graveyard: { layout: 'grid', sort: 'newest', group: 'none', stack: true },
+  exile: { layout: 'grid', sort: 'newest', group: 'none', stack: true },
+};
+
+const oneOf =
+  <T extends string>(values: readonly T[]): Parse<T> =>
+  (input) =>
+    (values as readonly unknown[]).includes(input) ? (input as T) : undefined;
+
+const browserLayout = oneOf(['grid', 'list'] as const);
+const browserSort = oneOf(BROWSER_SORTS);
+const browserGroup = oneOf(BROWSER_GROUPS);
+
+// Each value falls back on its own, so one bad entry keeps the rest. The
+// library never sorts by position: that would show its order.
+const browserViews: Parse<BrowserViews> = (input) => {
+  if (!isRecord(input)) return undefined;
+  const entries = BROWSER_ZONES.map((zone): [BrowserZone, BrowserView] => {
+    const fallback = defaultBrowserViews[zone];
+    const raw = input[zone];
+    const view = isRecord(raw) ? raw : {};
+    const sort = browserSort(view.sort);
+    return [
+      zone,
+      {
+        layout: browserLayout(view.layout) ?? fallback.layout,
+        sort:
+          sort === undefined || (zone === 'library' && sort === 'newest')
+            ? fallback.sort
+            : sort,
+        group: browserGroup(view.group) ?? fallback.group,
+        stack: boolean(view.stack) ?? fallback.stack,
+      },
+    ];
+  });
+  return Object.fromEntries(entries) as BrowserViews;
+};
+
 const fields = {
   displayName: field(DEFAULT_DISPLAY_NAME, displayName),
   // Turn and phase tracking clutters the board, so it is opt-in.
@@ -165,6 +225,7 @@ const fields = {
   // at your own relay.
   relayUrl: field('', relayUrl),
   relayKey: field('', relayKey),
+  zoneBrowser: field<BrowserViews>(defaultBrowserViews, browserViews),
 };
 
 type Fields = typeof fields;

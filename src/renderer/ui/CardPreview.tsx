@@ -77,7 +77,7 @@ export const CardPreviewProvider = ({
       {card?.ref && !pressed && (
         <div
           data-testid="card-preview"
-          className="fixed top-2 z-30 aspect-card h-[min(600px,calc(100vh-1rem))] pointer-events-none drop-shadow-2xl"
+          className="fixed top-2 z-45 aspect-card h-[min(600px,calc(100vh-1rem))] pointer-events-none drop-shadow-2xl"
           style={side}
         >
           <CardArt cardRef={card.ref} faceIndex={card.faceIndex} />

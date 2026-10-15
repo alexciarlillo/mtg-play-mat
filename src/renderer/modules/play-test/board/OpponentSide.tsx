@@ -519,6 +519,7 @@ const OpponentSide = ({
       {view && open && (
         <ZoneBrowser
           title={`${peer.name}'s ${pileTitles[open].toLowerCase()}`}
+          zone={open}
           cards={view.zones[open]}
           onClose={() => setOpen(null)}
           readOnly

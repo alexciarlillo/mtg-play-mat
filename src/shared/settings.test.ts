@@ -4,6 +4,7 @@ import {
   cleanDisplayName,
   DEFAULT_DISPLAY_NAME,
   DEFAULT_OPPONENT_ROW_HEIGHT,
+  defaultBrowserViews,
   defaultSettings,
   MAX_OPPONENT_ROW_HEIGHT,
   MAX_TRAY_HEIGHT,
@@ -32,6 +33,7 @@ describe('parseSettings', () => {
       seatLog: true,
       relayUrl: '',
       relayKey: '',
+      zoneBrowser: defaultBrowserViews,
     });
   });
 
@@ -202,5 +204,39 @@ describe('relay settings', () => {
   it('defaults both to blank', () => {
     expect(defaultSettings.relayUrl).toBe('');
     expect(defaultSettings.relayKey).toBe('');
+  });
+});
+
+describe('zoneBrowser', () => {
+  it('keeps a view per zone kind', () => {
+    const zoneBrowser = {
+      ...defaultBrowserViews,
+      graveyard: { layout: 'list', sort: 'mv', group: 'type', stack: false },
+    };
+    expect(parseSettingsPatch({ zoneBrowser })).toEqual({ zoneBrowser });
+  });
+
+  it('falls back value by value', () => {
+    expect(
+      parseSettingsPatch({
+        zoneBrowser: {
+          library: { layout: 'tiles', sort: 'color', group: 7 },
+          exile: 'list',
+        },
+      })
+    ).toEqual({
+      zoneBrowser: {
+        ...defaultBrowserViews,
+        library: { ...defaultBrowserViews.library, sort: 'color' },
+      },
+    });
+    expect(parseSettingsPatch({ zoneBrowser: [] })).toEqual({});
+  });
+
+  it('never sorts the library by position', () => {
+    expect(
+      parseSettingsPatch({ zoneBrowser: { library: { sort: 'newest' } } })
+        .zoneBrowser?.library.sort
+    ).toBe('name');
   });
 });

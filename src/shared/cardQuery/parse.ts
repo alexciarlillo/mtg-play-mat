@@ -30,7 +30,9 @@ export type QueryNode =
   | { kind: 'number'; field: NumberField; op: Comparison; value: number }
   | { kind: 'color'; field: ColorField; op: Comparison; colors: Color[] }
   | { kind: 'multicolor'; field: ColorField }
-  | { kind: 'is'; value: IsValue };
+  | { kind: 'is'; value: IsValue }
+  // A whole subtype word after the dash (only built by the chips).
+  | { kind: 'subtype'; value: string };
 
 export interface QueryError {
   message: string;

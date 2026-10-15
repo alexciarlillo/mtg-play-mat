@@ -1,4 +1,5 @@
 import type { CardView, PrivateView } from '@shared/game';
+import { defaultSettings } from '@shared/settings';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -111,6 +112,10 @@ beforeEach(() => {
       getLibrary,
       getCardFacts,
       setLibraryActivity,
+      getSettings: () => Promise.resolve(defaultSettings),
+      updateSettings: (patch: object) =>
+        Promise.resolve({ ...defaultSettings, ...patch }),
+      onSettingsChanged: () => () => {},
       onGameStarted: (listener: () => void) => {
         pushGameStarted = listener;
         return () => {};

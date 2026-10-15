@@ -173,6 +173,51 @@ test('mill 2 puts the top two in the graveyard', async () => {
   expect(me(await gameState()).zones.graveyard).toEqual([a, b]);
 });
 
+test('the graveyard browser filters, groups and remembers its view', async () => {
+  const state = await gameState();
+  const graveyard = me(state).zones.graveyard;
+  const names = graveyard.map((id) => state.cards[id].ref.name);
+  const lands = names.filter((name) => name === 'Forest').length;
+  const browser = () => board.getByRole('dialog', { name: /^Graveyard/ });
+
+  await board.getByRole('button', { name: 'Browse graveyard' }).click();
+  await expect(browser().getByTestId('browser-count')).toHaveText(
+    `${names.length} of ${names.length}`
+  );
+  // Newest first: the last card milled leads.
+  await expect(
+    browser().getByTestId('zone-card').first().getByTestId('card')
+  ).toHaveAttribute('data-card-name', names.at(-1)!);
+
+  await browser().getByLabel('Search the graveyard').fill('-t:land');
+  await expect(browser().getByTestId('browser-count')).toHaveText(
+    `${names.length - lands} of ${names.length}`
+  );
+  await browser().getByLabel('Search the graveyard').fill('');
+  await browser().getByLabel('Group').selectOption('type');
+  await expect(browser().getByTestId('browser-group').first()).toBeVisible();
+  await browser().getByRole('button', { name: 'List' }).click();
+  await expect(browser().getByTestId('zone-browser')).toHaveAttribute(
+    'data-layout',
+    'list'
+  );
+  await board.keyboard.press('Escape');
+  await expect(browser()).toHaveCount(0);
+
+  await board.getByRole('button', { name: 'Browse graveyard' }).click();
+  await expect(browser().getByTestId('zone-browser')).toHaveAttribute(
+    'data-layout',
+    'list'
+  );
+  await expect(browser().getByLabel('Group')).toHaveValue('type');
+  await expect(browser().getByLabel('Search the graveyard')).toHaveValue('');
+  // Put the defaults back for the steps that follow.
+  await browser().getByRole('button', { name: 'Grid' }).click();
+  await browser().getByLabel('Group').selectOption('none');
+  await board.keyboard.press('Escape');
+  expect((await gameState()).seq).toBe(state.seq);
+});
+
 test('search for a land to hand, then shuffle', async () => {
   const handBefore = await handCards().count();
   const libraryBefore = me(await gameState()).zones.library;
@@ -217,15 +262,24 @@ test('query syntax narrows the library search', async () => {
         .getByTestId('card')
         .evaluateAll((els) => els.map((el) => el.dataset.cardName))
     );
+  // Copies stack, so count cards through each tile's stack size.
+  const shownCount = () =>
+    found.evaluateAll((els) =>
+      els.reduce((sum, el) => sum + Number(el.dataset.count), 0)
+    );
 
   await hand.getByRole('button', { name: 'Search library…' }).click();
-  await expect(found).toHaveCount(libraryNames.length);
+  await expect.poll(shownCount).toBe(libraryNames.length);
+  await expect(found).toHaveCount(new Set(libraryNames).size);
 
   const expectShown = async (text: string, names: string[]) => {
     await query.fill(text);
     const expected = countOf(names);
     expect(expected).toBeGreaterThan(0);
-    await expect(found).toHaveCount(expected);
+    await expect.poll(shownCount).toBe(expected);
+    await expect(hand.getByTestId('browser-count')).toHaveText(
+      `${expected} of ${libraryNames.length}`
+    );
     expect(names).toEqual(expect.arrayContaining([...(await shownNames())]));
   };
 
@@ -249,12 +303,72 @@ test('query syntax narrows the library search', async () => {
   await expect(hand.getByTestId('query-error')).toHaveText(
     "Unknown keyword 'foo'"
   );
-  await expect(found).toHaveCount(
-    countOf([...cheapCreatures, 'Colossal Dreadmaw'])
-  );
+  await expect
+    .poll(shownCount)
+    .toBe(countOf([...cheapCreatures, 'Colossal Dreadmaw']));
+
+  // Chips build the same query and AND with the text.
+  await query.fill('mv<=1');
+  await hand.getByRole('button', { name: 'Creature', exact: true }).click();
+  await expect
+    .poll(shownCount)
+    .toBe(
+      countOf(['Llanowar Elves', 'Delver of Secrets // Insectile Aberration'])
+    );
+  await hand.getByRole('button', { name: 'Clear' }).click();
+  await expect.poll(shownCount).toBe(libraryNames.length);
+
   await hand.keyboard.press('Escape');
   await expect(found).toHaveCount(0);
   expect((await gameState()).seq).toBe(state.seq);
+});
+
+test('copies stack into one tile and each click picks one more', async () => {
+  const state = await gameState();
+  const forests = me(state).zones.library.filter(
+    (id) => state.cards[id].ref.name === 'Forest'
+  );
+  expect(forests.length).toBeGreaterThan(2);
+
+  await hand.getByRole('button', { name: 'Search library…' }).click();
+  await hand.getByLabel('Presets').selectOption({ label: 'Basic land' });
+  await expect(hand.getByLabel('Search the library')).toHaveValue(
+    't:basic t:land'
+  );
+  const tile = hand.getByTestId('search-card');
+  await expect(tile).toHaveCount(1);
+  await expect(tile).toHaveAttribute('data-count', String(forests.length));
+  await expect(tile.getByTestId('stack-count')).toHaveText(
+    `×${forests.length}`
+  );
+
+  await tile.getByTestId('card').click();
+  await tile.getByTestId('card').click();
+  await expect(tile).toHaveAttribute('data-picked', '2');
+  await expect(tile.getByTestId('stack-count')).toHaveText(
+    `2/${forests.length}`
+  );
+  await hand.getByLabel('Destination').selectOption('library');
+  await hand.getByLabel('Shuffle afterwards').uncheck();
+  await hand.getByRole('button', { name: 'Move 2', exact: true }).click();
+  await expect(tile).toHaveCount(0);
+
+  await expect
+    .poll(async () => (await gameState()).log.at(-1)?.type)
+    .toBe('searchLibrary');
+  const after = await gameState();
+  const moved = me(after).zones.library.slice(0, 2);
+  expect(new Set(moved).size).toBe(2);
+  moved.forEach((id) => expect(forests).toContain(id));
+  expect(me(after).zones.library).toHaveLength(me(state).zones.library.length);
+
+  // The query and chips start fresh; a recent query is offered instead.
+  await hand.getByRole('button', { name: 'Search library…' }).click();
+  await expect(hand.getByLabel('Search the library')).toHaveValue('');
+  await expect(
+    hand.getByLabel('Presets').locator('optgroup[label="Recent"] option')
+  ).toHaveText(['t:basic t:land', 't:land']);
+  await hand.keyboard.press('Escape');
 });
 
 test('a revealed hand card shows on the board until the next action', async () => {

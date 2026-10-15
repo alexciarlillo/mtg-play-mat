@@ -1,3 +1,4 @@
+import classNames from 'classnames';
 import {
   type FormEvent,
   type ReactNode,
@@ -10,9 +11,18 @@ interface ModalProps {
   onClose(): void;
   children: ReactNode;
   wide?: boolean;
+  // The body fills the dialog's height and scrolls its own content, so
+  // toolbars above and below a long list stay in view.
+  column?: boolean;
 }
 
-export const Modal = ({ title, onClose, children, wide }: ModalProps) => {
+export const Modal = ({
+  title,
+  onClose,
+  children,
+  wide,
+  column,
+}: ModalProps) => {
   // Listen before the first paint, so an Escape pressed the moment the
   // dialog appears still closes it.
   useLayoutEffect(() => {
@@ -33,11 +43,18 @@ export const Modal = ({ title, onClose, children, wide }: ModalProps) => {
       <div
         role="dialog"
         aria-label={title}
-        className={`max-h-[calc(100vh-2rem)] overflow-auto rounded-lg bg-stone-100 p-4 text-slate-900 shadow-2xl ${
-          wide ? 'w-[min(1100px,calc(100vw-2rem))]' : 'w-80'
-        }`}
+        className={classNames(
+          'max-h-[calc(100vh-2rem)] rounded-lg bg-stone-100 text-slate-900 shadow-2xl',
+          wide ? 'w-[min(1100px,calc(100vw-2rem))]' : 'w-80',
+          column ? 'flex flex-col overflow-hidden p-3' : 'overflow-auto p-4'
+        )}
       >
-        <div className="mb-3 flex items-center justify-between gap-4">
+        <div
+          className={classNames(
+            'flex shrink-0 items-center justify-between gap-4',
+            column ? 'mb-2' : 'mb-3'
+          )}
+        >
           <h2 className="text-lg font-semibold">{title}</h2>
           <button
             type="button"

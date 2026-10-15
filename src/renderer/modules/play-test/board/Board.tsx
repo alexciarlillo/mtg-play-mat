@@ -442,12 +442,18 @@ const Board = ({ store, opponent, hand }: Props) => {
         {view && dialog === 'graveyard' && (
           <ZoneBrowser
             title="Graveyard"
+            zone="graveyard"
             cards={view.zones.graveyard}
             onClose={close}
           />
         )}
         {view && dialog === 'exile' && (
-          <ZoneBrowser title="Exile" cards={view.zones.exile} onClose={close} />
+          <ZoneBrowser
+            title="Exile"
+            zone="exile"
+            cards={view.zones.exile}
+            onClose={close}
+          />
         )}
         {view && dialog === 'drawMany' && (
           <NumberPrompt

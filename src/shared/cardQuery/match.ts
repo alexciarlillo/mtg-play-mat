@@ -94,6 +94,14 @@ const matchesIs = (card: Searchable, value: IsValue): boolean => {
   }
 };
 
+// The words after each dash, so "Orc" never matches "Sorcery". A ref
+// without faces may still hold both halves joined by "//".
+const subtypes = (typeLine: string): string[] =>
+  typeLine
+    .split('//')
+    .flatMap((half) => half.split('—')[1]?.trim().split(' ') ?? [])
+    .filter(Boolean);
+
 const anyFace = (card: Searchable, test: (face: SearchFace) => boolean) =>
   card.faces.some(test);
 
@@ -178,6 +186,10 @@ const matchNode = (node: QueryNode, card: Searchable): boolean => {
     }
     case 'is':
       return matchesIs(card, node.value);
+    case 'subtype':
+      return anyFace(card, (face) =>
+        subtypes(face.typeLine).includes(node.value)
+      );
   }
 };
 
