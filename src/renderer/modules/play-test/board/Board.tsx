@@ -44,6 +44,7 @@ import {
 } from './commanders';
 import { CommanderDamageTaken, DummyOpponents } from './CommanderTracker';
 import CommandZone from './CommandZone';
+import SideboardCount from './SideboardCount';
 import CounterDialog from './CounterDialog';
 import HandTray from './HandTray';
 import Library from './Library';
@@ -533,6 +534,10 @@ const Board = ({ store, opponent, hand }: Props) => {
                         cards={view.zones.exile}
                         size={pileSize}
                         onOpen={() => setDialog('exile')}
+                      />
+                      <SideboardCount
+                        count={view.sideboardCount}
+                        testId="sideboard-count"
                       />
                       {commanderGame && (
                         <CommandZone view={view} size={duel ? 'xs' : 'sm'} />

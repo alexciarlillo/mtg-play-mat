@@ -329,6 +329,7 @@ const ownerZone: Record<ZoneId, (owner: string) => string> = {
   command: (owner) => `into ${owner}'s command zone`,
   hand: (owner) => `into ${owner}'s hand`,
   library: (owner) => `into ${owner}'s library`,
+  sideboard: (owner) => `into ${owner}'s sideboard`,
 };
 
 // Log lines, told by the player whose game changed.
@@ -362,6 +363,7 @@ const ownZone: Record<ZoneId, string> = {
   command: 'into their command zone',
   hand: 'into their hand',
   library: 'into their library',
+  sideboard: 'into their sideboard',
 };
 
 // The owner's side of a return; the card is named as it was when it left

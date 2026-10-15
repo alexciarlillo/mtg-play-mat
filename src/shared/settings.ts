@@ -141,7 +141,12 @@ const matId: Parse<string> = (input) =>
 
 // How a card browser lays out each kind of zone. Only the view is kept;
 // queries and filters start fresh every time a browser opens.
-export const BROWSER_ZONES = ['library', 'graveyard', 'exile'] as const;
+export const BROWSER_ZONES = [
+  'library',
+  'graveyard',
+  'exile',
+  'sideboard',
+] as const;
 export type BrowserZone = (typeof BROWSER_ZONES)[number];
 
 export interface BrowserView {
@@ -157,6 +162,7 @@ export const defaultBrowserViews: BrowserViews = {
   library: { layout: 'grid', sort: 'name', group: 'none', stack: true },
   graveyard: { layout: 'grid', sort: 'newest', group: 'none', stack: true },
   exile: { layout: 'grid', sort: 'newest', group: 'none', stack: true },
+  sideboard: { layout: 'grid', sort: 'name', group: 'none', stack: true },
 };
 
 const oneOf =

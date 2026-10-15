@@ -49,6 +49,7 @@ import LookAtTopDialog from './LookAtTopDialog';
 import LookPrompt, { type LookChoice } from './LookPrompt';
 import RevealUntilDialog from './RevealUntilDialog';
 import SearchLibraryDialog from './SearchLibraryDialog';
+import SideboardDialog from './SideboardDialog';
 import { useLibrary } from './useLibrary';
 
 const play = (card: CardView) => moveTo(card, 'battlefield');
@@ -200,6 +201,7 @@ type Dialog =
   | 'search'
   | 'bottom'
   | 'revealUntil'
+  | 'sideboard'
   | 'restart';
 
 const libraryDialogOf: Record<LibraryDialog, Dialog> = {
@@ -213,12 +215,14 @@ const commandDialogs: Record<HandCommand, Dialog> = {
   ...libraryDialogOf,
 };
 
+// Closed by a new game, whose instance ids repeat.
 const libraryDialogs: (Dialog | null)[] = [
   'lookCount',
   'look',
   'search',
   'bottom',
   'revealUntil',
+  'sideboard',
 ];
 
 type PickMode = 'mulligan' | LibraryEnd;
@@ -632,6 +636,15 @@ const Hand = ({ store, dock }: Props) => {
           >
             Reveal hand
           </button>
+          {view?.sideboard && view.sideboard.length > 0 && (
+            <button
+              type="button"
+              className={titleButton}
+              onClick={() => openDialog('sideboard')}
+            >
+              Sideboard ({view.sideboard.length})
+            </button>
+          )}
           {(privateLog.length > 0 || seenByYou.length > 0) && (
             <button
               type="button"
@@ -811,6 +824,13 @@ const Hand = ({ store, dock }: Props) => {
           seq={view.seq}
           revealed={view.revealed}
           libraryCount={view.libraryCount}
+          onClose={close}
+        />
+      )}
+      {view && dialog === 'sideboard' && (
+        <SideboardDialog
+          playerId={view.playerId}
+          cards={view.sideboard ?? []}
           onClose={close}
         />
       )}

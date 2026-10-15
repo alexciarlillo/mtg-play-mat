@@ -366,7 +366,7 @@ test('board and hand state survive window reloads', async () => {
   for (const bad of [
     { type: 'newGame', seed: 1, players: [] },
     { type: 'draw', playerId: 'p1', count: 'all' },
-    { type: 'moveCard', instanceId: id, to: 'sideboard' },
+    { type: 'moveCard', instanceId: id, to: 'maybeboard' },
   ]) {
     const result = await board.evaluate(
       (action) =>

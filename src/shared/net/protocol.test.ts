@@ -763,6 +763,25 @@ describe('turns and reveals over the wire', () => {
   });
 });
 
+describe('the sideboard count', () => {
+  it('round-trips a count, and nothing else of the sideboard', () => {
+    const v = { ...view(), sideboardCount: 7 };
+    expect(parsePublicView(v).sideboardCount).toBe(7);
+    const parsed = parsePublicView({ ...v, sideboard: [{ name: 'Secret' }] });
+    expect(JSON.stringify(parsed)).not.toContain('Secret');
+  });
+
+  it('is absent from older builds’ views, and must be a count', () => {
+    const { sideboardCount: _, ...old } = view();
+    expect('sideboardCount' in parsePublicView(old)).toBe(false);
+    [-1, 1.5, '3', 5000].forEach((sideboardCount) =>
+      expect(() => parsePublicView({ ...old, sideboardCount })).toThrow(
+        /bad message/
+      )
+    );
+  });
+});
+
 describe('the top card played revealed', () => {
   const showing = (): PublicView => {
     const state = applyAll(game(), [

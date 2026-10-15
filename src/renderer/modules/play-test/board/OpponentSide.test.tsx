@@ -1,7 +1,14 @@
 import type { CardView, PublicView } from '@shared/game';
 import type { PeerInfo } from '@shared/net/protocol';
 import type { TableEntry } from '@shared/net/remoteViews';
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ContextMenuProvider } from '../../../ui/ContextMenuProvider';
@@ -84,6 +91,18 @@ describe('OpponentSide', () => {
     expect(
       screen.getByTestId('opponent-battlefield').firstElementChild
     ).toHaveStyle({ transform: `translateX(${offsetX}px)` });
+  });
+
+  it('shows how many cards wait in the sideboard, and nothing else', () => {
+    renderSide(false);
+    expect(
+      screen.queryByTestId('opponent-sideboard-count')
+    ).not.toBeInTheDocument();
+    cleanup();
+    renderSide(false, { ...view, sideboardCount: 15 });
+    expect(screen.getByTestId('opponent-sideboard-count')).toHaveTextContent(
+      'Sideboard 15'
+    );
   });
 
   it('pins a duel seat command zone below its scrolling column', () => {

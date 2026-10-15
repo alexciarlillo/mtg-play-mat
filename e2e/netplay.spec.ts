@@ -34,6 +34,9 @@ interface Instance {
 
 const env = { ...process.env, MTG_PLAY_MAT_TEST_HOOKS: '1' };
 
+// The sample deck's sideboard, which never leaves its owner's machine.
+const SIDEBOARD = ['Lightning Bolt', 'Lightning Bolt', 'Containment Priest'];
+
 const electronBinary = createRequire(path.join(process.cwd(), 'package.json'))(
   'electron'
 ) as string;
@@ -354,6 +357,7 @@ interface WireMessage {
     zones: Record<string, { zone: string }[]>;
     handCount: number;
     libraryCount: number;
+    sideboardCount?: number;
     topCard?: { id: string; name: string } | null;
   } | null;
 }
@@ -377,8 +381,9 @@ const expectNoHiddenCards = async (
   const me = state.players.find((p) => p.id === playerId);
   if (!me) throw new Error('no local player');
 
-  const hidden = [...me.zones.hand, ...me.zones.library];
+  const hidden = [...me.zones.hand, ...me.zones.library, ...me.zones.sideboard];
   expect(hidden.length).toBeGreaterThan(50);
+  expect(me.zones.sideboard).toHaveLength(SIDEBOARD.length);
 
   const deckNames = new Set(Object.values(state.cards).map((c) => c.ref.name));
   const deckIds = new Set(Object.values(state.cards).map((c) => c.ref.id));
@@ -417,15 +422,20 @@ const expectNoHiddenCards = async (
     }
 
     // Card identities appear only as cards in public zones, and every card
-    // of the 60 is accounted for by those zones plus the two counts.
-    const { zones, handCount, libraryCount, topCard } = message.view;
+    // of the 60 and the sideboard is accounted for by those zones plus the
+    // three counts.
+    const { zones, handCount, libraryCount, sideboardCount, topCard } =
+      message.view;
     expect(Object.keys(zones).sort()).toEqual([...publicZones].sort());
     let shown = 0;
     for (const zone of publicZones) {
       zones[zone].forEach((card) => expect(card.zone).toBe(zone));
       shown += zones[zone].length;
     }
-    expect(shown + handCount + libraryCount).toBe(60);
+    expect(typeof sideboardCount).toBe('number');
+    expect(shown + handCount + libraryCount + (sideboardCount ?? 0)).toBe(
+      60 + SIDEBOARD.length
+    );
 
     if (allowTopCard) {
       if (topCard) {
@@ -446,6 +456,45 @@ const expectNoHiddenCards = async (
   }
   return { logLines, topCards };
 };
+
+test('the sideboard stays on its owner’s machine, as a count', async () => {
+  const [hostHand, guestBoard] = await Promise.all([
+    page(host, 'hand.html'),
+    page(guest, 'board.html'),
+  ]);
+  const theirCount = guestBoard.getByTestId('opponent-sideboard-count');
+  await expect(theirCount).toHaveText(`Sideboard ${SIDEBOARD.length}`);
+
+  // A wish: fetch a card to the hand, then send it back.
+  await hostHand
+    .getByRole('button', { name: `Sideboard (${SIDEBOARD.length})` })
+    .click();
+  const browser = hostHand.getByTestId('sideboard-browser');
+  await browser
+    .locator('[data-testid="sideboard-card"]', {
+      has: hostHand.locator('[data-card-name="Lightning Bolt"]'),
+    })
+    .getByTestId('card')
+    .click();
+  await hostHand.getByRole('button', { name: 'Move 1' }).click();
+  await expect(theirCount).toHaveText(`Sideboard ${SIDEBOARD.length - 1}`);
+  const log = guestBoard.getByTestId('table-log').getByTestId('log-entry');
+  await expect(log.last()).toHaveText(
+    /Alice put 1 card from their sideboard into their hand$/
+  );
+
+  const bolt = hostHand
+    .getByTestId('hand')
+    .locator('[data-testid="card"][data-card-name="Lightning Bolt"]');
+  await bolt.click({ button: 'right' });
+  await hostHand.getByRole('menuitem', { name: 'Move to sideboard' }).click();
+  await expect(theirCount).toHaveText(`Sideboard ${SIDEBOARD.length}`);
+  await expect(log.last()).toHaveText(
+    /Alice put a card from their hand into their sideboard$/
+  );
+  const shown = await guestBoard.locator('body').textContent();
+  for (const name of SIDEBOARD) expect(shown).not.toContain(name);
+});
 
 test('the wire never carries the sender’s hidden cards', async () => {
   const wire = await netWire();

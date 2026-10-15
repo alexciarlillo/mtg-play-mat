@@ -440,6 +440,10 @@ export const parsePublicView = (value: unknown): PublicView => {
     ) as Record<PublicZoneId, CardView[]>,
     handCount: int(fields, 'handCount', 0, MAX_COUNT),
     libraryCount: int(fields, 'libraryCount', 0, MAX_COUNT),
+    // Added within v2: a count only, never the sideboard's cards.
+    ...(fields.sideboardCount !== undefined && {
+      sideboardCount: int(fields, 'sideboardCount', 0, MAX_COUNT),
+    }),
     commanderDamage: commanderDamage(fields.commanderDamage),
     dummies: optionalList(fields.dummies, 'dummies', MAX_DUMMIES).map(dummy),
     ...turnFields(fields),

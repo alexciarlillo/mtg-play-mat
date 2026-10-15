@@ -266,7 +266,7 @@ const DeckImportModal = ({ isOpen, onClose, onSaved }: Props) => {
                 unresolved, {report.ignored.length} ignored
               </span>
               <div className="text-gray-600">
-                {(['commander', 'main', 'side'] as const)
+                {(['commander', 'companion', 'main', 'side'] as const)
                   .filter((b) => counts(b) > 0)
                   .map((b) => `${boardLabels[b]}: ${counts(b)}`)
                   .join(' · ')}

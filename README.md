@@ -58,7 +58,17 @@ The deck page groups cards by board and type. You can change quantities, move
 cards between boards, remove or add cards, switch any card's printing, pick the
 cover card, rename the deck, change its format, and copy it as MTGA or Moxfield
 text. **Play test** shuffles the main board into the library and puts the commander
-board in the command zone; the sideboard stays out.
+board in the command zone. A `Companion` section is its own board: the companion
+starts the game in the command zone in any format, as a plain card (no tax, no
+commander damage); clicking it puts it into your hand. The sideboard sits outside the
+game, as hidden as your hand: the hand window's **Sideboard** button browses it, and
+picked cards go to the hand, battlefield, graveyard, exile or either end of the
+library in one step (wishes, Lessons, Karn). Any card of yours can go back with
+**Move to sideboard**. The board, yours and everyone else's, shows only a count; the
+log names a card only when it lands somewhere public. A new game or restart deals the
+sideboard out again, and mulligans never touch it. Decks imported before companions had
+a board of their own keep the companion in the sideboard: move it to the Companion board
+in the deck editor, or import the list again.
 
 ## Online play
 
@@ -70,13 +80,13 @@ under **Settings → Online play**, with the key its `RELAY_APP_KEYS` lists for
 `mtg-play-mat`. The fallback is **Invite codes**: players paste WebRTC offer and answer codes
 to each other and no server is involved at all.
 
-Either way a pod is a star — guests talk to the host, and the host passes messages on. Hands
-and libraries never leave the machine they are on, except for cards a player chooses to show:
-a reveal, or the top card while playing with it revealed. A card revealed to one player goes
-to that player alone and shows only in their hand window, never on a board (unless they
-keep the hand docked in the board window, where it shows in the docked tray); everyone else
-sees who was shown how many cards. It is not encrypted, though: it passes through the host
-(or the relay), which could technically read it.
+Either way a pod is a star — guests talk to the host, and the host passes messages on.
+Hands, libraries and sideboards never leave the machine they are on, except for cards a
+player chooses to show: a reveal, or the top card while playing with it revealed. A card
+revealed to one player goes to that player alone and shows only in their hand window, never
+on a board (unless they keep the hand docked in the board window, where it shows in the
+docked tray); everyone else sees who was shown how many cards. It is not encrypted, though:
+it passes through the host (or the relay), which could technically read it.
 
 ## Development
 
@@ -231,7 +241,7 @@ list.
 
 Hosting is independent of the play test. Once players are connected and have a game
 open, each board shows the other players' battlefields, graveyards, exile, command
-zones, life, mulligans, and hand and library counts, read-only. With one opponent the
+zones, life, mulligans, and hand, library and sideboard counts, read-only. With one opponent the
 board splits in two. With two or three opponents they sit in a row across the top, in
 turn order, each scaled to fit. Each player sends only their own public view, so
 hand contents and library order never leave the machine. In a Commander game you can

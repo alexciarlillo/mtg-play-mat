@@ -36,8 +36,8 @@ const sectionHeaders: Record<string, Section> = {
   sideboard: 'side',
   side: 'side',
   'side board': 'side',
-  companion: 'side',
-  companions: 'side',
+  companion: 'companion',
+  companions: 'companion',
   commander: 'commander',
   commanders: 'commander',
   maybeboard: 'maybe',
@@ -126,6 +126,28 @@ const promoteCommander = (cards: ParsedCardLine[], notes: string[]) => {
   );
 };
 
+// Arena lists the companion in its own section and again in the
+// sideboard, where it really lives; one sideboard copy per companion is
+// the same card. The note says so, in case it was a real second copy.
+const dropListedCompanions = (cards: ParsedCardLine[], notes: string[]) => {
+  cards
+    .filter((card) => card.board === 'companion')
+    .forEach((companion) => {
+      const key = companion.name.toLowerCase();
+      const side = cards.find(
+        (card) => card.board === 'side' && card.name.toLowerCase() === key
+      );
+      if (!side) return;
+      side.qty -= 1;
+      if (side.qty === 0) cards.splice(cards.indexOf(side), 1);
+      notes.push(
+        `"${companion.name}" is listed as the companion and in the ` +
+          `sideboard (line ${side.line}), so it was counted once. Add it ` +
+          'to the sideboard again if that was a second copy.'
+      );
+    });
+};
+
 // Parses plain, MTGA, and Moxfield text exports. It never looks cards up;
 // every non-blank line ends up as a card, a header, or an ignored line.
 export const parseDeckList = (input: string): ParsedDeckList => {
@@ -151,8 +173,9 @@ export const parseDeckList = (input: string): ParsedDeckList => {
 
     if (text === '') {
       groupOpen = false;
-      // A blank line ends the About block in MTGA exports.
-      if (section === 'about') section = 'main';
+      // A blank line ends the About block in MTGA exports, and the
+      // one-card Companion block, so later cards aren't all companions.
+      if (section === 'about' || section === 'companion') section = 'main';
       return;
     }
 
@@ -225,6 +248,7 @@ export const parseDeckList = (input: string): ParsedDeckList => {
   }
 
   promoteCommander(cards, notes);
+  dropListedCompanions(cards, notes);
 
   const maybe = ignored.filter((i) => i.reason === 'maybeboard').length;
   if (maybe > 0) {

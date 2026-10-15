@@ -8,6 +8,7 @@ import {
 import { useState } from 'react';
 
 import CardBrowser from '../common/CardBrowser';
+import { moveTo } from '../common/cardMenus';
 import { Modal } from '../common/Dialogs';
 import RevealTargetSelect from '../common/RevealTargetSelect';
 import {
@@ -159,6 +160,12 @@ const SearchLibraryDialog = ({ playerId, seq, onClose }: Props) => {
         tileTestId="search-card"
         picked={chosen}
         onPickedChange={changePicked}
+        menu={(card) => [
+          {
+            title: 'Move to sideboard',
+            action: () => moveTo(card, 'sideboard'),
+          },
+        ]}
       />
       <div
         data-testid="search-footer"

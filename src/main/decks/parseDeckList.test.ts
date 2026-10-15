@@ -99,7 +99,61 @@ describe('parseDeckList', () => {
     ].join('\n');
     expect(summary(text)).toEqual([
       [1, 'Atraxa', 'commander'],
-      [1, 'Lurrus', 'side'],
+      [1, 'Lurrus', 'companion'],
+      [4, 'Forest', 'main'],
+      [2, 'Duress', 'side'],
+    ]);
+  });
+
+  it('counts a companion also listed in the sideboard once, with a note', () => {
+    const text = [
+      'Companion',
+      '1 Lurrus',
+      '',
+      'Deck',
+      '4 Forest',
+      '',
+      'Sideboard',
+      '2 lurrus',
+      '1 Duress',
+    ].join('\n');
+    const parsed = parseDeckList(text);
+    expect(summary(text)).toEqual([
+      [1, 'Lurrus', 'companion'],
+      [4, 'Forest', 'main'],
+      [1, 'lurrus', 'side'],
+      [1, 'Duress', 'side'],
+    ]);
+    expect(parsed.notes).toEqual([
+      expect.stringContaining('"Lurrus" is listed as the companion'),
+    ]);
+    const once = 'Companion\n1 Lurrus\nSideboard\n1 Lurrus\n1 Duress';
+    expect(summary(once)).toEqual([
+      [1, 'Lurrus', 'companion'],
+      [1, 'Duress', 'side'],
+    ]);
+  });
+
+  it('ends the Companion block at a blank line', () => {
+    expect(summary('Companion\n1 Lurrus\n\n4 Forest\n2 Duress')).toEqual([
+      [1, 'Lurrus', 'companion'],
+      [4, 'Forest', 'main'],
+      [2, 'Duress', 'main'],
+    ]);
+  });
+
+  it('keeps the blank-line sideboard rule after a Companion section', () => {
+    const text = [
+      'Companion',
+      '1 Lurrus',
+      '',
+      'Deck',
+      '4 Forest',
+      '',
+      '2 Duress',
+    ].join('\n');
+    expect(summary(text)).toEqual([
+      [1, 'Lurrus', 'companion'],
       [4, 'Forest', 'main'],
       [2, 'Duress', 'side'],
     ]);

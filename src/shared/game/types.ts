@@ -11,12 +11,13 @@ export const zoneIds = [
   'graveyard',
   'exile',
   'command',
+  'sideboard',
 ] as const;
 
 export type ZoneId = (typeof zoneIds)[number];
 
 // Zones whose contents only the owner may know.
-export const hiddenZones: readonly ZoneId[] = ['library', 'hand'];
+export const hiddenZones: readonly ZoneId[] = ['library', 'hand', 'sideboard'];
 
 export interface Position {
   x: number;
@@ -153,7 +154,12 @@ export interface PlayerSetup {
   id: PlayerId;
   name: string;
   deck: CardRef[];
+  // Commanders; the companion goes to the command zone after them but
+  // is not a commander.
   command?: CardRef[];
+  companion?: CardRef[];
+  // Outside the game, and as hidden as the hand.
+  sideboard?: CardRef[];
   life?: number;
 }
 

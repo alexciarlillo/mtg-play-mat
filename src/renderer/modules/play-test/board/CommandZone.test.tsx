@@ -128,11 +128,33 @@ describe('CommandZone', () => {
     });
   });
 
+  it('puts a companion into the hand, with no tax', () => {
+    const companion = commander('p1:5', 'Lurrus', {
+      isCommander: undefined,
+      commanderCasts: undefined,
+    });
+    renderZone(viewWith([companion]));
+    expect(screen.queryByTestId('commander-tax')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('card'));
+    expect(dispatch).toHaveBeenLastCalledWith({
+      type: 'moveCard',
+      instanceId: 'p1:5',
+      to: 'hand',
+    });
+    fireEvent.contextMenu(screen.getByTestId('card'));
+    const items = screen.getAllByRole('menuitem').map((i) => i.textContent);
+    expect(items[0]).toBe('Put into hand');
+    expect(items).toContain('Move to sideboard');
+    expect(items).not.toContain('Commander tax +2');
+  });
+
   it('offers cast and tax fixes in its menu', () => {
     renderZone(viewWith([commander('p1:0', 'Tymna', { commanderCasts: 1 })]));
     fireEvent.contextMenu(screen.getByTestId('card'));
     const items = screen.getAllByRole('menuitem').map((i) => i.textContent);
     expect(items[0]).toBe('Cast');
+    // A commander never goes to the sideboard.
+    expect(items).not.toContain('Move to sideboard');
     expect(items).toContain('Commander tax +2');
     expect(items).toContain('Commander tax −2');
     expect(items).not.toContain('Move to command zone');

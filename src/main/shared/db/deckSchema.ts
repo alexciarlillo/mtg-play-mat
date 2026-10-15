@@ -46,4 +46,20 @@ export const deckMigrations: Migration[] = [
   ALTER TABLE decks_v2 RENAME TO decks;
   ALTER TABLE deck_cards_v2 RENAME TO deck_cards;
   `,
+  // Adds the companion board. SQLite can't change a CHECK in place, so the
+  // table is rebuilt, keeping rows in their order.
+  `
+  CREATE TABLE deck_cards_v3 (
+    deck_id INTEGER NOT NULL REFERENCES decks (id) ON DELETE CASCADE,
+    printing_id TEXT NOT NULL,
+    qty INTEGER NOT NULL CHECK (qty > 0),
+    board TEXT NOT NULL
+      CHECK (board IN ('main', 'side', 'commander', 'companion')),
+    PRIMARY KEY (deck_id, printing_id, board)
+  );
+  INSERT INTO deck_cards_v3 (deck_id, printing_id, qty, board)
+    SELECT deck_id, printing_id, qty, board FROM deck_cards ORDER BY rowid;
+  DROP TABLE deck_cards;
+  ALTER TABLE deck_cards_v3 RENAME TO deck_cards;
+  `,
 ];

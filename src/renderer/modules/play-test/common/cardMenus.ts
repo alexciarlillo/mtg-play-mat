@@ -29,6 +29,16 @@ export const moveTo = (card: CardView, to: ZoneId, index?: number) =>
 
 const toCommand: Destination = { title: 'Move to command zone', to: 'command' };
 
+const toSideboard: Destination = {
+  title: 'Move to sideboard',
+  to: 'sideboard',
+};
+
+// A token would cease to exist, a borrowed permanent belongs in its
+// owner's game, and a commander never leaves the game.
+export const maySideboard = (card: CardView) =>
+  !card.isToken && !card.isCommander && card.owner === card.controller;
+
 // Manual tax fixes, in steps of one cast (2 mana).
 export const commanderMenu = (card: CardView): ContextMenuSpec[] => {
   if (!card.isCommander) return [];
@@ -59,7 +69,11 @@ export const moveMenu = (
   titles: Partial<Record<ZoneId, string>> = {},
   { onPutInLibrary }: MoveMenuOptions = {}
 ): ContextMenuSpec[] => [
-  ...(card.isCommander ? [toCommand, ...destinations] : destinations)
+  ...[
+    ...(card.isCommander ? [toCommand] : []),
+    ...destinations,
+    ...(maySideboard(card) ? [toSideboard] : []),
+  ]
     .filter(({ to }) => to !== card.zone)
     .map(({ title, to, index }) => ({
       title: titles[to] ?? title,

@@ -72,6 +72,7 @@ const into: Record<ZoneId, string> = {
   command: 'into the command zone',
   hand: 'into their hand',
   library: 'into their library',
+  sideboard: 'into their sideboard',
 };
 
 const from: Record<ZoneId, string> = {
@@ -81,6 +82,7 @@ const from: Record<ZoneId, string> = {
   command: 'the command zone',
   hand: 'their hand',
   library: 'their library',
+  sideboard: 'their sideboard',
 };
 
 const phaseNames: Record<Phase, string> = {
@@ -107,11 +109,24 @@ const libraryPlace = (index: number | undefined, size: number) => {
   return `into their library ${ordinal(index + 1)} from the top`;
 };
 
+type HiddenZoneId = Exclude<ZoneId, PublicZoneId>;
+
+const isHidden = (zone: ZoneId): zone is HiddenZoneId =>
+  zone === 'hand' || zone === 'library' || zone === 'sideboard';
+
+const hiddenCount = (view: PublicView, zone: HiddenZoneId): number => {
+  if (zone === 'hand') return view.handCount;
+  if (zone === 'library') return view.libraryCount;
+  return view.sideboardCount ?? 0;
+};
+
+const hiddenZoneIds: HiddenZoneId[] = ['hand', 'library', 'sideboard'];
+
 // Hidden zones that lost cards, told by the hidden counts.
-const hiddenDrops = (before: PublicView, after: PublicView): ZoneId[] => [
-  ...(after.handCount < before.handCount ? (['hand'] as const) : []),
-  ...(after.libraryCount < before.libraryCount ? (['library'] as const) : []),
-];
+const hiddenDrops = (before: PublicView, after: PublicView): ZoneId[] =>
+  hiddenZoneIds.filter(
+    (zone) => hiddenCount(after, zone) < hiddenCount(before, zone)
+  );
 
 // Where a card that wasn't public came from, if only one place it could.
 const hiddenSource = (before: PublicView, after: PublicView): ZoneId | null => {
@@ -237,14 +252,9 @@ const movedFrom = (
   from: ZoneId,
   to: ZoneId
 ): BulkMoved => {
-  if (from === 'hand' || from === 'library') {
-    const count = (view: PublicView) =>
-      from === 'hand' ? view.handCount : view.libraryCount;
-    const names =
-      to === 'hand' || to === 'library'
-        ? []
-        : arrived(before, after, to).map(nameOf);
-    const total = count(before) - count(after);
+  if (isHidden(from)) {
+    const names = isHidden(to) ? [] : arrived(before, after, to).map(nameOf);
+    const total = hiddenCount(before, from) - hiddenCount(after, from);
     return { names, hidden: Math.max(0, total - names.length), source: from };
   }
   const still = new Set(after.zones[from].map((card) => card.instanceId));
@@ -505,9 +515,9 @@ export const describeAction = (
       return describeSetTapped(before, after, action);
     case 'shuffleIntoLibrary': {
       const was = findCard(before, action.instanceId);
-      return was
-        ? `shuffled ${nameOf(was)} into their library`
-        : 'shuffled a card from their hand into their library';
+      if (was) return `shuffled ${nameOf(was)} into their library`;
+      const source = hiddenSource(before, after) ?? 'hand';
+      return `shuffled a card from ${from[source]} into their library`;
     }
     case 'tap':
     case 'untap':

@@ -37,6 +37,7 @@ interface WireMessage {
     zones: Record<string, { zone: string }[]>;
     handCount: number;
     libraryCount: number;
+    sideboardCount?: number;
   } | null;
 }
 
@@ -393,7 +394,7 @@ test('the host sends no hidden cards and relays guests unaltered', async () => {
   const { playerId: hostId } = await profileOf(alice);
   const me = state.players.find((p) => p.id === hostId);
   if (!me) throw new Error('no local player');
-  const hidden = [...me.zones.hand, ...me.zones.library];
+  const hidden = [...me.zones.hand, ...me.zones.library, ...me.zones.sideboard];
   const deckSize = Object.values(state.cards).filter(
     (c) => c.owner === hostId
   ).length;
@@ -412,10 +413,12 @@ test('the host sends no hidden cards and relays guests unaltered', async () => {
     for (const id of hidden) expect(raw).not.toContain(JSON.stringify(id));
     const message = JSON.parse(raw) as WireMessage;
     if (message.kind !== 'public' || !message.view) continue;
-    const { zones, handCount, libraryCount } = message.view;
+    const { zones, handCount, libraryCount, sideboardCount } = message.view;
     let shown = 0;
     for (const zone of publicZones) shown += zones[zone].length;
-    expect(shown + handCount + libraryCount).toBe(deckSize);
+    expect(shown + handCount + libraryCount + (sideboardCount ?? 0)).toBe(
+      deckSize
+    );
   }
 
   // Everything else the host sent came from a guest, byte for byte.

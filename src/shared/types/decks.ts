@@ -1,7 +1,9 @@
 export const deckFormats = ['commander', 'constructed', 'other'] as const;
 export type DeckFormat = (typeof deckFormats)[number];
 
-export const deckBoards = ['main', 'side', 'commander'] as const;
+// The companion sits outside the deck and starts the game in the command
+// zone; like the sideboard, it isn't counted in the deck.
+export const deckBoards = ['main', 'side', 'commander', 'companion'] as const;
 export type DeckBoard = (typeof deckBoards)[number];
 
 // What the deck views need to know about one printing.
@@ -28,7 +30,7 @@ export interface DeckSummary {
   name: string;
   format: DeckFormat;
   displayPrintingId: string | null;
-  // Main plus commander; the sideboard isn't part of the played deck.
+  // Main plus commander; the sideboard and companion aren't counted.
   cardCount: number;
   updatedAt: string;
 }

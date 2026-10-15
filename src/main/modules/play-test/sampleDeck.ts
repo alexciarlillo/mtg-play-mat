@@ -9,6 +9,8 @@ interface SampleCard {
   power?: string;
   toughness?: string;
   layout?: string;
+  // Sideboard cards stay out of the 60.
+  side?: true;
   // Multi-face cards list every face; others use the card itself.
   faces?: CardFace[];
   // Search data, standing in for the card database.
@@ -117,6 +119,39 @@ const sampleCards: SampleCard[] = [
       oracleText: ['Trample'],
     },
   },
+  {
+    copies: 2,
+    side: true,
+    id: '435589bb-27c6-4a6d-9d63-394d5092b9d8',
+    name: 'Lightning Bolt',
+    typeLine: 'Instant',
+    facts: {
+      mv: 1,
+      colors: ['R'],
+      colorIdentity: ['R'],
+      keywords: [],
+      oracleText: ['Lightning Bolt deals 3 damage to any target.'],
+    },
+  },
+  {
+    copies: 1,
+    side: true,
+    id: 'a24e8dba-5c86-4e32-8a52-61402f7fe9f0',
+    name: 'Containment Priest',
+    typeLine: 'Creature — Human Cleric',
+    power: '2',
+    toughness: '2',
+    facts: {
+      mv: 2,
+      colors: ['W'],
+      colorIdentity: ['W'],
+      keywords: ['Flash'],
+      oracleText: [
+        "Flash\nIf a nontoken creature would enter and it wasn't cast, " +
+          'exile it instead.',
+      ],
+    },
+  },
 ];
 
 const facesOf = ({ faces, name, typeLine, power, toughness }: SampleCard) =>
@@ -129,9 +164,8 @@ const facesOf = ({ faces, name, typeLine, power, toughness }: SampleCard) =>
     },
   ];
 
-// A fixed 60-card deck for trying the play test without a card database.
-const buildSampleDeck = (): CardRef[] =>
-  sampleCards.flatMap((card) => {
+const refsOf = (cards: SampleCard[]): CardRef[] =>
+  cards.flatMap((card) => {
     const { id, name, typeLine, power, toughness, layout, copies } = card;
     const ref: CardRef = {
       id,
@@ -144,6 +178,13 @@ const buildSampleDeck = (): CardRef[] =>
     };
     return Array.from({ length: copies }, () => ref);
   });
+
+// A fixed 60-card deck for trying the play test without a card database.
+const buildSampleDeck = (): CardRef[] =>
+  refsOf(sampleCards.filter((card) => !card.side));
+
+export const buildSampleSideboard = (): CardRef[] =>
+  refsOf(sampleCards.filter((card) => card.side));
 
 // Lets library search work on the sample deck without a card database.
 export const sampleCardFacts = (id: string): CardFacts | undefined => {

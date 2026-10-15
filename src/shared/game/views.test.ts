@@ -82,6 +82,7 @@ describe('publicView', () => {
         'playerId',
         'revealed',
         'seq',
+        'sideboardCount',
         'turn',
         'zones',
       ].sort()

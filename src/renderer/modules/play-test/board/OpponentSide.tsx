@@ -23,6 +23,7 @@ import { shownCard } from '../common/shownCard';
 import { hasCommanders } from './commanders';
 import { CommanderDamageTaken } from './CommanderTracker';
 import CommandZone from './CommandZone';
+import SideboardCount from './SideboardCount';
 import {
   fieldBounds,
   FULL_PANEL_WIDTH,
@@ -526,6 +527,10 @@ const OpponentSide = ({
                   ))}
                 </div>
               )}
+              <SideboardCount
+                count={view.sideboardCount}
+                testId="opponent-sideboard-count"
+              />
               {!pinCommand && hasCommanders(view) && (
                 <CommandZone
                   view={view}

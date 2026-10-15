@@ -286,7 +286,10 @@ describe('parsePlayerAction', () => {
     ['a string count', { type: 'draw', playerId: 'p1', count: '1' }],
     ['an empty instanceId', { type: 'tap', instanceId: '' }],
     ['a numeric instanceId', { type: 'tap', instanceId: 3 }],
-    ['an unknown zone', { type: 'moveCard', instanceId: 'a', to: 'sideboard' }],
+    [
+      'an unknown zone',
+      { type: 'moveCard', instanceId: 'a', to: 'maybeboard' },
+    ],
     [
       'a negative index',
       { type: 'moveCard', instanceId: 'a', to: 'library', index: -1 },

@@ -249,6 +249,22 @@ describe('Board opponent row', () => {
   });
 });
 
+describe('Board sideboard', () => {
+  it('shows only a count of your sideboard, when you have one', async () => {
+    renderBoard(defaultSettings, { ...view, sideboardCount: 3 });
+    await act(async () => {});
+    expect(screen.getByTestId('sideboard-count')).toHaveTextContent(
+      'Sideboard 3'
+    );
+  });
+
+  it('shows nothing without a sideboard', async () => {
+    renderBoard(defaultSettings, { ...view, sideboardCount: 0 });
+    await act(async () => {});
+    expect(screen.queryByTestId('sideboard-count')).toBeNull();
+  });
+});
+
 describe('Board library activity', () => {
   it('shows no badges while nobody is in their library', async () => {
     renderBoard(defaultSettings);

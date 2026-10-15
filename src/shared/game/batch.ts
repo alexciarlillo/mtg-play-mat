@@ -81,7 +81,9 @@ const moveCards = (
   if (
     ids.length === 0 ||
     !distinct(ids) ||
-    !ids.every((id) => holds(state, player, id))
+    !ids.every((id) => holds(state, player, id)) ||
+    (to === 'sideboard' &&
+      ids.some((id) => !getPlayer(state, state.cards[id].owner)))
   ) {
     return state;
   }

@@ -20,7 +20,7 @@ import type {
 // which card it is (a face-down permanent in the public view).
 export type CardView = Omit<CardInstance, 'ref'> & { ref: CardRef | null };
 
-export type PublicZoneId = Exclude<ZoneId, 'library' | 'hand'>;
+export type PublicZoneId = Exclude<ZoneId, 'library' | 'hand' | 'sideboard'>;
 
 // Peers refuse a view showing more, so nothing may reveal more at once.
 export const MAX_REVEALED_CARDS = 100;
@@ -50,6 +50,9 @@ export interface PublicView {
   zones: Record<PublicZoneId, CardView[]>;
   handCount: number;
   libraryCount: number;
+  // Optional, unlike the other counts: older builds don't send it, and
+  // its zone id must never reach them.
+  sideboardCount?: number;
   // Commander damage taken, and any stand-in opponents; both public.
   commanderDamage: CommanderDamage[];
   dummies: DummyOpponent[];
@@ -70,6 +73,8 @@ export interface PublicView {
 // What the player themselves may see: the public view plus their hand.
 export interface PrivateView extends PublicView {
   hand: CardView[];
+  // Optional so a view built without it still reads as no sideboard.
+  sideboard?: CardView[];
   // The player's own known cards at either end of their library. Added
   // by main, which keeps that knowledge outside the game.
   known?: KnownCards;
@@ -184,6 +189,7 @@ export const publicView = (
     zones: zoneViews(state, player, true),
     handCount: player.zones.hand.length,
     libraryCount: player.zones.library.length,
+    sideboardCount: player.zones.sideboard.length,
     commanderDamage: copyDamage(player.commanderDamage),
     dummies: (player.dummies ?? []).map((dummy) => ({
       ...dummy,
@@ -209,6 +215,7 @@ export const privateView = (
     // The owner still sees the fronts of their face-down permanents.
     zones: zoneViews(state, player, false),
     hand: viewCards(state, player.zones.hand, false),
+    sideboard: viewCards(state, player.zones.sideboard, false),
   };
 };
 

@@ -6,6 +6,7 @@ import type {
   DummyOpponent,
   GameState,
   InstanceId,
+  NewGameAction,
   PlayerId,
   PlayerState,
   ZoneId,
@@ -50,9 +51,16 @@ export const withCommanderRules = (rules: Rules): Rules => ({
   },
 });
 
-// A new game's command zone holds exactly the players' commanders.
-export const markCommanders = (state: GameState): GameState => {
-  const ids = state.players.flatMap((player) => player.zones.command);
+// A new game's command zone starts with the players' commanders, then
+// any companion, which is not one.
+export const markCommanders = (
+  state: GameState,
+  action: NewGameAction
+): GameState => {
+  const ids = state.players.flatMap((player) => {
+    const setup = action.players.find((p) => p.id === player.id);
+    return player.zones.command.slice(0, setup?.command?.length ?? 0);
+  });
   if (ids.length === 0) return state;
   const cards = { ...state.cards };
   ids.forEach((id) => {

@@ -52,6 +52,30 @@ const cards: DeckCard[] = [
 ];
 
 describe('exportDeck', () => {
+  it('writes the companion in its own section, which reads back', () => {
+    const lurrus: DeckCard = {
+      printingId: 'l',
+      qty: 1,
+      board: 'companion',
+      printing: printing({ name: 'Lurrus of the Dream-Den', setCode: 'iko' }),
+    };
+    const text = exportDeck([cards[0], lurrus], 'mtga');
+    expect(text).toBe(
+      [
+        'Companion',
+        '1 Lurrus of the Dream-Den (IKO) 263',
+        '',
+        'Deck',
+        '1 Sol Ring (C21) 263',
+        '',
+      ].join('\n')
+    );
+    expect(parseDeckList(text).cards.map((c) => c.board)).toEqual([
+      'companion',
+      'main',
+    ]);
+  });
+
   it('writes MTGA sections with front-face names', () => {
     expect(exportDeck(cards, 'mtga')).toBe(
       [

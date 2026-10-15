@@ -1,5 +1,5 @@
 // @vitest-environment node
-import type { LentCard, ShownToYou } from '@shared/game';
+import type { LentCard, PrivateView, ShownToYou } from '@shared/game';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('electron', () => ({
@@ -585,5 +585,104 @@ describe('PlayTest seen list', () => {
     playTest.notePeers([bob(playTest, [bear])]);
     playTest.forgetSeen();
     expect(playTest.handlers.getSeenList()).toEqual([]);
+  });
+});
+
+describe('PlayTest sideboard and companion', () => {
+  const printing = (id: string, name: string) => ({
+    id,
+    name,
+    typeLine: 'Creature — Cat Nightmare',
+    layout: 'normal',
+    power: '3',
+    toughness: '2',
+    loyalty: null,
+    faces: [],
+  });
+  const printings: Record<string, ReturnType<typeof printing>> = {
+    forest: printing('forest', 'Forest'),
+    lurrus: printing('lurrus', 'Lurrus of the Dream-Den'),
+    priest: printing('priest', 'Containment Priest'),
+  };
+
+  const openDeck = async () => {
+    const playTest = new PlayTest({
+      cardDb: {
+        getCardById: ({ id }: { id: string }) => printings[id],
+      } as never,
+      deckDb: {
+        getDeck: () => ({ name: 'Lurrus', format: 'constructed' }),
+        getDeckCards: () => [
+          { printingId: 'lurrus', qty: 1, board: 'companion' },
+          { printingId: 'forest', qty: 20, board: 'main' },
+          { printingId: 'priest', qty: 2, board: 'side' },
+        ],
+      } as never,
+      playerId: 'p1',
+      playerName: () => 'Alice',
+      handInBoard: () => false,
+    });
+    const log: string[] = [];
+    playTest.onLogEntry((text) => log.push(text));
+    await playTest.handlers.startPlayTest(1);
+    return { playTest, log, ...windowsOf(false) };
+  };
+
+  const names = (playTest: InstanceType<typeof PlayTest>, zone: string) => {
+    const { zones } = playTest.gameState.players[0];
+    return zones[zone as keyof typeof zones].map(
+      (id) => playTest.gameState.cards[id].ref.name
+    );
+  };
+
+  it('starts the companion in command and the rest of the sideboard aside', async () => {
+    const { playTest } = await openDeck();
+    expect(names(playTest, 'command')).toEqual(['Lurrus of the Dream-Den']);
+    const [lurrus] = playTest.gameState.players[0].zones.command;
+    expect(playTest.gameState.cards[lurrus].isCommander).toBeUndefined();
+    expect(names(playTest, 'sideboard')).toEqual([
+      'Containment Priest',
+      'Containment Priest',
+    ]);
+    expect(names(playTest, 'library')).toHaveLength(13);
+    expect(playTest.gameState.players[0].life).toBe(20);
+  });
+
+  it('sends the sideboard to the hand window only, and a count to the board', async () => {
+    const { playTest, hand, board } = await openDeck();
+    const view = (await playTest.handlers.getHandView()) as PrivateView;
+    expect(view.sideboard?.map((card) => card.ref?.name)).toEqual([
+      'Containment Priest',
+      'Containment Priest',
+    ]);
+    expect(playTest.currentPublicView()?.sideboardCount).toBe(2);
+    playTest.handlers.dispatch({
+      type: 'moveCard',
+      instanceId: playTest.gameState.players[0].zones.sideboard[0],
+      to: 'hand',
+    });
+    expect(sentOn(hand, 'handView').at(-1)?.[1].sideboard).toHaveLength(1);
+    expect(sentOn(board, 'handView')).toEqual([]);
+    expect(JSON.stringify(sentOn(board, 'boardView'))).not.toContain(
+      'Containment Priest'
+    );
+  });
+
+  it('logs a wish by count, and a restart brings the sideboard back', async () => {
+    const { playTest, log } = await openDeck();
+    const [priest] = playTest.gameState.players[0].zones.sideboard;
+    playTest.handlers.dispatch({
+      type: 'moveCards',
+      playerId: 'p1',
+      instanceIds: [priest],
+      to: 'hand',
+    });
+    expect(log.at(-1)).toBe('put 1 card from their sideboard into their hand');
+    expect(names(playTest, 'sideboard')).toHaveLength(1);
+
+    playTest.handlers.restartPlayTest();
+    expect(names(playTest, 'sideboard')).toHaveLength(2);
+    expect(names(playTest, 'command')).toEqual(['Lurrus of the Dream-Den']);
+    expect(names(playTest, 'hand')).toHaveLength(7);
   });
 });

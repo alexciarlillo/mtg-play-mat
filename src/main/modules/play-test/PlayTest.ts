@@ -53,7 +53,7 @@ import {
 } from '@shared/game';
 import type { RevealChange } from '@shared/net/protocol';
 import type { RevealTarget } from '@shared/net/revealTargets';
-import type { DeckFormat } from '@shared/types/decks';
+import type { DeckBoard, DeckFormat } from '@shared/types/decks';
 import { isHandCommand, type PlayTestStatus } from '@shared/types/playTest';
 import type { EventPayload } from '@shared/ipc/contract';
 import { app, BrowserWindow, screen, type WebContents } from 'electron';
@@ -66,12 +66,14 @@ import { createWindow, whenLoaded } from '../../windows';
 import { toCardRef } from './cardRef';
 import LibraryActivityTracker from './LibraryActivityTracker';
 import { mayReadHand, mayReadLibrary } from './privateAccess';
-import buildSampleDeck from './sampleDeck';
+import buildSampleDeck, { buildSampleSideboard } from './sampleDeck';
 
 export interface LoadedDeck {
   library: CardRef[];
   command: CardRef[];
   format: DeckFormat;
+  companion?: CardRef[];
+  sideboard?: CardRef[];
 }
 
 interface Deps {
@@ -465,19 +467,19 @@ export default class PlayTest {
     const leader = library.find((ref) => ref.name === 'Colossal Dreadmaw');
     const command = format === 'commander' && leader ? [leader] : [];
     const label = { id: null, name: 'Sample deck' };
-    return this.start({ library, command, format }, seed, label).catch(
-      (err) => {
-        console.error('[PlayTest] failed to open sample deck', err);
-      }
-    );
+    const sideboard = buildSampleSideboard();
+    const deck = { library, command, format, sideboard };
+    return this.start(deck, seed, label).catch((err) => {
+      console.error('[PlayTest] failed to open sample deck', err);
+    });
   };
 
-  // The sideboard stays out of the game; commanders start in the
-  // command zone.
+  // Commanders and the companion start in the command zone; the
+  // sideboard waits outside the game, hidden like the hand.
   private loadDeck = (deckId: number): LoadedDeck => {
-    const refs = (board: 'main' | 'commander') =>
-      this.deckDb
-        .getDeckCards(deckId)
+    const cards = this.deckDb.getDeckCards(deckId);
+    const refs = (board: DeckBoard) =>
+      cards
         .filter((card) => card.board === board)
         .flatMap((card) => {
           const printing = this.cardDb.getCardById({ id: card.printingId });
@@ -488,6 +490,8 @@ export default class PlayTest {
       library: refs('main'),
       command: refs('commander'),
       format: this.deckDb.getDeck(deckId)?.format ?? 'other',
+      companion: refs('companion'),
+      sideboard: refs('side'),
     };
   };
 
@@ -1037,6 +1041,8 @@ export default class PlayTest {
             name: this.playerName(),
             deck: deck.library,
             command: deck.command,
+            companion: deck.companion,
+            sideboard: deck.sideboard,
             life: startingLife(deck.format),
           },
         ],

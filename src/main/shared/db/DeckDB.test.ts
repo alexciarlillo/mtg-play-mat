@@ -72,6 +72,27 @@ describe('deck schema migration', () => {
     expect(db.createDeck({ name: 'New', format: 'other', cards: [] })).toBe(8);
   });
 
+  it('keeps decks, rows and their order when the companion board is added', () => {
+    const old = new DatabaseSync(dbPath);
+    migrate(old, deckMigrations.slice(0, 2));
+    old.exec(`
+      INSERT INTO decks (id, name) VALUES (4, 'Lurrus');
+      INSERT INTO deck_cards (deck_id, printing_id, qty, board) VALUES
+        (4, '${B}', 2, 'side'), (4, '${A}', 4, 'main');
+    `);
+    old.close();
+
+    const db = track(new DeckDB(dbPath));
+    expect(db.getDeckCards(4)).toEqual([
+      { printingId: B, qty: 2, board: 'side' },
+      { printingId: A, qty: 4, board: 'main' },
+    ]);
+    db.editCards(4, { type: 'add', printingId: C, board: 'companion', qty: 1 });
+    expect(db.getDeck(4)?.cardCount).toBe(4);
+    db.deleteDeck(4);
+    expect(db.getDeckCards(4)).toEqual([]);
+  });
+
   it('creates the new schema on a fresh file', () => {
     const db = track(new DeckDB(dbPath));
     expect(db.listDecks()).toEqual([]);

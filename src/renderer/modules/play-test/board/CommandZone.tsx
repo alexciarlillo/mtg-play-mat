@@ -32,6 +32,7 @@ interface Props {
 
 // The command zone with each commander's tax. Clicking a commander here
 // casts it; the tax is a counter the player steps by a cast at a time.
+// Anything else, such as a companion, goes to the hand instead.
 const CommandZone = ({
   view,
   size = 'sm',
@@ -40,7 +41,8 @@ const CommandZone = ({
 }: Props) => {
   const commanders = visibleCommanders(view);
   const others = view.zones.command.filter((card) => !card.isCommander);
-  const cast = (card: CardView) => moveTo(card, 'battlefield');
+  const cast = (card: CardView) =>
+    moveTo(card, card.isCommander ? 'battlefield' : 'hand');
   // A step is one cast, so the shown mana cost moves by two at a time.
   const adjustCasts = (card: CardView, delta: number) =>
     dispatch({
@@ -80,7 +82,10 @@ const CommandZone = ({
                     readOnly
                       ? []
                       : [
-                          { title: 'Cast', action: () => cast(card) },
+                          {
+                            title: card.isCommander ? 'Cast' : 'Put into hand',
+                            action: () => cast(card),
+                          },
                           ...moveMenu(card),
                         ]
                   }

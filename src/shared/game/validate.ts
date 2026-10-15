@@ -14,7 +14,7 @@ import type {
   ZoneId,
 } from './types';
 import { MAX_TOKENS } from './mtg';
-import { phases, zoneIds } from './types';
+import { hiddenZones, phases, zoneIds } from './types';
 import { MAX_REVEALED_CARDS } from './views';
 
 export class InvalidActionError extends Error {
@@ -209,7 +209,7 @@ const parseMoveAll = (input: Fields): PlayerAction => {
   const parsed = typeFilter(input);
   const filter = parsed && Object.keys(parsed).length > 0 ? parsed : undefined;
   // Picking hidden cards by type would tell the table what they are.
-  if (filter && (from === 'hand' || from === 'library')) {
+  if (filter && hiddenZones.includes(from)) {
     return fail('a filter needs a public zone to move from');
   }
   return {

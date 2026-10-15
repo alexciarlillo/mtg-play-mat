@@ -314,6 +314,74 @@ test('a play test uses the main board and puts the commander in command', async 
   ]);
 });
 
+test('a companion deck starts with its companion in command, and wishes work', async () => {
+  const page = await appWindow();
+  await page.bringToFront();
+  await page.getByRole('link', { name: 'Deck Builder' }).first().click();
+  await page.getByRole('button', { name: 'New deck' }).click();
+  await page.getByLabel('Name', { exact: true }).fill('Companion Test');
+  // Arena lists the companion in the sideboard as well; it counts once.
+  await page
+    .getByLabel('Card list')
+    .fill(
+      [
+        'Companion',
+        '1 Baneslayer Angel (M21) 6',
+        '',
+        'Deck',
+        '20 Island (M21) 263',
+        '',
+        'Sideboard',
+        '1 Baneslayer Angel (M21) 6',
+        '2 Containment Priest (M21) 13',
+      ].join('\n')
+    );
+  await page.getByRole('button', { name: 'Check list' }).click();
+  await expect(page.getByTestId('import-report')).toContainText(
+    'Companion: 1 · Main: 20 · Sideboard: 2'
+  );
+  await expect(page.getByTestId('import-report')).toContainText('counted once');
+  await page.getByRole('button', { name: 'Save deck' }).click();
+  await expect(tile(page, 'Companion Test')).toContainText(
+    'Constructed · 20 cards'
+  );
+  await tile(page, 'Companion Test').click();
+  await expect(page.getByTestId('board-companion')).toContainText(
+    'Baneslayer Angel'
+  );
+  await page.getByRole('button', { name: 'Play test' }).click();
+
+  const board = app.windows().find((w) => w.url().includes('board.html'))!;
+  await expect(board.getByTestId('library')).toHaveAttribute(
+    'data-count',
+    '13'
+  );
+  const command = board.getByTestId('command-zone');
+  await expect(
+    command.locator('[data-testid="card"][data-card-name="Baneslayer Angel"]')
+  ).toBeVisible();
+  await expect(command.getByTestId('commander-tax')).toHaveCount(0);
+  await expect(board.getByTestId('life')).toHaveText('20');
+  await expect(board.getByTestId('sideboard-count')).toHaveText('Sideboard 2');
+
+  // The hand is docked on the board here, so its sideboard opens there.
+  await board.getByRole('button', { name: 'Sideboard (2)' }).click();
+  await board
+    .getByTestId('sideboard-browser')
+    .locator('[data-testid="card"][data-card-name="Containment Priest"]')
+    .click();
+  await board.getByRole('button', { name: 'Move 1' }).click();
+  await expect(
+    board
+      .getByTestId('hand')
+      .locator('[data-testid="card"][data-card-name="Containment Priest"]')
+  ).toBeVisible();
+  await expect(board.getByTestId('sideboard-count')).toHaveText('Sideboard 1');
+  await expect(
+    board.getByTestId('table-log').getByTestId('log-entry').last()
+  ).toHaveText(/put 1 card from their sideboard into their hand$/);
+});
+
 test('no renderer console errors', () => {
   expect(errors).toEqual([]);
 });

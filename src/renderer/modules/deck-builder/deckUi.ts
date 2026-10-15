@@ -4,6 +4,7 @@ export const boardLabels: Record<DeckBoard, string> = {
   commander: 'Commander',
   main: 'Main',
   side: 'Sideboard',
+  companion: 'Companion',
 };
 
 export const formatLabels: Record<DeckFormat, string> = {

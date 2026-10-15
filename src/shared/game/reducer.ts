@@ -75,7 +75,7 @@ const reduceAny = (state: GameState, action: GameAction): GameState => {
   if (isControlAction(action)) return reduceControl(state, action, rules);
   if (isBatchAction(action)) return reduceBatch(state, action, rules);
   if (action.type === 'newGame') {
-    return markCommanders(reduceCore(state, action, rules));
+    return markCommanders(reduceCore(state, action, rules), action);
   }
   return reduceCore(state, action, rules);
 };

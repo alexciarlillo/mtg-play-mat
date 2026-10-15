@@ -39,6 +39,7 @@ const emptyZones = (): Record<ZoneId, InstanceId[]> => ({
   graveyard: [],
   exile: [],
   command: [],
+  sideboard: [],
 });
 
 export const getPlayer = (
@@ -173,8 +174,11 @@ const newGame = (state: GameState, action: NewGameAction): GameState => {
     zones: {
       ...emptyZones(),
       library: setup.deck.map((ref) => place(ref, setup.id, 'library')),
-      command: (setup.command ?? []).map((ref) =>
-        place(ref, setup.id, 'command')
+      command: [...(setup.command ?? []), ...(setup.companion ?? [])].map(
+        (ref) => place(ref, setup.id, 'command')
+      ),
+      sideboard: (setup.sideboard ?? []).map((ref) =>
+        place(ref, setup.id, 'sideboard')
       ),
     },
   }));
@@ -234,6 +238,9 @@ export const moveCard = (
 ): GameState => {
   const card = state.cards[instanceId];
   if (!card) return state;
+  // Older builds can't take a card back into a sideboard, so a borrowed
+  // permanent never goes there.
+  if (to === 'sideboard' && !getPlayer(state, card.owner)) return state;
 
   const from = card.zone;
   const removed = updateZone(state, zoneHolder(card), from, (ids) =>

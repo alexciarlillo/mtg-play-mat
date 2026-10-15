@@ -34,7 +34,7 @@ const META_COLUMNS = `d.id, d.name, d.format,
   d.display_printing_id AS displayPrintingId, d.created_at AS createdAt,
   d.updated_at AS updatedAt,
   (SELECT COALESCE(SUM(qty), 0) FROM deck_cards AS c
-    WHERE c.deck_id = d.id AND c.board != 'side') AS cardCount`;
+    WHERE c.deck_id = d.id AND c.board IN ('main', 'commander')) AS cardCount`;
 
 export const MAX_QTY = 999;
 

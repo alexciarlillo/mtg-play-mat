@@ -14,6 +14,7 @@ const frontOnlyLayouts = new Set([
 
 const sections: { board: DeckBoard; title: string }[] = [
   { board: 'commander', title: 'Commander' },
+  { board: 'companion', title: 'Companion' },
   { board: 'main', title: 'Deck' },
   { board: 'side', title: 'Sideboard' },
 ];

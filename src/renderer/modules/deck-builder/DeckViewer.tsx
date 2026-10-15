@@ -47,7 +47,7 @@ const copyText = async (text: string) => {
   }
 };
 
-const boardOrder: DeckBoard[] = ['commander', 'main', 'side'];
+const boardOrder: DeckBoard[] = ['commander', 'companion', 'main', 'side'];
 
 const total = (cards: DeckCard[]) => cards.reduce((n, c) => n + c.qty, 0);
 

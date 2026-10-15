@@ -1524,3 +1524,79 @@ describe('Hand known cards and seen list', () => {
     expect(screen.getByTestId('seen-by-you')).toHaveTextContent('Card 40');
   });
 });
+
+describe('Hand sideboard', () => {
+  const sideCard = (n: number, name: string): CardView => ({
+    ...libraryCard(n, name, 'Instant'),
+    zone: 'sideboard',
+  });
+  const sideboard = [sideCard(30, 'Lightning Bolt'), sideCard(31, 'Duress')];
+
+  const openSideboard = async () => {
+    renderHand(viewOf({ keptHand: true, sideboard, sideboardCount: 2 }));
+    fireEvent.click(screen.getByRole('button', { name: 'Sideboard (2)' }));
+    return screen.findAllByTestId('sideboard-card');
+  };
+
+  it('offers the sideboard only when there is one', () => {
+    renderHand(viewOf({ keptHand: true, sideboard: [] }));
+    expect(
+      screen.queryByRole('button', { name: /Sideboard/ })
+    ).not.toBeInTheDocument();
+  });
+
+  it('fetches picked cards to the hand in one action', async () => {
+    const [bolt] = await openSideboard();
+    fireEvent.click(within(bolt).getByTestId('card'));
+    fireEvent.click(screen.getByRole('button', { name: 'Move 1' }));
+    expect(dispatch).toHaveBeenLastCalledWith({
+      type: 'moveCards',
+      playerId: 'p1',
+      instanceIds: ['p1:31'],
+      to: 'hand',
+    });
+    expect(screen.queryByTestId('sideboard-browser')).not.toBeInTheDocument();
+  });
+
+  it('puts picks on top of the library, or moves one from its menu', async () => {
+    const tiles = await openSideboard();
+    tiles.forEach((tile) => fireEvent.click(within(tile).getByTestId('card')));
+    fireEvent.change(screen.getByLabelText('Destination'), {
+      target: { value: 'top' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Move 2' }));
+    expect(dispatch).toHaveBeenLastCalledWith({
+      type: 'moveCards',
+      playerId: 'p1',
+      instanceIds: ['p1:31', 'p1:30'],
+      to: 'library',
+      index: 0,
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Sideboard (2)' }));
+    const [first] = await screen.findAllByTestId('sideboard-card');
+    fireEvent.contextMenu(within(first).getByTestId('card'));
+    expect(
+      screen.queryByRole('menuitem', { name: 'Move to sideboard' })
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Move to exile' }));
+    expect(dispatch).toHaveBeenLastCalledWith({
+      type: 'moveCard',
+      instanceId: 'p1:31',
+      to: 'exile',
+    });
+  });
+
+  it('puts a hand card into the sideboard from its menu', () => {
+    renderHand(viewOf({ keptHand: true }));
+    fireEvent.contextMenu(cards()[2]);
+    fireEvent.click(
+      screen.getByRole('menuitem', { name: 'Move to sideboard' })
+    );
+    expect(dispatch).toHaveBeenLastCalledWith({
+      type: 'moveCard',
+      instanceId: 'p1:2',
+      to: 'sideboard',
+    });
+  });
+});
