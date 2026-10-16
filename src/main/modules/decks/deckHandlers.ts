@@ -36,6 +36,7 @@ type DeckHandlers = Pick<
   | 'updateDeck'
   | 'editDeckCards'
   | 'deleteDeck'
+  | 'copyDeck'
   | 'searchCardNames'
   | 'listPrintings'
 >;
@@ -153,7 +154,26 @@ const createDeckHandlers = ({
     displayPrintingId: row.displayPrintingId,
     cardCount: row.cardCount,
     updatedAt: row.updatedAt,
+    moxfield:
+      row.source === 'moxfield' && row.moxfieldId
+        ? {
+            publicId: row.moxfieldId,
+            user: row.moxfieldUser ?? '',
+            author: row.moxfieldAuthor ?? '',
+            remoteUpdatedAt: row.moxfieldUpdatedAt ?? '',
+            syncedAt: row.syncedAt ?? '',
+            gone: row.moxfieldGone === 1,
+          }
+        : null,
   });
+
+  // A synced deck is replaced by every re-sync, so edits would be lost.
+  const editable = (v: unknown): number => {
+    const deckId = id(v);
+    return deckDb.getDeck(deckId)?.source === 'moxfield'
+      ? fail('edit of a Moxfield deck; make a local copy')
+      : deckId;
+  };
 
   const listDecks = () => deckDb.listDecks().map(toSummaryRow);
 
@@ -185,11 +205,11 @@ const createDeckHandlers = ({
     createDeck: (deck) => deckDb.createDeck(parseNewDeck(deck)),
     getDeck: (deckId) => getDeck(id(deckId)),
     updateDeck: (deckId, patch) => {
-      deckDb.updateDeck(id(deckId), parsePatch(patch));
+      deckDb.updateDeck(editable(deckId), parsePatch(patch));
       return getDeck(deckId);
     },
     editDeckCards: (deckId, edit) => {
-      deckDb.editCards(id(deckId), parseEdit(edit));
+      deckDb.editCards(editable(deckId), parseEdit(edit));
       return getDeck(deckId);
     },
     deleteDeck: (deckId) => {
@@ -197,6 +217,12 @@ const createDeckHandlers = ({
       deckDb.deleteDeck(deleted);
       deckDeleted?.(deleted);
       return listDecks();
+    },
+    copyDeck: (deckId) => {
+      const source = deckDb.getDeck(id(deckId));
+      if (!source) return fail('id');
+      const name = `${source.name.slice(0, 190)} (copy)`;
+      return deckDb.copyDeck(source.id, name) ?? fail('id');
     },
     searchCardNames: (query) => {
       const q = text(query, 'query', 200);

@@ -1,3 +1,5 @@
+import type { MoxfieldDeckInfo } from '../moxfield';
+
 export const deckFormats = ['commander', 'constructed', 'other'] as const;
 export type DeckFormat = (typeof deckFormats)[number];
 
@@ -33,6 +35,8 @@ export interface DeckSummary {
   // Main plus commander; the sideboard and companion aren't counted.
   cardCount: number;
   updatedAt: string;
+  // Set for a deck synced from Moxfield, which is read-only here.
+  moxfield: MoxfieldDeckInfo | null;
 }
 
 export interface DeckCard {

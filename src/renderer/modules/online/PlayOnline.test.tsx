@@ -18,6 +18,7 @@ const deck = (id: number, name: string): DeckSummary => ({
   displayPrintingId: null,
   cardCount: 60,
   updatedAt: '2026-09-18',
+  moxfield: null,
 });
 
 const closed: PlayTestStatus = {

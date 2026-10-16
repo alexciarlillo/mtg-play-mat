@@ -1,0 +1,278 @@
+{
+  "id": "V5XG3",
+  "name": "Slimefoot Aristocrats",
+  "format": "commander",
+  "visibility": "public",
+  "publicUrl": "https://moxfield.com/decks/gINTeyqvQkaiV4OqHFHLAw",
+  "publicId": "gINTeyqvQkaiV4OqHFHLAw",
+  "version": 0,
+  "createdAtUtc": "2022-08-22T14:44:36.587Z",
+  "lastUpdatedAtUtc": "2022-10-27T15:04:03.913Z",
+  "createdByUser": {
+    "userName": "aciarlillo",
+    "displayName": "aciarlillo",
+    "badges": []
+  },
+  "authors": [
+    {
+      "userName": "aciarlillo",
+      "displayName": "aciarlillo",
+      "badges": []
+    }
+  ],
+  "main": {
+    "id": "YnBGx",
+    "uniqueCardId": "EW89r",
+    "scryfall_id": "e8815cd9-7032-445a-aebc-cfc19bd51ee4",
+    "set": "dom",
+    "set_name": "Dominaria",
+    "name": "Slimefoot, the Stowaway",
+    "cn": "205",
+    "layout": "normal",
+    "type_line": "Legendary Creature — Fungus",
+    "lang": "en",
+    "isToken": false
+  },
+  "boards": {
+    "mainboard": {
+      "count": 21,
+      "cards": {
+        "kywJr": {
+          "quantity": 7,
+          "boardType": "mainboard",
+          "finish": "foil",
+          "isFoil": true,
+          "isAlter": false,
+          "isProxy": false,
+          "card": {
+            "id": "vrPA8",
+            "uniqueCardId": "kywJr",
+            "scryfall_id": "2b86b3a4-981e-497a-b78b-30b2dbc5ea7a",
+            "set": "clb",
+            "set_name": "Commander Legends: Battle for Baldur's Gate",
+            "name": "Forest",
+            "cn": "468",
+            "layout": "normal",
+            "type_line": "Basic Land — Forest",
+            "lang": "en",
+            "isToken": false
+          }
+        },
+        "kOzVw": {
+          "quantity": 10,
+          "boardType": "mainboard",
+          "finish": "foil",
+          "isFoil": true,
+          "isAlter": false,
+          "isProxy": false,
+          "card": {
+            "id": "LKAem",
+            "uniqueCardId": "kOzVw",
+            "scryfall_id": "be87de91-aa10-4ed8-83a2-261b4f57e7db",
+            "set": "vow",
+            "set_name": "Innistrad: Crimson Vow",
+            "name": "Swamp",
+            "cn": "400",
+            "layout": "normal",
+            "type_line": "Basic Land — Swamp",
+            "lang": "en",
+            "isToken": false
+          }
+        },
+        "k9vvg": {
+          "quantity": 1,
+          "boardType": "mainboard",
+          "finish": "nonFoil",
+          "isFoil": false,
+          "isAlter": false,
+          "isProxy": false,
+          "card": {
+            "id": "kOGQ0",
+            "uniqueCardId": "k9vvg",
+            "scryfall_id": "01b186af-8825-4257-80fd-9c1ecdb21414",
+            "set": "c21",
+            "set_name": "Commander 2021",
+            "name": "Arcane Signet",
+            "cn": "234",
+            "layout": "normal",
+            "type_line": "Artifact",
+            "lang": "en",
+            "isToken": false
+          }
+        },
+        "kaN92": {
+          "quantity": 1,
+          "boardType": "mainboard",
+          "finish": "nonFoil",
+          "isFoil": false,
+          "isAlter": false,
+          "isProxy": false,
+          "card": {
+            "id": "433p6",
+            "uniqueCardId": "kaN92",
+            "scryfall_id": "43a32bdf-c430-46a0-9d23-8b8e8468391b",
+            "set": "ncc",
+            "set_name": "New Capenna Commander",
+            "name": "Command Tower",
+            "cn": "395",
+            "layout": "normal",
+            "type_line": "Land",
+            "lang": "en",
+            "isToken": false
+          }
+        },
+        "E1dX3": {
+          "quantity": 1,
+          "boardType": "mainboard",
+          "finish": "nonFoil",
+          "isFoil": false,
+          "isAlter": false,
+          "isProxy": false,
+          "card": {
+            "id": "Yvd5e",
+            "uniqueCardId": "E1dX3",
+            "scryfall_id": "a808868f-aea8-4651-9357-85a4d7b4f290",
+            "set": "eld",
+            "set_name": "Throne of Eldraine",
+            "name": "Syr Konrad, the Grim",
+            "cn": "107",
+            "layout": "normal",
+            "type_line": "Legendary Creature — Human Knight",
+            "lang": "en",
+            "isToken": false
+          }
+        },
+        "Yxl0Q": {
+          "quantity": 1,
+          "boardType": "mainboard",
+          "finish": "nonFoil",
+          "isFoil": false,
+          "isAlter": false,
+          "isProxy": false,
+          "card": {
+            "id": "L3b7K",
+            "uniqueCardId": "Yxl0Q",
+            "scryfall_id": "3fe2e358-4175-4cd6-9aa1-e54898df31f2",
+            "set": "c19",
+            "set_name": "Commander 2019",
+            "name": "Bojuka Bog",
+            "cn": "232",
+            "layout": "normal",
+            "type_line": "Land",
+            "lang": "en",
+            "isToken": false
+          }
+        }
+      }
+    },
+    "sideboard": {
+      "count": 0,
+      "cards": {}
+    },
+    "maybeboard": {
+      "count": 2,
+      "cards": {
+        "k9vXe": {
+          "quantity": 1,
+          "boardType": "maybeboard",
+          "finish": "nonFoil",
+          "isFoil": false,
+          "isAlter": false,
+          "isProxy": false,
+          "card": {
+            "id": "L32D1",
+            "uniqueCardId": "k9vXe",
+            "scryfall_id": "44d60a41-3f5e-4559-b18c-22c0fe15235e",
+            "set": "afc",
+            "set_name": "Forgotten Realms Commander",
+            "name": "Kenrith's Transformation",
+            "cn": "162",
+            "layout": "normal",
+            "type_line": "Enchantment — Aura",
+            "lang": "en",
+            "isToken": false
+          }
+        },
+        "E1dX3": {
+          "quantity": 1,
+          "boardType": "maybeboard",
+          "finish": "nonFoil",
+          "isFoil": false,
+          "isAlter": false,
+          "isProxy": false,
+          "card": {
+            "id": "Yvd5e",
+            "uniqueCardId": "E1dX3",
+            "scryfall_id": "a808868f-aea8-4651-9357-85a4d7b4f290",
+            "set": "eld",
+            "set_name": "Throne of Eldraine",
+            "name": "Syr Konrad, the Grim",
+            "cn": "107",
+            "layout": "normal",
+            "type_line": "Legendary Creature — Human Knight",
+            "lang": "en",
+            "isToken": false
+          }
+        }
+      }
+    },
+    "commanders": {
+      "count": 1,
+      "cards": {
+        "EW89r": {
+          "quantity": 1,
+          "boardType": "commanders",
+          "finish": "nonFoil",
+          "isFoil": false,
+          "isAlter": false,
+          "isProxy": false,
+          "card": {
+            "id": "YnBGx",
+            "uniqueCardId": "EW89r",
+            "scryfall_id": "e8815cd9-7032-445a-aebc-cfc19bd51ee4",
+            "set": "dom",
+            "set_name": "Dominaria",
+            "name": "Slimefoot, the Stowaway",
+            "cn": "205",
+            "layout": "normal",
+            "type_line": "Legendary Creature — Fungus",
+            "lang": "en",
+            "isToken": false
+          }
+        }
+      }
+    },
+    "companions": {
+      "count": 0,
+      "cards": {}
+    },
+    "signatureSpells": {
+      "count": 0,
+      "cards": {}
+    },
+    "attractions": {
+      "count": 0,
+      "cards": {}
+    },
+    "stickers": {
+      "count": 0,
+      "cards": {}
+    },
+    "contraptions": {
+      "count": 0,
+      "cards": {}
+    },
+    "planes": {
+      "count": 0,
+      "cards": {}
+    },
+    "schemes": {
+      "count": 0,
+      "cards": {}
+    },
+    "tokens": {
+      "count": 0,
+      "cards": {}
+    }
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "pageNumber": 1,
+  "pageSize": 50,
+  "totalResults": 10000,
+  "totalPages": 200,
+  "data": [
+    {
+      "id": "gjOXdv",
+      "name": "Amareth 🐉",
+      "hasPrimer": false,
+      "format": "commander",
+      "visibility": "public",
+      "publicUrl": "https://moxfield.com/decks/JfowIXuMgEmWCPp2twu9Eg",
+      "publicId": "JfowIXuMgEmWCPp2twu9Eg",
+      "createdByUser": {
+        "userName": "Kris69",
+        "displayName": "Kris69",
+        "badges": []
+      },
+      "authors": [
+        {
+          "userName": "Kris69",
+          "displayName": "Kris69",
+          "badges": []
+        }
+      ],
+      "createdAtUtc": "2026-10-15T05:14:50.39Z",
+      "lastUpdatedAtUtc": "2026-10-15T23:50:42.273Z",
+      "mainboardCount": 100,
+      "sideboardCount": 0,
+      "maybeboardCount": 0,
+      "commanders": []
+    },
+    {
+      "id": "pobnDB",
+      "name": "Aerid Ramp",
+      "hasPrimer": false,
+      "format": "standard",
+      "visibility": "public",
+      "publicUrl": "https://moxfield.com/decks/DciOn2xsqUm0u_K3mCPPdA",
+      "publicId": "DciOn2xsqUm0u_K3mCPPdA",
+      "createdByUser": {
+        "userName": "SimpleEnuff",
+        "displayName": "Simef",
+        "badges": []
+      },
+      "authors": [
+        {
+          "userName": "SimpleEnuff",
+          "displayName": "Simef",
+          "badges": []
+        }
+      ],
+      "createdAtUtc": "2026-10-15T20:57:48.54Z",
+      "lastUpdatedAtUtc": "2026-10-15T23:50:41.58Z",
+      "mainboardCount": 60,
+      "sideboardCount": 7,
+      "maybeboardCount": 30,
+      "commanders": []
+    }
+  ]
+}

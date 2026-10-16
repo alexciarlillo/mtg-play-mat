@@ -155,6 +155,12 @@ test('window.api is a narrow typed bridge', async () => {
   expect(surface.keys).toEqual(
     [
       'deleteDeck',
+      'copyDeck',
+      'getMoxfieldSync',
+      'syncMoxfield',
+      'cancelMoxfieldSync',
+      'openMoxfieldDeck',
+      'onMoxfieldSync',
       'dispatch',
       'getBoardView',
       'getHandView',

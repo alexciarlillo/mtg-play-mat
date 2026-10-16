@@ -62,4 +62,23 @@ export const deckMigrations: Migration[] = [
   DROP TABLE deck_cards;
   ALTER TABLE deck_cards_v3 RENAME TO deck_cards;
   `,
+  // Decks synced from Moxfield: where each came from, so a re-sync updates
+  // the same deck, and when each user's list was last synced. Existing
+  // decks are local.
+  `
+  ALTER TABLE decks ADD COLUMN source TEXT NOT NULL DEFAULT 'local'
+    CHECK (source IN ('local', 'moxfield'));
+  ALTER TABLE decks ADD COLUMN moxfield_id TEXT;
+  ALTER TABLE decks ADD COLUMN moxfield_user TEXT;
+  ALTER TABLE decks ADD COLUMN moxfield_author TEXT;
+  ALTER TABLE decks ADD COLUMN moxfield_updated_at TEXT;
+  ALTER TABLE decks ADD COLUMN synced_at TEXT;
+  ALTER TABLE decks ADD COLUMN moxfield_gone INTEGER NOT NULL DEFAULT 0;
+  CREATE UNIQUE INDEX decks_moxfield_id ON decks (moxfield_id)
+    WHERE moxfield_id IS NOT NULL;
+  CREATE TABLE moxfield_syncs (
+    user TEXT PRIMARY KEY COLLATE NOCASE,
+    synced_at TEXT NOT NULL
+  );
+  `,
 ];

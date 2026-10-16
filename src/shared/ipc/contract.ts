@@ -14,6 +14,7 @@ import type {
   ShownToYou,
   UndoState,
 } from '../game';
+import type { MoxfieldSyncStatus } from '../moxfield';
 import type { NetCommand, NetReport, NetState } from '../net/lobby';
 import type { RollRequest } from '../net/protocol';
 import type { OpponentState } from '../net/remoteViews';
@@ -67,6 +68,15 @@ export const requests = {
   updateDeck: request<[id: number, patch: DeckPatch], DeckDetail | null>(),
   editDeckCards: request<[id: number, edit: DeckCardEdit], DeckDetail | null>(),
   deleteDeck: request<[id: number], DeckSummary[]>(),
+  // A local, editable deck with the same cards; resolves to its id.
+  copyDeck: request<[id: number], number>(),
+  // Syncs a Moxfield user's public decks (a username or profile link).
+  // Resolves at once; progress and the result arrive as moxfieldSync.
+  getMoxfieldSync: request<[], MoxfieldSyncStatus>(),
+  syncMoxfield: request<[user: string], MoxfieldSyncStatus>(),
+  cancelMoxfieldSync: request<[]>(),
+  // Opens a synced deck's Moxfield page in the browser.
+  openMoxfieldDeck: request<[id: number]>(),
   searchCardNames: request<[query: string], CardNameResult[]>(),
   // Every printing of the same card as the given printing.
   listPrintings: request<[printingId: string], PrintingSummary[]>(),
@@ -195,6 +205,7 @@ export const events = {
   boardView: event<PublicView>(),
   handView: event<PrivateView>(),
   cardDataStatus: event<CardDataStatus>(),
+  moxfieldSync: event<MoxfieldSyncStatus>(),
   netState: event<NetState>(),
   netCommand: event<NetCommand>(),
   opponentView: event<OpponentState>(),

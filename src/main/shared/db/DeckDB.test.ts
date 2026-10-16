@@ -93,6 +93,30 @@ describe('deck schema migration', () => {
     expect(db.getDeckCards(4)).toEqual([]);
   });
 
+  it('keeps existing decks local when sync columns are added', () => {
+    const old = new DatabaseSync(dbPath);
+    migrate(old, deckMigrations.slice(0, 3));
+    old.exec(`
+      INSERT INTO decks (id, name, format) VALUES (5, 'Mine', 'commander');
+      INSERT INTO deck_cards (deck_id, printing_id, qty, board) VALUES
+        (5, '${A}', 1, 'commander');
+    `);
+    old.close();
+
+    const db = track(new DeckDB(dbPath));
+    expect(db.getDeck(5)).toMatchObject({
+      name: 'Mine',
+      source: 'local',
+      moxfieldId: null,
+      moxfieldGone: 0,
+      cardCount: 1,
+    });
+    db.close();
+    const raw = new DatabaseSync(dbPath);
+    expect(userVersion(raw)).toBe(4);
+    raw.close();
+  });
+
   it('creates the new schema on a fresh file', () => {
     const db = track(new DeckDB(dbPath));
     expect(db.listDecks()).toEqual([]);
@@ -189,5 +213,177 @@ describe('DeckDB', () => {
   it('persists across reopening', () => {
     const { id } = make();
     expect(cards(track(new DeckDB(dbPath)), id)).toHaveLength(3);
+  });
+});
+
+describe('Moxfield sync', () => {
+  const deck = (
+    publicId: string,
+    cards: [string, number][],
+    name = publicId
+  ) => ({
+    publicId,
+    name,
+    format: 'commander' as const,
+    author: 'Ann',
+    remoteUpdatedAt: 't1',
+    displayPrintingId: cards[0]?.[0] ?? null,
+    cards: cards.map(([printingId, qty]) => ({
+      printingId,
+      qty,
+      board: 'main' as const,
+    })),
+  });
+
+  const sync = (
+    db: DeckDB,
+    patch: Partial<Parameters<DeckDB['applyMoxfieldSync']>[0]>
+  ) =>
+    db.applyMoxfieldSync({
+      user: 'ann',
+      syncedAt: '2026-10-15T10:00:00.000Z',
+      decks: [],
+      unchanged: [],
+      gone: [],
+      ...patch,
+    });
+
+  it('adds synced decks beside local ones, marked with where they came from', () => {
+    const db = track(new DeckDB(dbPath));
+    const local = db.createDeck({ name: 'Local', format: 'other', cards: [] });
+    const { ids, cardsChanged } = sync(db, {
+      decks: [
+        deck(
+          'x1',
+          [
+            [A, 2],
+            [B, 1],
+          ],
+          'Synced'
+        ),
+      ],
+    });
+    const id = ids.get('x1')!;
+    expect(cardsChanged).toEqual([]);
+    expect(db.getDeck(id)).toMatchObject({
+      name: 'Synced',
+      format: 'commander',
+      source: 'moxfield',
+      moxfieldId: 'x1',
+      moxfieldUser: 'ann',
+      moxfieldAuthor: 'Ann',
+      moxfieldUpdatedAt: 't1',
+      syncedAt: '2026-10-15T10:00:00.000Z',
+      moxfieldGone: 0,
+      displayPrintingId: A,
+      cardCount: 3,
+    });
+    expect(db.getDeck(local)?.source).toBe('local');
+    expect(db.moxfieldDecks('ANN')).toEqual([
+      { id, name: 'Synced', publicId: 'x1', remoteUpdatedAt: 't1' },
+    ]);
+    expect(db.moxfieldDecks('bob')).toEqual([]);
+    expect(db.lastSyncedAt('Ann')).toBe('2026-10-15T10:00:00.000Z');
+    expect(db.lastSyncedAt('bob')).toBeNull();
+  });
+
+  it("remembers each user's last sync, even with no decks", () => {
+    const db = track(new DeckDB(dbPath));
+    sync(db, { user: 'Ann', syncedAt: 'first' });
+    sync(db, {
+      user: 'bob',
+      syncedAt: 'second',
+      decks: [deck('x1', [[A, 1]])],
+    });
+    sync(db, { user: 'ann', syncedAt: 'third' });
+    db.close();
+    const again = track(new DeckDB(dbPath));
+    expect(again.lastSyncedAt('ANN')).toBe('third');
+    expect(again.lastSyncedAt('bob')).toBe('second');
+    expect(again.lastSyncedAt('carol')).toBeNull();
+    expect(again.moxfieldIds()).toEqual(new Set(['x1']));
+  });
+
+  it('updates a deck in place, and says when its cards changed', () => {
+    const db = track(new DeckDB(dbPath));
+    const id = sync(db, { decks: [deck('x1', [[A, 2]])] }).ids.get('x1')!;
+
+    const renamed = {
+      ...deck('x1', [[A, 2]], 'Renamed'),
+      remoteUpdatedAt: 't2',
+    };
+    const same = sync(db, { decks: [renamed] });
+    expect(same.ids.get('x1')).toBe(id);
+    expect(same.cardsChanged).toEqual([]);
+    expect(db.getDeck(id)).toMatchObject({
+      name: 'Renamed',
+      moxfieldUpdatedAt: 't2',
+    });
+
+    const changed = sync(db, {
+      decks: [
+        deck('x1', [
+          [A, 1],
+          [C, 1],
+        ]),
+      ],
+    });
+    expect(changed.cardsChanged).toEqual([id]);
+    expect(db.getDeckCards(id)).toEqual([
+      { printingId: A, qty: 1, board: 'main' },
+      { printingId: C, qty: 1, board: 'main' },
+    ]);
+  });
+
+  it('flags decks gone upstream and clears the flag when they return', () => {
+    const db = track(new DeckDB(dbPath));
+    const id = sync(db, { decks: [deck('x1', [[A, 1]])] }).ids.get('x1')!;
+    sync(db, { gone: ['x1'], syncedAt: 'later' });
+    expect(db.getDeck(id)).toMatchObject({
+      moxfieldGone: 1,
+      syncedAt: '2026-10-15T10:00:00.000Z',
+      cardCount: 1,
+    });
+    sync(db, { unchanged: ['x1'], syncedAt: 'latest' });
+    expect(db.getDeck(id)).toMatchObject({
+      moxfieldGone: 0,
+      syncedAt: 'latest',
+    });
+  });
+
+  it('writes nothing when any part of a sync fails', () => {
+    const db = track(new DeckDB(dbPath));
+    sync(db, { decks: [deck('x1', [[A, 1]])] });
+    expect(() =>
+      sync(db, {
+        gone: ['x1'],
+        decks: [deck('x2', [[A, 1]]), deck('x3', [[A, 0]])],
+      })
+    ).toThrow();
+    expect(db.listDecks().map((d) => [d.moxfieldId, d.moxfieldGone])).toEqual([
+      ['x1', 0],
+    ]);
+  });
+
+  it('copies a deck into a plain local one', () => {
+    const db = track(new DeckDB(dbPath));
+    const id = sync(db, {
+      decks: [
+        deck('x1', [
+          [A, 2],
+          [B, 1],
+        ]),
+      ],
+    }).ids.get('x1')!;
+    const copy = db.copyDeck(id, 'x1 (copy)')!;
+    expect(db.getDeck(copy)).toMatchObject({
+      name: 'x1 (copy)',
+      format: 'commander',
+      source: 'local',
+      moxfieldId: null,
+      displayPrintingId: A,
+    });
+    expect(db.getDeckCards(copy)).toEqual(db.getDeckCards(id));
+    expect(db.copyDeck(999, 'nope')).toBeUndefined();
   });
 });

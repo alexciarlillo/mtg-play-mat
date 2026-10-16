@@ -5,6 +5,7 @@ import {
   type BrowserSort,
 } from './cardQuery/organize';
 import { isMatId } from './mat';
+import { parseMoxfieldUser } from './moxfield';
 
 // App-wide preferences, persisted by main and pushed to every window.
 // Each field pairs its default with a parser, so a new setting is one
@@ -139,6 +140,10 @@ const opponentRowHeight: Parse<number> = (input) =>
 const matId: Parse<string> = (input) =>
   input === '' || isMatId(input) ? (input as string) : undefined;
 
+// Blank, or a username as parseMoxfieldUser reads it.
+const moxfieldUser: Parse<string> = (input) =>
+  input === '' ? '' : (parseMoxfieldUser(input) ?? undefined);
+
 // How a card browser lays out each kind of zone. Only the view is kept;
 // queries and filters start fresh every time a browser opens.
 export const BROWSER_ZONES = [
@@ -232,6 +237,8 @@ const fields = {
   relayUrl: field('', relayUrl),
   relayKey: field('', relayKey),
   zoneBrowser: field<BrowserViews>(defaultBrowserViews, browserViews),
+  // Whose public Moxfield decks to sync.
+  moxfieldUser: field('', moxfieldUser),
 };
 
 type Fields = typeof fields;

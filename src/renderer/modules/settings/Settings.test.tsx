@@ -1,3 +1,4 @@
+import { type MoxfieldSyncStatus, parseMoxfieldUser } from '@shared/moxfield';
 import { defaultSettings, type Settings as Values } from '@shared/settings';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -23,7 +24,26 @@ const updateSettings = vi.fn((patch: Partial<Values>) => {
   return Promise.resolve(saved);
 });
 
+let moxfield: MoxfieldSyncStatus;
+// Like main, keeps only the username from a profile link.
+const syncMoxfield = vi.fn((user: string) =>
+  Promise.resolve({
+    ...moxfield,
+    user: parseMoxfieldUser(user) ?? moxfield.user,
+    running: true,
+  })
+);
+
 beforeEach(() => {
+  moxfield = {
+    user: '',
+    running: false,
+    progress: null,
+    lastSyncedAt: null,
+    result: null,
+    error: null,
+  };
+  syncMoxfield.mockClear();
   saved = { ...defaultSettings, displayName: 'Alice' };
   updateSettings.mockClear();
   Object.assign(window, {
@@ -31,6 +51,10 @@ beforeEach(() => {
       getSettings: () => Promise.resolve(saved),
       onSettingsChanged: () => () => {},
       updateSettings,
+      getMoxfieldSync: () => Promise.resolve(moxfield),
+      onMoxfieldSync: () => () => {},
+      syncMoxfield,
+      cancelMoxfieldSync: vi.fn(() => Promise.resolve()),
     },
   });
 });
@@ -95,5 +119,89 @@ describe('Settings', () => {
       )
     );
     expect(screen.getByLabelText('Relay server')).toHaveValue('');
+  });
+
+  it('syncs Moxfield decks and shows the last result', async () => {
+    moxfield = {
+      ...moxfield,
+      user: 'ann',
+      lastSyncedAt: '2026-10-15T10:00:00.000Z',
+      result: {
+        user: 'ann',
+        finishedAt: '2026-10-15T10:00:00.000Z',
+        counts: { added: 1, updated: 0, unchanged: 2, gone: 1, failed: 1 },
+        complete: false,
+        decks: [
+          {
+            publicId: 'a',
+            name: 'Elves',
+            outcome: 'added',
+            unresolved: [
+              {
+                name: 'Bogus',
+                qty: 2,
+                board: 'main',
+                reason: 'No card named "Bogus"',
+              },
+            ],
+            notes: [
+              '"Lurrus" is listed as the companion and in the sideboard.',
+            ],
+          },
+          {
+            publicId: 'b',
+            name: 'Old',
+            outcome: 'gone',
+            unresolved: [],
+            notes: [],
+          },
+          {
+            publicId: 'c',
+            name: 'Odd',
+            outcome: 'failed',
+            error: 'This deck is no longer public on Moxfield.',
+            unresolved: [],
+            notes: [],
+          },
+          {
+            publicId: 'd',
+            name: 'Same',
+            outcome: 'unchanged',
+            unresolved: [],
+            notes: [],
+          },
+        ],
+      },
+    };
+    saved = { ...saved, moxfieldUser: 'ann' };
+    render(<Settings />);
+    const field = await screen.findByLabelText('Moxfield user');
+    expect(field).toHaveValue('ann');
+    expect(screen.getByTestId('moxfield-status')).toHaveTextContent(
+      'Last synced'
+    );
+    expect(screen.getByTestId('moxfield-result')).toHaveTextContent(
+      '1 added · 0 updated · 2 unchanged · 1 no longer on Moxfield · 1 failed'
+    );
+    expect(screen.getByTestId('moxfield-incomplete')).toHaveTextContent(
+      'no deck was marked as no longer on Moxfield'
+    );
+    const lines = screen.getAllByTestId('moxfield-result-line');
+    expect(lines.map((l) => l.textContent)).toEqual([
+      expect.stringMatching(/without 2 Bogus.*\. "Lurrus" is listed/),
+      expect.stringContaining('Old: no longer public'),
+      expect.stringContaining('Odd: This deck is no longer public'),
+    ]);
+
+    fireEvent.change(field, {
+      target: { value: 'https://moxfield.com/users/bob' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Sync decks' }));
+    await waitFor(() =>
+      expect(syncMoxfield).toHaveBeenCalledWith(
+        'https://moxfield.com/users/bob'
+      )
+    );
+    await waitFor(() => expect(field).toHaveValue('bob'));
   });
 });

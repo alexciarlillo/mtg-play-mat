@@ -19,9 +19,10 @@ import {
 } from '@shared/types/decks';
 import classNames from 'classnames';
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router';
+import { useNavigate, useParams } from 'react-router';
 
 import CardImg from '../../ui/CardImg';
+import MoxfieldBadge from '../moxfield/MoxfieldBadge';
 import CardSearch from './CardSearch';
 import {
   boardLabels,
@@ -56,6 +57,8 @@ const byName = (a: DeckCard, b: DeckCard) =>
 
 interface RowProps {
   card: DeckCard;
+  // A synced deck: shown, never edited.
+  readOnly: boolean;
   isCover: boolean;
   onEdit(edit: DeckCardEdit): void;
   onCover(): void;
@@ -65,6 +68,7 @@ interface RowProps {
 
 const CardRow = ({
   card,
+  readOnly,
   isCover,
   onEdit,
   onCover,
@@ -75,6 +79,28 @@ const CardRow = ({
   const name = printing?.name ?? 'Unknown card';
   const setQty = (value: number) =>
     onEdit({ type: 'setQty', printingId, board, qty: value });
+
+  if (readOnly) {
+    return (
+      <li
+        data-testid="deck-card"
+        data-card-name={name}
+        data-board={board}
+        className="flex items-center gap-2 rounded px-1 py-0.5 text-sm hover:bg-gray-50"
+        onMouseEnter={() => onHover(printing)}
+        onMouseLeave={() => onHover(null)}
+      >
+        <span className="w-8 text-right tabular-nums">{qty}</span>
+        <span className="min-w-0 flex-1 truncate">{name}</span>
+        {printing && (
+          <span className="flex items-center gap-1 px-1 text-xs text-gray-600">
+            <i className={`ss ss-${printing.keyruneCode.toLowerCase()}`} />
+            {printing.setCode.toUpperCase()} #{printing.collectorNumber}
+          </span>
+        )}
+      </li>
+    );
+  }
 
   return (
     <li
@@ -178,6 +204,56 @@ const CardRow = ({
   );
 };
 
+// Where a synced deck came from, and what can be done with it here.
+const MoxfieldPanel = ({ deck }: { deck: DeckDetail }) => {
+  const navigate = useNavigate();
+  const info = deck.moxfield!;
+
+  const copy = () => {
+    window.api.copyDeck(deck.id).then(
+      (copyId) => void navigate(`/decks/${copyId}`),
+      (err: unknown) => console.error('[decks] could not copy', err)
+    );
+  };
+
+  const remove = () => {
+    window.api.deleteDeck(deck.id).then(
+      () => void navigate('/decks'),
+      (err: unknown) => console.error('[decks] could not remove', err)
+    );
+  };
+
+  return (
+    <div
+      data-testid="moxfield-panel"
+      className="mt-3 flex flex-wrap items-center gap-3 rounded-md bg-violet-50 px-3 py-2 text-sm text-gray-700"
+    >
+      <MoxfieldBadge info={info} />
+      <span className="min-w-48 flex-1">
+        By {info.author}, synced {new Date(info.syncedAt).toLocaleString()}.{' '}
+        {info.gone
+          ? 'It is no longer among their public decks, so it will not be updated again.'
+          : 'Read-only: the next sync replaces it. Make a local copy to edit it.'}
+      </span>
+      <button
+        type="button"
+        className={buttonClass}
+        onClick={() => void window.api.openMoxfieldDeck(deck.id)}
+      >
+        Open on Moxfield
+      </button>
+      <button type="button" className={buttonClass} onClick={copy}>
+        Make a local copy
+      </button>
+      {info.gone && (
+        <button type="button" className={buttonClass} onClick={remove}>
+          Remove
+        </button>
+      )}
+    </div>
+  );
+};
+
 const DeckViewer = () => {
   const { deckId } = useParams();
   const id = Number(deckId);
@@ -223,6 +299,7 @@ const DeckViewer = () => {
     setTimeout(() => setCopied(null), 1500);
   };
 
+  const readOnly = deck.moxfield !== null;
   const cover = deck.displayPrintingId;
   const preview = hovered?.id ?? cover ?? undefined;
 
@@ -230,36 +307,54 @@ const DeckViewer = () => {
     <div className="flex h-full w-full gap-6">
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-end gap-3 border-b border-gray-200 pb-3">
-          <div className="min-w-64 flex-1">
-            <label htmlFor="deck-title" className="text-xs text-gray-500">
-              Deck name
-            </label>
-            <input
-              id="deck-title"
-              className={`${inputClass} text-lg font-semibold`}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              onBlur={rename}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') e.currentTarget.blur();
-              }}
-            />
-          </div>
-          <label className="text-xs text-gray-500">
-            Format
-            <select
-              aria-label="Format"
-              className="block rounded-md border border-gray-300 px-1 py-1 text-sm text-gray-900"
-              value={deck.format}
-              onChange={(e) => update({ format: e.target.value as DeckFormat })}
-            >
-              {deckFormats.map((f) => (
-                <option key={f} value={f}>
-                  {formatLabels[f]}
-                </option>
-              ))}
-            </select>
-          </label>
+          {readOnly ? (
+            <div className="min-w-64 flex-1">
+              <h2
+                data-testid="deck-title"
+                className="truncate text-lg font-semibold text-gray-900"
+              >
+                {deck.name}
+              </h2>
+              <p data-testid="deck-format" className="text-sm text-gray-600">
+                {formatLabels[deck.format]}
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="min-w-64 flex-1">
+                <label htmlFor="deck-title" className="text-xs text-gray-500">
+                  Deck name
+                </label>
+                <input
+                  id="deck-title"
+                  className={`${inputClass} text-lg font-semibold`}
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  onBlur={rename}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') e.currentTarget.blur();
+                  }}
+                />
+              </div>
+              <label className="text-xs text-gray-500">
+                Format
+                <select
+                  aria-label="Format"
+                  className="block rounded-md border border-gray-300 px-1 py-1 text-sm text-gray-900"
+                  value={deck.format}
+                  onChange={(e) =>
+                    update({ format: e.target.value as DeckFormat })
+                  }
+                >
+                  {deckFormats.map((f) => (
+                    <option key={f} value={f}>
+                      {formatLabels[f]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </>
+          )}
           <span data-testid="deck-count" className="pb-1 text-sm text-gray-600">
             {deck.cardCount} cards
           </span>
@@ -286,34 +381,38 @@ const DeckViewer = () => {
           </button>
         </div>
 
-        <div className="mt-3 flex items-center gap-2">
-          <div className="flex-1">
-            <CardSearch
-              label="Add card"
-              placeholder="Add a card by name…"
-              onPick={(card) =>
-                edit({
-                  type: 'add',
-                  printingId: card.defaultPrinting.id,
-                  board: addBoard,
-                  qty: 1,
-                })
-              }
-            />
+        {readOnly ? (
+          <MoxfieldPanel deck={deck} />
+        ) : (
+          <div className="mt-3 flex items-center gap-2">
+            <div className="flex-1">
+              <CardSearch
+                label="Add card"
+                placeholder="Add a card by name…"
+                onPick={(card) =>
+                  edit({
+                    type: 'add',
+                    printingId: card.defaultPrinting.id,
+                    board: addBoard,
+                    qty: 1,
+                  })
+                }
+              />
+            </div>
+            <select
+              aria-label="Add to board"
+              className="rounded-md border border-gray-300 px-1 py-1 text-sm"
+              value={addBoard}
+              onChange={(e) => setAddBoard(e.target.value as DeckBoard)}
+            >
+              {deckBoards.map((b) => (
+                <option key={b} value={b}>
+                  to {boardLabels[b]}
+                </option>
+              ))}
+            </select>
           </div>
-          <select
-            aria-label="Add to board"
-            className="rounded-md border border-gray-300 px-1 py-1 text-sm"
-            value={addBoard}
-            onChange={(e) => setAddBoard(e.target.value as DeckBoard)}
-          >
-            {deckBoards.map((b) => (
-              <option key={b} value={b}>
-                to {boardLabels[b]}
-              </option>
-            ))}
-          </select>
-        </div>
+        )}
 
         {boardOrder.map((board) => {
           const cards = deck.cards.filter((c) => c.board === board);
@@ -343,6 +442,7 @@ const DeckViewer = () => {
                           <CardRow
                             key={`${card.board}:${card.printingId}`}
                             card={card}
+                            readOnly={readOnly}
                             isCover={card.printingId === cover}
                             onEdit={edit}
                             onCover={() =>

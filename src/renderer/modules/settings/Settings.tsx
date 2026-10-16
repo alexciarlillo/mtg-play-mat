@@ -9,6 +9,7 @@ import {
 import { type FormEvent, type ReactNode, useState } from 'react';
 
 import useSettings from '../../hooks/useSettings';
+import MoxfieldSyncPanel from '../moxfield/MoxfieldSyncPanel';
 import { cardBackUrl } from '../../ui/cardImages';
 
 const secondary =
@@ -327,6 +328,17 @@ const Settings = () => {
         />
         <p className="text-sm text-gray-600">
           Other players see this name when you play online.
+        </p>
+      </Section>
+
+      <Section title="Moxfield decks">
+        <MoxfieldSyncPanel savedUser={settings.moxfieldUser} />
+        <p className="text-sm text-gray-600">
+          Copies a Moxfield user&apos;s public decks into your deck list, and
+          updates them each time you sync. Private and unlisted decks can&apos;t
+          be reached. Synced decks are read-only here: make a local copy of one
+          to edit it. This uses Moxfield&apos;s unofficial API, which may change
+          or stop working without notice.
         </p>
       </Section>
 

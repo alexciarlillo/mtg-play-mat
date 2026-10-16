@@ -129,7 +129,12 @@ const promoteCommander = (cards: ParsedCardLine[], notes: string[]) => {
 // Arena lists the companion in its own section and again in the
 // sideboard, where it really lives; one sideboard copy per companion is
 // the same card. The note says so, in case it was a real second copy.
-const dropListedCompanions = (cards: ParsedCardLine[], notes: string[]) => {
+export const dropListedCompanions = <
+  T extends { board: DeckBoard; name: string; qty: number; line?: number },
+>(
+  cards: T[],
+  notes: string[]
+) => {
   cards
     .filter((card) => card.board === 'companion')
     .forEach((companion) => {
@@ -140,9 +145,10 @@ const dropListedCompanions = (cards: ParsedCardLine[], notes: string[]) => {
       if (!side) return;
       side.qty -= 1;
       if (side.qty === 0) cards.splice(cards.indexOf(side), 1);
+      const where = side.line === undefined ? '' : ` (line ${side.line})`;
       notes.push(
         `"${companion.name}" is listed as the companion and in the ` +
-          `sideboard (line ${side.line}), so it was counted once. Add it ` +
+          `sideboard${where}, so it was counted once. Add it ` +
           'to the sideboard again if that was a second copy.'
       );
     });

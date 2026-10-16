@@ -34,6 +34,7 @@ describe('parseSettings', () => {
       relayUrl: '',
       relayKey: '',
       zoneBrowser: defaultBrowserViews,
+      moxfieldUser: '',
     });
   });
 

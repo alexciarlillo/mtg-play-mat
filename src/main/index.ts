@@ -9,6 +9,7 @@ import {
   BrowserWindow,
   dialog,
   nativeImage,
+  net,
   protocol,
   shell,
 } from 'electron';
@@ -30,6 +31,11 @@ import createDebugHandlers from './modules/debug/debugHandlers';
 import createMatHandlers from './modules/mat/matHandlers';
 import createCollectionHandlers from './modules/collection/collectionHandlers';
 import createDeckHandlers from './modules/decks/deckHandlers';
+import {
+  createMoxfieldClient,
+  MOXFIELD_API_URL,
+} from './moxfield/moxfieldClient';
+import MoxfieldSync from './modules/moxfield/MoxfieldSync';
 import MatStore, { type TableImageKind } from './mats/MatStore';
 import { createMatImageHandler, matSchemePrivileges } from './mats/matProtocol';
 import type Netplay from './modules/netplay/Netplay';
@@ -108,6 +114,12 @@ if (testHooksEnabled && process.platform === 'darwin') {
 // Tests point this at a local fixture server. Without one, tests skip the
 // launch check so they never pull the real ~80 MB bulk file.
 const bulkDataUrlOverride = process.env.MTG_PLAY_MAT_BULK_DATA_URL;
+
+// Tests point Moxfield at a local fake too; without one they get no
+// Moxfield at all. Outside tests the variable is ignored.
+const moxfieldUrlOverride = testHooksEnabled
+  ? (process.env.MTG_PLAY_MAT_MOXFIELD_URL ?? 'http://127.0.0.1:9')
+  : undefined;
 
 // Fake opponents are refused once a session is live, so the menu greys
 // out rather than offering a click it cannot honour.
@@ -252,6 +264,36 @@ const start = (onDeepLink: ReturnType<typeof watchDeepLinks>) => {
     },
   });
 
+  // Discards anything kept for a deck's old card list.
+  const forgetDeckSave = (deckId: number) => {
+    playTest.forgetSave(deckSaveKey(deckId));
+    saves.remove(deckSaveKey(deckId));
+  };
+
+  const openExternal = async (url: string) => {
+    if (testHooksEnabled) openedUrls.push(url);
+    else await shell.openExternal(url);
+  };
+
+  const moxfield = new MoxfieldSync({
+    // Chromium's network stack: Moxfield's Cloudflare turns away Node's.
+    client: createMoxfieldClient({
+      fetch: (url, init) => net.fetch(url, init),
+      baseUrl: moxfieldUrlOverride ?? MOXFIELD_API_URL,
+    }),
+    cardDb,
+    deckDb,
+    settings,
+    onStatus: (status) => {
+      BrowserWindow.getAllWindows().forEach((window) => {
+        sendEvent(window, 'moxfieldSync', status);
+      });
+    },
+    cardsChanged: forgetDeckSave,
+    openExternal,
+    ...(testHooksEnabled && { pauseMs: 20 }),
+  });
+
   protocol.handle(MAT_SCHEME, createMatImageHandler(mats));
 
   protocol.handle(
@@ -275,11 +317,9 @@ const start = (onDeepLink: ReturnType<typeof watchDeepLinks>) => {
       ...createDeckHandlers({
         cardDb,
         deckDb,
-        deckDeleted: (deckId) => {
-          playTest.forgetSave(deckSaveKey(deckId));
-          saves.remove(deckSaveKey(deckId));
-        },
+        deckDeleted: forgetDeckSave,
       }),
+      ...moxfield.handlers,
       ...createCollectionHandlers({ cardDb }),
       ...createCardDataHandlers({ cardData }),
       ...playTest.handlers,
@@ -299,10 +339,7 @@ const start = (onDeepLink: ReturnType<typeof watchDeepLinks>) => {
           }
           return pickMatFile(appWindow, kind);
         },
-        openExternal: async (url) => {
-          if (testHooksEnabled) openedUrls.push(url);
-          else await shell.openExternal(url);
-        },
+        openExternal,
       }),
     },
     {
@@ -310,6 +347,9 @@ const start = (onDeepLink: ReturnType<typeof watchDeepLinks>) => {
       ...playTest.guards,
       // The hidden net window has no reason to change preferences.
       updateSettings: (sender) => !online.netWindow.isNetSender(sender),
+      syncMoxfield: (sender) => !online.netWindow.isNetSender(sender),
+      cancelMoxfieldSync: (sender) => !online.netWindow.isNetSender(sender),
+      openMoxfieldDeck: (sender) => !online.netWindow.isNetSender(sender),
     }
   );
 

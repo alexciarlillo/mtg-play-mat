@@ -2,7 +2,7 @@
 
 A desktop playtest table for Magic: The Gathering decks. It opens three windows:
 
-- **App**: deck list, deck import, and a collection browser.
+- **App**: deck list, deck import, Moxfield sync, and settings.
 - **Board**: the battlefield, library, and graveyard. Screenshare this one.
 - **Hand**: a small frameless window with your hand. It stays private.
 
@@ -38,7 +38,9 @@ Everything lives in `<userData>`:
 - `db/cards.sqlite`: printings, sets, and metadata. It's fully rebuildable; delete
   it to force a fresh download.
 - `db/Decks.sqlite`: your decks. Each card row is a Scryfall printing id, a
-  quantity, and a board (main, side, or commander).
+  quantity, and a board (main, side, commander, or companion). A deck synced from
+  Moxfield also keeps its Moxfield id, author and update time. A database upgraded
+  by this version won't open in an older one, which then shows no decks.
 - `image-cache/`: card images. Pages load images as
   `card://<scryfallId>/<face>/<size>`. The main process serves those from this cache,
   fetching from Scryfall's CDN only on a miss, so an image seen once works offline.
@@ -78,6 +80,40 @@ log names a card only when it lands somewhere public. A new game or restart deal
 sideboard out again, and mulligans never touch it. Decks imported before companions had
 a board of their own keep the companion in the sideboard: move it to the Companion board
 in the deck editor, or import the list again.
+
+### Moxfield sync
+
+**Settings → Moxfield decks** takes a Moxfield username (or a link to the profile) and
+**Sync decks** copies that user's public decks into the deck list. Private and unlisted
+decks can't be reached. Each sync lists the user's decks and fetches only those that are
+new or changed on Moxfield since the last one, a few hundred milliseconds apart; it can be
+cancelled. Commander, companion, main and sideboard come across, and an Oathbreaker
+deck's signature spell goes to the commander board, so it starts in the command zone and
+pays tax; the maybeboard, tokens and other boards don't. As with a pasted Arena list, a
+companion also listed in the sideboard is counted once, with a note. Cards resolve by Scryfall id, then like a pasted line (set and
+number, then name), and the result lists any card that didn't resolve along with how
+many decks were added, updated, unchanged, no longer on Moxfield, or failed.
+
+Synced decks carry a **Moxfield** badge, and the deck list filters **All / Local /
+Moxfield**. They are read-only, because the next sync replaces them: **Make a local copy**
+gives an ordinary deck to edit. **Open on Moxfield** opens the deck's page in the browser.
+A deck that's no longer among the user's public decks is kept and marked **No longer on
+Moxfield**, never deleted; **Remove** it yourself if you don't want it. A deck still on
+Moxfield can't be removed, since the next sync would bring it back. If the user's deck
+list changes on Moxfield while a sync reads it, that sync marks nothing as gone and says
+so; the next one checks again. When a sync changes a deck's cards,
+its saved game is discarded, since it was played with the old list.
+
+Nothing is changed unless the whole sync succeeds: if Moxfield can't be reached, refuses
+the request, or sends something unexpected, the sync stops with a message and your decks
+stay as they were. A single deck that fails is reported and the rest still sync.
+
+**This uses Moxfield's unofficial API.** Moxfield doesn't publish or support it, so it
+may change, rate-limit or block the app at any time, and the sync will then stop working
+until the app is updated. Requests go from the main process through Electron's network
+stack (Moxfield's Cloudflare turns away plain Node and curl requests). Every response is
+size-capped and checked field by field, and only `moxfield.com` deck pages are ever
+opened in the browser.
 
 ## Online play
 
@@ -125,6 +161,9 @@ virtual display such as `xvfb-run` on Linux). It sets `MTG_PLAY_MAT_TEST_HOOKS=1
 which lets it open the sample play test from the main process and skips the launch
 card data check. The card data test sets `MTG_PLAY_MAT_BULK_DATA_URL` to a local
 server that serves a small fixture bulk file, so no test downloads the real one.
+Likewise `MTG_PLAY_MAT_MOXFIELD_URL` points Moxfield sync at a local fake; it is only
+read with test hooks enabled, and with test hooks enabled but no fake set, the app can't
+reach Moxfield at all.
 
 ## IPC
 

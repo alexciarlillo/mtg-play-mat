@@ -1,0 +1,278 @@
+{
+  "id": "Vb2Xx",
+  "name": "Satoru Home Wrecker",
+  "format": "commander",
+  "visibility": "public",
+  "publicUrl": "https://moxfield.com/decks/PtCaUR1it0O6-aGZP0Gx-A",
+  "publicId": "PtCaUR1it0O6-aGZP0Gx-A",
+  "version": 0,
+  "createdAtUtc": "2022-08-25T17:05:38.523Z",
+  "lastUpdatedAtUtc": "2023-03-13T00:56:39.627Z",
+  "createdByUser": {
+    "userName": "aciarlillo",
+    "displayName": "aciarlillo",
+    "badges": []
+  },
+  "authors": [
+    {
+      "userName": "aciarlillo",
+      "displayName": "aciarlillo",
+      "badges": []
+    }
+  ],
+  "main": {
+    "id": "G4372",
+    "uniqueCardId": "ky2Q0",
+    "scryfall_id": "983abbf8-4966-47ae-9e72-72f400a49f3b",
+    "set": "pneo",
+    "set_name": "Kamigawa: Neon Dynasty Promos",
+    "name": "Thousand-Faced Shadow",
+    "cn": "86p",
+    "layout": "normal",
+    "type_line": "Creature — Human Ninja",
+    "lang": "en",
+    "isToken": false
+  },
+  "boards": {
+    "mainboard": {
+      "count": 18,
+      "cards": {
+        "kaN49": {
+          "quantity": 7,
+          "boardType": "mainboard",
+          "finish": "foil",
+          "isFoil": true,
+          "isAlter": false,
+          "isProxy": false,
+          "card": {
+            "id": "O9x74",
+            "uniqueCardId": "kaN49",
+            "scryfall_id": "c9c9ea23-93c5-4aae-9786-3b3c03a07778",
+            "set": "clb",
+            "set_name": "Commander Legends: Battle for Baldur's Gate",
+            "name": "Island",
+            "cn": "458",
+            "layout": "normal",
+            "type_line": "Basic Land — Island",
+            "lang": "en",
+            "isToken": false
+          }
+        },
+        "kOzVw": {
+          "quantity": 7,
+          "boardType": "mainboard",
+          "finish": "foil",
+          "isFoil": true,
+          "isAlter": false,
+          "isProxy": false,
+          "card": {
+            "id": "EbQz0",
+            "uniqueCardId": "kOzVw",
+            "scryfall_id": "30b3d647-3546-4ade-b395-f2370750a7a6",
+            "set": "m21",
+            "set_name": "Core Set 2021",
+            "name": "Swamp",
+            "cn": "266",
+            "layout": "normal",
+            "type_line": "Basic Land — Swamp",
+            "lang": "en",
+            "isToken": false
+          }
+        },
+        "LK66K": {
+          "quantity": 1,
+          "boardType": "mainboard",
+          "finish": "nonFoil",
+          "isFoil": false,
+          "isAlter": false,
+          "isProxy": false,
+          "card": {
+            "id": "LKe3N",
+            "uniqueCardId": "LK66K",
+            "scryfall_id": "e3d4fd29-dab5-481f-94c9-eeb70f3c29dd",
+            "set": "thb",
+            "set_name": "Theros Beyond Death",
+            "name": "Temple of Deceit",
+            "cn": "245",
+            "layout": "normal",
+            "type_line": "Land",
+            "lang": "en",
+            "isToken": false
+          }
+        },
+        "k9vvg": {
+          "quantity": 1,
+          "boardType": "mainboard",
+          "finish": "nonFoil",
+          "isFoil": false,
+          "isAlter": false,
+          "isProxy": false,
+          "card": {
+            "id": "kAvK0",
+            "uniqueCardId": "k9vvg",
+            "scryfall_id": "ee40458c-7f3a-4fa6-976f-be1f7a336fdc",
+            "set": "cmr",
+            "set_name": "Commander Legends",
+            "name": "Arcane Signet",
+            "cn": "297",
+            "layout": "normal",
+            "type_line": "Artifact",
+            "lang": "en",
+            "isToken": false
+          }
+        },
+        "kaN92": {
+          "quantity": 1,
+          "boardType": "mainboard",
+          "finish": "nonFoil",
+          "isFoil": false,
+          "isAlter": false,
+          "isProxy": false,
+          "card": {
+            "id": "EJOmp",
+            "uniqueCardId": "kaN92",
+            "scryfall_id": "c328d8ac-97df-4240-ac38-7cab363c5da1",
+            "set": "c19",
+            "set_name": "Commander 2019",
+            "name": "Command Tower",
+            "cn": "237",
+            "layout": "normal",
+            "type_line": "Land",
+            "lang": "en",
+            "isToken": false
+          }
+        },
+        "LD5lN": {
+          "quantity": 1,
+          "boardType": "mainboard",
+          "finish": "nonFoil",
+          "isFoil": false,
+          "isAlter": false,
+          "isProxy": false,
+          "card": {
+            "id": "kqejz",
+            "uniqueCardId": "LD5lN",
+            "scryfall_id": "415a3104-90e6-4235-b67f-69337c7fe714",
+            "set": "all",
+            "set_name": "Alliances",
+            "name": "Arcane Denial",
+            "cn": "22b",
+            "layout": "normal",
+            "type_line": "Instant",
+            "lang": "en",
+            "isToken": false
+          }
+        }
+      }
+    },
+    "sideboard": {
+      "count": 0,
+      "cards": {}
+    },
+    "maybeboard": {
+      "count": 2,
+      "cards": {
+        "LD5ob": {
+          "quantity": 1,
+          "boardType": "maybeboard",
+          "finish": "nonFoil",
+          "isFoil": false,
+          "isAlter": false,
+          "isProxy": false,
+          "card": {
+            "id": "YoDNW",
+            "uniqueCardId": "LD5ob",
+            "scryfall_id": "f55fe038-c903-4d92-b689-72dd6d041a91",
+            "set": "eld",
+            "set_name": "Throne of Eldraine",
+            "name": "Gingerbrute",
+            "cn": "219",
+            "layout": "normal",
+            "type_line": "Artifact Creature — Food Golem",
+            "lang": "en",
+            "isToken": false
+          }
+        },
+        "Lmy1z": {
+          "quantity": 1,
+          "boardType": "maybeboard",
+          "finish": "nonFoil",
+          "isFoil": false,
+          "isAlter": false,
+          "isProxy": false,
+          "card": {
+            "id": "LKvyo",
+            "uniqueCardId": "Lmy1z",
+            "scryfall_id": "037b396c-2146-4d86-9d13-757685c850c7",
+            "set": "c18",
+            "set_name": "Commander 2018",
+            "name": "Archetype of Imagination",
+            "cn": "81",
+            "layout": "normal",
+            "type_line": "Enchantment Creature — Human Wizard",
+            "lang": "en",
+            "isToken": false
+          }
+        }
+      }
+    },
+    "commanders": {
+      "count": 1,
+      "cards": {
+        "kazR2": {
+          "quantity": 1,
+          "boardType": "commanders",
+          "finish": "foil",
+          "isFoil": true,
+          "isAlter": false,
+          "isProxy": false,
+          "card": {
+            "id": "ka0B8",
+            "uniqueCardId": "kazR2",
+            "scryfall_id": "8887f26d-b097-4fbc-9c48-bdc656409a32",
+            "set": "neo",
+            "set_name": "Kamigawa: Neon Dynasty",
+            "name": "Satoru Umezawa",
+            "cn": "234",
+            "layout": "normal",
+            "type_line": "Legendary Creature — Human Ninja",
+            "lang": "en",
+            "isToken": false
+          }
+        }
+      }
+    },
+    "companions": {
+      "count": 0,
+      "cards": {}
+    },
+    "signatureSpells": {
+      "count": 0,
+      "cards": {}
+    },
+    "attractions": {
+      "count": 0,
+      "cards": {}
+    },
+    "stickers": {
+      "count": 0,
+      "cards": {}
+    },
+    "contraptions": {
+      "count": 0,
+      "cards": {}
+    },
+    "planes": {
+      "count": 0,
+      "cards": {}
+    },
+    "schemes": {
+      "count": 0,
+      "cards": {}
+    },
+    "tokens": {
+      "count": 0,
+      "cards": {}
+    }
+  }
+}

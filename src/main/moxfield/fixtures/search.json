@@ -1,0 +1,62 @@
+{
+  "pageNumber": 1,
+  "pageSize": 50,
+  "totalResults": 2,
+  "totalPages": 1,
+  "data": [
+    {
+      "id": "Vb2Xx",
+      "name": "Satoru Home Wrecker",
+      "hasPrimer": false,
+      "format": "commander",
+      "visibility": "public",
+      "publicUrl": "https://moxfield.com/decks/PtCaUR1it0O6-aGZP0Gx-A",
+      "publicId": "PtCaUR1it0O6-aGZP0Gx-A",
+      "createdByUser": {
+        "userName": "aciarlillo",
+        "displayName": "aciarlillo",
+        "badges": []
+      },
+      "authors": [
+        {
+          "userName": "aciarlillo",
+          "displayName": "aciarlillo",
+          "badges": []
+        }
+      ],
+      "createdAtUtc": "2022-08-25T17:05:38.523Z",
+      "lastUpdatedAtUtc": "2023-03-13T00:56:39.627Z",
+      "mainboardCount": 100,
+      "sideboardCount": 0,
+      "maybeboardCount": 33,
+      "commanders": []
+    },
+    {
+      "id": "V5XG3",
+      "name": "Slimefoot Aristocrats",
+      "hasPrimer": false,
+      "format": "commander",
+      "visibility": "public",
+      "publicUrl": "https://moxfield.com/decks/gINTeyqvQkaiV4OqHFHLAw",
+      "publicId": "gINTeyqvQkaiV4OqHFHLAw",
+      "createdByUser": {
+        "userName": "aciarlillo",
+        "displayName": "aciarlillo",
+        "badges": []
+      },
+      "authors": [
+        {
+          "userName": "aciarlillo",
+          "displayName": "aciarlillo",
+          "badges": []
+        }
+      ],
+      "createdAtUtc": "2022-08-22T14:44:36.587Z",
+      "lastUpdatedAtUtc": "2022-10-27T15:04:03.913Z",
+      "mainboardCount": 100,
+      "sideboardCount": 0,
+      "maybeboardCount": 29,
+      "commanders": []
+    }
+  ]
+}
