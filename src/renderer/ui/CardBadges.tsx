@@ -1,7 +1,12 @@
 import type { CardView } from '@shared/game';
 import classNames from 'classnames';
 
-import { loyalty, otherCounters, powerToughness } from './cardStats';
+import {
+  counterPtLabel,
+  loyalty,
+  otherCounters,
+  powerToughness,
+} from './cardStats';
 
 // Sentence case, so "first strike" reads as a badge, not a sentence.
 const abilityLabel = (ability: string) =>
@@ -22,6 +27,7 @@ const CardBadges = ({
   owner?: string | null;
 }) => {
   const pt = powerToughness(card);
+  const fromCounters = pt === null ? null : counterPtLabel(card);
   const walker = loyalty(card);
   const counters = otherCounters(card);
   const abilities = card.abilities ?? [];
@@ -95,13 +101,25 @@ const CardBadges = ({
         </span>
       )}
       {(pt !== null || walker !== null) && (
-        <div className="pointer-events-none absolute bottom-1 right-1 flex gap-1">
+        <div className="pointer-events-none absolute bottom-1 right-1 flex items-end gap-1">
           {walker !== null && (
             <span
               data-testid="loyalty-badge"
               className="rounded-b-xl rounded-t bg-slate-900/90 px-2 text-base font-black text-white shadow ring-2 ring-amber-200 tabular-nums"
             >
               {walker}
+            </span>
+          )}
+          {fromCounters !== null && (
+            <span
+              data-testid="pt-counter-delta"
+              title={`${fromCounters} from counters`}
+              className={classNames(
+                chipBase,
+                'bg-sky-800/90 text-[10px] leading-4'
+              )}
+            >
+              {fromCounters}
             </span>
           )}
           {pt !== null && (

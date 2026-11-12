@@ -1,4 +1,9 @@
-import { type CardView, counterNames, currentFace } from '@shared/game';
+import {
+  type CardView,
+  counterNames,
+  countersPtDelta,
+  currentFace,
+} from '@shared/game';
 
 // A face-down permanent (morph, manifest, disguise) is a 2/2 creature.
 const FACE_DOWN_STATS = { power: '2', toughness: '2' };
@@ -17,28 +22,36 @@ const typeLineOf = (card: CardView): string =>
   faceOf(card)?.typeLine ?? card.ref?.typeLine ?? '';
 
 // Power/toughness to show on a badge: shown for face-down permanents, for
-// a set base (which replaces the printed one), and whenever +1/+1 or -1/-1
-// counters change the printed values.
+// a set base (which replaces the printed one), and whenever P/T counters
+// (+1/+1, -1/-1, +1/+0, ...) change the printed values.
 export const powerToughness = (card: CardView): string | null => {
-  const delta =
-    (card.counters[counterNames.plusOne] ?? 0) -
-    (card.counters[counterNames.minusOne] ?? 0);
+  const delta = countersPtDelta(card.counters);
 
   if (card.ptOverride) {
     const { power, toughness } = card.ptOverride;
-    return `${power + delta}/${toughness + delta}`;
+    return `${power + delta.power}/${toughness + delta.toughness}`;
   }
   if (card.faceDown) {
     const { power, toughness } = FACE_DOWN_STATS;
-    return `${withDelta(power, delta)}/${withDelta(toughness, delta)}`;
+    return `${withDelta(power, delta.power)}/${withDelta(toughness, delta.toughness)}`;
   }
-  if (delta === 0 || !card.ref) return null;
+  if ((delta.power === 0 && delta.toughness === 0) || !card.ref) return null;
 
   const face = faceOf(card);
   const power = face?.power ?? card.ref.power;
   const toughness = face?.toughness ?? card.ref.toughness;
   if (power === undefined || toughness === undefined) return null;
-  return `${withDelta(power, delta)}/${withDelta(toughness, delta)}`;
+  return `${withDelta(power, delta.power)}/${withDelta(toughness, delta.toughness)}`;
+};
+
+const signed = (n: number) => (n < 0 ? String(n) : `+${n}`);
+
+// The part of the P/T badge that comes from counters, e.g. "+2/+1", so
+// it reads apart from the base and other effects. Null without any.
+export const counterPtLabel = (card: CardView): string | null => {
+  const { power, toughness } = countersPtDelta(card.counters);
+  if (power === 0 && toughness === 0) return null;
+  return `${signed(power)}/${signed(toughness)}`;
 };
 
 // The base a P/T dialog starts from: the set one, else the printed one.

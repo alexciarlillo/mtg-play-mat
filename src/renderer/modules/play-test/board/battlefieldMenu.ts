@@ -4,6 +4,7 @@ import {
   type CardView,
   counterNames,
   currentFace,
+  normalizeCounterName,
   type SetCardStateAction,
   type ZoneId,
 } from '@shared/game';
@@ -23,7 +24,7 @@ export const adjustCounter = (card: CardView, counter: string, delta: number) =>
   dispatch({
     type: 'adjustCounter',
     instanceId: card.instanceId,
-    counter,
+    counter: normalizeCounterName(counter),
     delta,
   });
 
@@ -244,6 +245,14 @@ export const battlefieldMenu = (
     {
       title: 'Add -1/-1 counter',
       action: () => adjustCounter(card, counterNames.minusOne, 1),
+    },
+    {
+      title: 'Add +1/+0 counter',
+      action: () => adjustCounter(card, counterNames.plusPower, 1),
+    },
+    {
+      title: 'Add +0/+1 counter',
+      action: () => adjustCounter(card, counterNames.plusToughness, 1),
     },
     ...(isPlaneswalker(card)
       ? [

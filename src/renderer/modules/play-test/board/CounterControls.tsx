@@ -1,4 +1,9 @@
-import { type CardView, counterNames, currentFace } from '@shared/game';
+import {
+  type CardView,
+  counterNames,
+  currentFace,
+  ptCounterCount,
+} from '@shared/game';
 
 import { isPlaneswalker, loyalty } from '../../../ui/cardStats';
 import { adjustCounter } from './battlefieldMenu';
@@ -23,9 +28,7 @@ const isCreature = (card: CardView) =>
 
 const rowsFor = (card: CardView): Row[] => {
   const rows: Row[] = [];
-  const hasPt =
-    card.counters[counterNames.plusOne] !== undefined ||
-    card.counters[counterNames.minusOne] !== undefined;
+  const hasPt = ptCounterCount(card.counters) > 0;
   if (isCreature(card) || hasPt) {
     rows.push({
       label: 'P/T',
@@ -49,12 +52,12 @@ const rowsFor = (card: CardView): Row[] => {
       down: { title: 'Loyalty -1', counter: counterNames.loyalty, delta: -1 },
     });
   }
+  // The P/T row steps +1/+1 and -1/-1; other kinds (+1/+0 too) get rows.
   const named = Object.entries(card.counters).filter(
     ([name]) =>
-      !Object.values(counterNames).includes(
-        name as (typeof counterNames)[keyof typeof counterNames]
-      ) ||
-      (name === counterNames.loyalty && !isPlaneswalker(card))
+      name !== counterNames.plusOne &&
+      name !== counterNames.minusOne &&
+      (name !== counterNames.loyalty || !isPlaneswalker(card))
   );
   named.forEach(([name, count]) => {
     rows.push({

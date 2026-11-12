@@ -1,7 +1,12 @@
 import type { CardView } from '@shared/game';
 import { describe, expect, it } from 'vitest';
 
-import { loyalty, otherCounters, powerToughness } from './cardStats';
+import {
+  counterPtLabel,
+  loyalty,
+  otherCounters,
+  powerToughness,
+} from './cardStats';
 
 const base: CardView = {
   instanceId: 'p1:1',
@@ -68,6 +73,25 @@ describe('powerToughness', () => {
       counters: { '+1/+1': 1 },
     };
     expect(powerToughness(star)).toBe('*+1/1+*+1');
+  });
+});
+
+describe('P/T counters of any kind', () => {
+  it('adds +1/+0 and +0/+1 counters to one side each', () => {
+    const card = { ...base, counters: { '+1/+0': 2, '+0/+1': 1 } };
+    expect(powerToughness(card)).toBe('3/2');
+    expect(counterPtLabel(card)).toBe('+2/+1');
+  });
+
+  it('labels only the counters on top of a set base', () => {
+    const card = {
+      ...base,
+      ptOverride: { power: 4, toughness: 4 },
+      counters: { '+1/+1': 1, '-1/-1': 0, charge: 3 },
+    };
+    expect(powerToughness(card)).toBe('5/5');
+    expect(counterPtLabel(card)).toBe('+1/+1');
+    expect(counterPtLabel(base)).toBeNull();
   });
 });
 

@@ -241,6 +241,7 @@ describe('BattlefieldCard', () => {
     });
     expect(screen.getByTestId('pt-badge')).toHaveTextContent('4/4');
     expect(screen.getByTestId('counter-chip')).toHaveTextContent('+1/+1 ×2');
+    expect(screen.getByTestId('pt-counter-delta')).toHaveTextContent('+2/+2');
   });
 
   it('keeps taking hover keys while the pointer is on its counters', () => {

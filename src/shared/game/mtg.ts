@@ -27,10 +27,59 @@ export const OPENING_HAND_SIZE = 7;
 export const counterNames = {
   plusOne: '+1/+1',
   minusOne: '-1/-1',
+  plusPower: '+1/+0',
+  plusToughness: '+0/+1',
   loyalty: 'loyalty',
 } as const;
 
 export const playerCounterNames = ['poison', 'energy', 'experience'] as const;
+
+// Counters named like "+1/+0" or "-2/-2" change power and toughness.
+const PT_COUNTER = /^([+-]?\d+)\/([+-]?\d+)$/;
+
+export interface PtDelta {
+  power: number;
+  toughness: number;
+}
+
+export const ptCounterDelta = (name: string): PtDelta | null => {
+  const match = PT_COUNTER.exec(name.trim());
+  if (!match) return null;
+  return { power: Number(match[1]), toughness: Number(match[2]) };
+};
+
+const signed = (n: number) => (n < 0 ? String(n) : `+${n}`);
+
+// Spells a P/T counter the way cards print it, so "+1/0" and "+1/+0"
+// stack as one counter; any other name is only trimmed.
+export const normalizeCounterName = (name: string): string => {
+  const delta = ptCounterDelta(name);
+  return delta
+    ? `${signed(delta.power)}/${signed(delta.toughness)}`
+    : name.trim();
+};
+
+// The total power/toughness change from every P/T counter on a card.
+export const countersPtDelta = (counters: Record<string, number>): PtDelta =>
+  Object.entries(counters).reduce<PtDelta>(
+    (sum, [name, count]) => {
+      const delta = ptCounterDelta(name);
+      return delta
+        ? {
+            power: sum.power + delta.power * count,
+            toughness: sum.toughness + delta.toughness * count,
+          }
+        : sum;
+    },
+    { power: 0, toughness: 0 }
+  );
+
+// How many P/T counters sit on a card, of every kind.
+export const ptCounterCount = (counters: Record<string, number>): number =>
+  Object.entries(counters).reduce(
+    (sum, [name, count]) => (ptCounterDelta(name) ? sum + count : sum),
+    0
+  );
 
 // How far each attachment peeks out from behind its host.
 export const ATTACH_OFFSET: Position = { x: 0, y: -28 };

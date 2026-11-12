@@ -88,10 +88,15 @@ export { redoAction, type Undone, undoLast, type UndoState } from './history';
 export {
   ATTACH_OFFSET,
   counterNames,
+  countersPtDelta,
   MAX_TOKENS,
   mtgRules,
+  normalizeCounterName,
   OPENING_HAND_SIZE,
   playerCounterNames,
+  ptCounterCount,
+  ptCounterDelta,
+  type PtDelta,
 } from './mtg';
 export { reduce, replay } from './reducer';
 export { nextRandom, seedRng, shuffle } from './rng';

@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import { canTransform } from './cardRefs';
-import { ATTACH_OFFSET, counterNames } from './mtg';
+import {
+  ATTACH_OFFSET,
+  counterNames,
+  countersPtDelta,
+  normalizeCounterName,
+  ptCounterCount,
+} from './mtg';
 import { reduce, replay } from './reducer';
 import { applyAll, cardRef, deepFreeze, startGame, zone } from './testFixtures';
 import type { CardRef, GameAction, GameState } from './types';
@@ -657,5 +663,20 @@ describe('attach', () => {
       { type: 'moveCard', instanceId: aura.instanceId, to: 'battlefield' },
     ]);
     expect(next.cards[aura.instanceId].attachedTo).toBeNull();
+  });
+});
+
+describe('P/T counter names', () => {
+  it('normalizes the signs so variants stack', () => {
+    expect(normalizeCounterName('+1/0')).toBe('+1/+0');
+    expect(normalizeCounterName(' 0/1 ')).toBe('+0/+1');
+    expect(normalizeCounterName('-1/-1')).toBe('-1/-1');
+    expect(normalizeCounterName(' croak ')).toBe('croak');
+  });
+
+  it('sums every kind of P/T counter', () => {
+    const counters = { '+1/+1': 2, '+1/+0': 1, '+0/-2': 1, croak: 4 };
+    expect(countersPtDelta(counters)).toEqual({ power: 3, toughness: 0 });
+    expect(ptCounterCount(counters)).toBe(4);
   });
 });
