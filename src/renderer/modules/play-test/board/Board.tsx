@@ -104,7 +104,7 @@ type Dialog =
 
 // Dialogs about one permanent, opened from its menu.
 type CardDialog = {
-  kind: 'counter' | 'attach' | 'libraryPosition';
+  kind: 'counter' | 'exileCounter' | 'attach' | 'libraryPosition';
   card: CardView;
 };
 
@@ -175,6 +175,11 @@ const Board = ({ store, opponent, hand }: Props) => {
   const closeCardDialog = useCallback(() => setCardDialog(null), []);
   const onAddCounter = useCallback(
     (card: CardView) => setCardDialog({ kind: 'counter', card }),
+    []
+  );
+  const onZoneCounter = useCallback(
+    (card: CardView, exile: boolean) =>
+      setCardDialog({ kind: exile ? 'exileCounter' : 'counter', card }),
     []
   );
   const [stateDialog, setStateDialog] = useState<{
@@ -562,6 +567,7 @@ const Board = ({ store, opponent, hand }: Props) => {
                         cards={view.zones.graveyard}
                         size={pileSize}
                         onOpen={() => setDialog('graveyard')}
+                        onCounter={onZoneCounter}
                       />
                       <ZonePile
                         zone="exile"
@@ -569,6 +575,7 @@ const Board = ({ store, opponent, hand }: Props) => {
                         cards={view.zones.exile}
                         size={pileSize}
                         onOpen={() => setDialog('exile')}
+                        onCounter={onZoneCounter}
                       />
                       <SideboardCount
                         count={view.sideboardCount}
@@ -620,6 +627,7 @@ const Board = ({ store, opponent, hand }: Props) => {
             zone="graveyard"
             cards={view.zones.graveyard}
             onClose={close}
+            onCounter={onZoneCounter}
           />
         )}
         {view && dialog === 'exile' && (
@@ -628,6 +636,7 @@ const Board = ({ store, opponent, hand }: Props) => {
             zone="exile"
             cards={view.zones.exile}
             onClose={close}
+            onCounter={onZoneCounter}
           />
         )}
         {view && dialog === 'drawMany' && (
@@ -747,8 +756,13 @@ const Board = ({ store, opponent, hand }: Props) => {
             onClose={closeStateDialog}
           />
         )}
-        {cardDialog?.kind === 'counter' && (
-          <CounterDialog card={cardDialog.card} onClose={closeCardDialog} />
+        {(cardDialog?.kind === 'counter' ||
+          cardDialog?.kind === 'exileCounter') && (
+          <CounterDialog
+            card={cardDialog.card}
+            exile={cardDialog.kind === 'exileCounter'}
+            onClose={closeCardDialog}
+          />
         )}
         {view && cardDialog?.kind === 'libraryPosition' && (
           <LibraryPositionPrompt

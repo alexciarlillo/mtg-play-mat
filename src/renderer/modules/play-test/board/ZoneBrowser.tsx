@@ -2,8 +2,8 @@ import type { CardView } from '@shared/game';
 import type { BrowserZone } from '@shared/settings';
 
 import CardBrowser from '../common/CardBrowser';
-import { moveMenu } from '../common/cardMenus';
 import { Modal } from '../common/Dialogs';
+import { type OnZoneCounter, zoneCardMenu } from './zoneMenus';
 
 interface Props {
   title: string;
@@ -11,6 +11,7 @@ interface Props {
   cards: CardView[];
   onClose(): void;
   readOnly?: boolean;
+  onCounter?: OnZoneCounter;
 }
 
 // Every card in a public zone, each with the move menu unless it belongs
@@ -21,6 +22,7 @@ const ZoneBrowser = ({
   cards,
   onClose,
   readOnly = false,
+  onCounter,
 }: Props) => (
   <Modal title={`${title} (${cards.length})`} onClose={onClose} wide column>
     <CardBrowser
@@ -29,11 +31,11 @@ const ZoneBrowser = ({
       label={`Search the ${zone}`}
       testId="zone-browser"
       tileTestId="zone-card"
-      menu={readOnly ? undefined : moveMenu}
+      menu={readOnly ? undefined : (card) => zoneCardMenu(card, onCounter)}
     />
     {!readOnly && cards.length > 0 && (
       <p className="mt-2 shrink-0 text-xs text-slate-600">
-        Right-click a card to move it.
+        Right-click a card to move it or change its counters.
       </p>
     )}
   </Modal>

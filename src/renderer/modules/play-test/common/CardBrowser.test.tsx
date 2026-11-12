@@ -465,7 +465,11 @@ describe('ZoneBrowser', () => {
       expect(
         screen.getAllByTestId('browser-group').map((el) => el.textContent)
       ).toEqual(['Creature · 1', 'Land · 1']);
-      expect(screen.getByText('Right-click a card to move it.')).toBeVisible();
+      expect(
+        screen.getByText(
+          'Right-click a card to move it or change its counters.'
+        )
+      ).toBeVisible();
     }
   );
 
@@ -511,6 +515,10 @@ describe('ZoneBrowser', () => {
       within(screen.getAllByTestId('zone-card')[0]!).getByTestId('card')
     );
     expect(screen.queryByRole('menuitem')).toBeNull();
-    expect(screen.queryByText('Right-click a card to move it.')).toBeNull();
+    expect(
+      screen.queryByText(
+        'Right-click a card to move it or change its counters.'
+      )
+    ).toBeNull();
   });
 });

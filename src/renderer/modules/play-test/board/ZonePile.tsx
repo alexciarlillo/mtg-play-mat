@@ -3,8 +3,8 @@ import classNames from 'classnames';
 
 import Card from '../../../ui/Card';
 import { type CardSize, cardWidths } from '../../../ui/cardSizes';
-import { moveMenu } from '../common/cardMenus';
 import ZoneCountBadge from './ZoneCountBadge';
+import { type OnZoneCounter, zoneCardMenu } from './zoneMenus';
 
 interface Props {
   zone: 'graveyard' | 'exile' | 'command';
@@ -15,6 +15,7 @@ interface Props {
   // An opponent's pile: no menus, and never a drop target.
   readOnly?: boolean;
   testId?: string;
+  onCounter?: OnZoneCounter;
 }
 
 // A public pile showing its top card. Clicking opens the full list, and
@@ -27,6 +28,7 @@ const ZonePile = ({
   size = 'sm',
   readOnly = false,
   testId = zone,
+  onCounter,
 }: Props) => {
   const top = cards.at(-1);
 
@@ -52,7 +54,11 @@ const ZonePile = ({
         }}
       >
         {top && (
-          <Card card={top} size={size} menu={readOnly ? [] : moveMenu(top)} />
+          <Card
+            card={top}
+            size={size}
+            menu={readOnly ? [] : zoneCardMenu(top, onCounter)}
+          />
         )}
         <ZoneCountBadge count={cards.length} size={size} />
       </div>
