@@ -306,6 +306,16 @@ const MulliganBar = ({
       >
         Mulligan
       </button>
+      <button
+        type="button"
+        title="Doesn't add a card to put on the bottom; it still shows in the log"
+        className={`${mulliganButton} ring-1 ring-slate-600`}
+        onClick={() =>
+          dispatch({ type: 'mulligan', playerId: view.playerId, free: true })
+        }
+      >
+        Free mulligan
+      </button>
     </div>
   );
 };

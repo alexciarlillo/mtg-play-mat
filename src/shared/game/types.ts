@@ -301,9 +301,11 @@ export interface SetLifeAction {
 }
 
 // Shuffles the hand into the library and draws a new hand of seven.
+// A free one doesn't add to the cards owed on keep.
 export interface MulliganAction {
   type: 'mulligan';
   playerId: PlayerId;
+  free?: boolean;
 }
 
 // Keeps the hand, putting one card per mulligan on the library bottom in

@@ -435,6 +435,15 @@ describe('describeAction privacy', () => {
     expect(kept.text).toBe('kept their hand, putting a card on the bottom');
   });
 
+  it('logs a free mulligan', () => {
+    const mull = step(opening(), {
+      type: 'mulligan',
+      playerId: P1,
+      free: true,
+    });
+    expect(mull.text).toBe('took a free mulligan (0 counted)');
+  });
+
   it('names revealed cards, which everyone can see', () => {
     const state = opening();
     const [shown] = ids(state, 'hand');

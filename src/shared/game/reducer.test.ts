@@ -347,6 +347,16 @@ describe('opening hand and London mulligan', () => {
     expect(zone(twice, P1, 'hand')).toHaveLength(7);
   });
 
+  it('takes a free mulligan without adding to the count', () => {
+    const state = opening();
+    const next = reduce(state, { type: 'mulligan', playerId: P1, free: true });
+    expect(p1(next).mulligans).toBe(0);
+    expect(zone(next, P1, 'hand')).toHaveLength(7);
+    expect(zone(next, P1, 'hand')).not.toEqual(zone(state, P1, 'hand'));
+    const kept = reduce(next, { type: 'keepHand', playerId: P1, bottom: [] });
+    expect(p1(kept).keptHand).toBe(true);
+  });
+
   it('draws what is left when the library is short', () => {
     const state = applyAll(startGame([player('p1', 5)]), [draw(5)]);
     const next = reduce(state, { type: 'mulligan', playerId: P1 });

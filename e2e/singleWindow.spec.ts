@@ -132,7 +132,7 @@ test('mulligan, then keep and bottom a card, from the tray', async () => {
     els.map((el) => el.dataset.instanceId)
   );
 
-  await tray().getByRole('button', { name: 'Mulligan' }).click();
+  await tray().getByRole('button', { name: 'Mulligan', exact: true }).click();
   await expect(status).toHaveText(/Mulligans 1/);
   await expect(handCards()).toHaveCount(7);
   expect(

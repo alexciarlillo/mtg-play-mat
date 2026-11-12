@@ -299,7 +299,12 @@ const setLife = (
 
 // London mulligan: the whole hand goes back, the library is shuffled, and
 // a fresh seven is drawn. The cost is paid on keep (see keepHand).
-const mulligan = (state: GameState, player: PlayerState): GameState => {
+// A free mulligan (a house rule) costs nothing on keep.
+const mulligan = (
+  state: GameState,
+  player: PlayerState,
+  free: boolean
+): GameState => {
   if (player.keptHand) return state;
 
   const returned = player.zones.hand.reduce(
@@ -312,7 +317,9 @@ const mulligan = (state: GameState, player: PlayerState): GameState => {
     player.id,
     OPENING_HAND_SIZE
   );
-  return updatePlayer(drawn, player.id, { mulligans: player.mulligans + 1 });
+  return free
+    ? drawn
+    : updatePlayer(drawn, player.id, { mulligans: player.mulligans + 1 });
 };
 
 // The bottom choice must be exactly one distinct hand card per mulligan
@@ -356,7 +363,7 @@ export const reduceMtg = (state: GameState, action: MtgAction): GameState => {
     case 'setLife':
       return setLife(state, player, action.life);
     case 'mulligan':
-      return mulligan(state, player);
+      return mulligan(state, player, action.free === true);
     case 'keepHand':
       return keepHand(state, player, action);
     case 'adjustPlayerCounter': {

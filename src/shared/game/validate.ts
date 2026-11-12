@@ -460,8 +460,13 @@ export const parsePlayerAction = (input: unknown): PlayerAction => {
         to: input.to === null ? null : string(input, 'to'),
       };
     case 'untapAll':
-    case 'mulligan':
       return { type: input.type, playerId: string(input, 'playerId') };
+    case 'mulligan':
+      return {
+        type: 'mulligan',
+        playerId: string(input, 'playerId'),
+        ...(input.free === true && { free: true }),
+      };
     case 'adjustLife':
       return {
         type: 'adjustLife',

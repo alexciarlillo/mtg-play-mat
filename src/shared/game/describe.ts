@@ -621,7 +621,9 @@ export const describeAction = (
     case 'setLife':
       return lifeChange('', before.life, after.life);
     case 'mulligan':
-      return `took a mulligan (${after.mulligans} so far)`;
+      return action.free
+        ? `took a free mulligan (${after.mulligans} counted)`
+        : `took a mulligan (${after.mulligans} so far)`;
     case 'keepHand': {
       const bottom = action.bottom.length;
       return bottom > 0

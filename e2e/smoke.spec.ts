@@ -412,7 +412,7 @@ test('goldfish: mulligan, keep, play, move, drag, life, untap, restart', async (
   const firstHand = await instanceIds(handCards(hand));
 
   // Mulligan once: a fresh seven, and the count is public.
-  await hand.getByRole('button', { name: 'Mulligan' }).click();
+  await hand.getByRole('button', { name: 'Mulligan', exact: true }).click();
   await expect(status).toHaveText(/Mulligans 1/);
   await expect(hand.getByTestId('mulligan-bar')).toHaveText(/Mulligans 1/);
   await expect(handCards(hand)).toHaveCount(7);
